@@ -1,0 +1,66 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+modelVersion: "1.0"
+pipelineId: "pipeline-sql-on-dataproc-gce-ephemeral"
+description: "A pipeline running a SQL query on an ephemeral Dataproc GCE cluster."
+runner: "airflow"
+owner: "data-eng-team"
+tags: ["dataproc-gce", "example"]
+
+defaults:
+  projectId: "your-gcp-project-id"
+  location: "us-central1"
+  executionConfig:
+    retries: 0
+
+triggers:
+  - schedule:
+      interval: "0 5 * * *"
+      startTime: "2025-10-01T00:00:00"
+      endTime: "2026-10-01T00:00:00"
+      catchup: false
+      timezone: "UTC"
+
+actions:
+  - sql:
+      name: "run-sql-on-ephemeral-cluster"
+      query:
+        path: "sql-scripts/test_query.sql"
+      engine:
+        dataprocOnGce:
+          ephemeralCluster:
+            clusterName: "my-temp-cluster"
+            projectId: "your-gcp-project-id"
+            location: "us-central1"
+            impersonationChain:
+              ["dataproc-sa@your-gcp-project-id.iam.gserviceaccount.com"]
+            properties:
+              spark.sql.catalog.bigquery: "com.google.cloud.spark.bigquery.BigQueryCatalog"
+              spark.sql.catalog.bigquery.project: "your-gcp-project-id"
+              # This field is needed and important for the Spark-BigQuery connector.
+              spark.jars: "gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.42.3.jar" 
+            resourceProfile:
+              inline:
+                clusterConfig:
+                  gceClusterConfig:
+                    zoneUri: "us-central1-a"
+                    metadata: # This metadata field is needed and important for the Spark-BigQuery connector.
+                      SPARK_BQ_CONNECTOR_URL: "gs://spark-lib/bigquery/spark-3.5-bigquery-0.43.1.jar"
+                  masterConfig:
+                    numInstances: 1
+                    machineTypeUri: "n1-standard-4"
+                  workerConfig:
+                    numInstances: 2
+                    machineTypeUri: "n1-standard-4"
