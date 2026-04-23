@@ -13,8 +13,6 @@
 # limitations under the License.
 #
 """Email utilities for Airflow DAGs."""
-from airflow.utils.email import send_email
-
 
 def send_failure_notification_email(emails, context):
     """Sends an email when a DAG run fails.
@@ -23,6 +21,7 @@ def send_failure_notification_email(emails, context):
         emails: A list of email addresses to send the notification to.
         context: The Airflow context dictionary.
     """
+    from airflow.utils.email import send_email
     dag_run = context.get('dag_run')
     task_instances = dag_run.get_task_instances()
 

@@ -13,9 +13,9 @@
 # limitations under the License.
 #
 """Provides the VersionedFileManager for version-aware file access."""
+from __future__ import annotations
 import os
-from typing import Optional
-from google.cloud import storage
+from typing import Optional, Any
 from orchestration_pipelines_lib.utils import path_utils
 from orchestration_pipelines_lib.utils.file_manager import (
     OrchestrationPipelinesInitializationError, FileManager)
@@ -33,7 +33,7 @@ class VersionedFileManager(FileManager):
                  current_version: str,
                  bundle_id: str,
                  local_data_root: str = "/orchestration_pipelines",
-                 gcs_client: Optional[storage.Client] = None):
+                 gcs_client: Optional[Any] = None):
         """Initializes the VersionedFileManager.
 
         Args:
@@ -62,12 +62,44 @@ class VersionedFileManager(FileManager):
         self.bundle_id = bundle_id
         self._local_data_root = local_data_root
 
+    @classmethod
+    def from_file_manager(cls,
+                          base_manager: FileManager,
+                          pipeline_id: str,
+                          current_version: str,
+                          bundle_id: str,
+                          local_data_root: str = "/orchestration_pipelines") -> VersionedFileManager:
+        """Creates a VersionedFileManager by explicitly reusing an existing FileManager's GCS client.
+
+        Args:
+            base_manager: The base FileManager instance to reuse the GCS client from.
+            pipeline_id: The unique identifier of the current pipeline.
+            current_version: The version hash of the current pipeline execution.
+            bundle_id: The identifier of the bundle.
+            local_data_root: The local mount point for the '/data/' directory.
+
+        Returns:
+            A new VersionedFileManager instance sharing the same GCS client.
+        """
+        return cls(
+            pipeline_id=pipeline_id,
+            current_version=current_version,
+            bundle_id=bundle_id,
+            local_data_root=local_data_root,
+            gcs_client=base_manager._gcs_client
+        )
+
+    def set_version(self, version_id: str):
+        """Updates the current version for path resolution."""
+        self._current_version = version_id
+
     def resolve_path(self, file_path: str) -> str:
         """Resolves a relative path to an absolute path based on the version.
 
         - Relative paths are resolved to:
           /orchestration_pipelines/<bundle_id>/versions/<version_id>/<file_path>
         - GCS URIs ('gcs://...') are returned as-is.
+        - Absolute paths are returned as-is.
 
         Args:
             file_path: The relative or absolute path to resolve.
@@ -78,6 +110,8 @@ class VersionedFileManager(FileManager):
         if file_path is None:
             return None
         if self._is_gcs_blob(file_path):
+            return file_path
+        if os.path.isabs(file_path):
             return file_path
         return path_utils.resolve_versioned_path(self._local_data_root,
                                                  self.bundle_id,

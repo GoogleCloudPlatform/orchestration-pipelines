@@ -13,17 +13,17 @@
 # limitations under the License.
 #
 """Module with all dataproc related client methods."""
+from __future__ import annotations
 import os
 from typing import Any, Dict
-
-from google.api_core.client_options import ClientOptions
-from google.cloud.dataproc_v1 import SessionTemplateControllerClient, GetSessionTemplateRequest
-from google.cloud.dataproc_v1.types import session_templates
 
 
 def get_session_template(
         region: str,
         session_template_name: str) -> session_templates.SessionTemplate:
+    from google.api_core.client_options import ClientOptions
+    from google.cloud.dataproc_v1 import SessionTemplateControllerClient, GetSessionTemplateRequest
+    from google.cloud.dataproc_v1.types import session_templates
     """Retrieves the session template using the Dataproc client.
 
     Args:

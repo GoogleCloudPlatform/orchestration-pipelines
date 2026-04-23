@@ -17,8 +17,6 @@ import os
 import importlib
 import importlib.resources
 
-from google.cloud import storage
-
 BLOB_NAME_CLUSTER = "data/run_notebook.py"
 
 
@@ -32,6 +30,7 @@ def upload_run_notebook_if_needed(gcs_path: str):
     bucket_name = path_parts[0]
     blob_name = path_parts[1]
 
+    from google.cloud import storage
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(blob_name)
@@ -84,6 +83,7 @@ def get_gcs_file_content(gcs_path: str) -> str:
     path_parts = gcs_path.replace("gs://", "").split("/", 1)
     bucket_name = path_parts[0]
     blob_name = path_parts[1]
+    from google.cloud import storage
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(blob_name)

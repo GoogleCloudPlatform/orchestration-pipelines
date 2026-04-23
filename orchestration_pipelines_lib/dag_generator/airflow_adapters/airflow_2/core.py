@@ -14,16 +14,11 @@
 #
 """Module to validate and build pipeline from YAML in Airflow 2."""
 import json
+from typing import Any
 from functools import partial
-from airflow.models import DAG
-from airflow.utils.session import create_session
-from airflow.models.dagrun import DagRunNote
-from airflow.models.taskinstance import TaskInstanceNote
-from airflow.models import DagRun
-from airflow.models import TaskInstance
-from airflow.utils.state import State
-from airflow.operators.python import PythonOperator
-from sqlalchemy.exc import IntegrityError
+
+
+# Airflow and SQLAlchemy imports moved inside functions to reduce import tax
 from . import task_factory
 from .email_utils import send_failure_notification_email
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import action_handler_registry
@@ -32,6 +27,11 @@ from orchestration_pipelines_lib.internal_models.triggers import ScheduleTrigger
 
 
 def init_orchestration_pipeline_context(note_content: str, **context):
+    from airflow.utils.session import create_session
+    from airflow.models.dagrun import DagRunNote
+    from airflow.models.taskinstance import TaskInstanceNote
+    from airflow.models import TaskInstance
+    from sqlalchemy.exc import IntegrityError
     """Initializes the orchestration pipeline context for a DAG run.
 
     Extracts specific metadata from the provided notes content and applies
@@ -121,7 +121,9 @@ def init_orchestration_pipeline_context(note_content: str, **context):
 
 
 def generate(pipeline: PipelineModel, tags: list[str], dag_notes: str,
-             data_root: str) -> DAG:
+             data_root: str) -> Any:
+    from airflow.models import DAG
+    from airflow.operators.python import PythonOperator
     """Generates the Airflow DAG for the given pipeline model.
 
     Args:
@@ -208,17 +210,20 @@ def get_actively_running_versions(pipeline_id, bundle_id) -> list[str]:
     Queries the Airflow database to find any DAG runs currently in 'running' or
     'queued' states that match the bundle and pipeline ID pattern.
     """
+    from airflow.utils.state import State
+    from airflow.utils.session import create_session
+    from airflow.models import DagRun
     active_states = [State.RUNNING, State.QUEUED]
     with create_session() as session:
-        runs = (session.query(DagRun).filter(
+        runs = (session.query(DagRun.dag_id).filter(
             DagRun.state.in_(active_states),
             DagRun.dag_id.like(f"{bundle_id}__v__%__{pipeline_id}"),
         ).all())
-    version_ids = set([
-        x.dag_id.removeprefix(f"{bundle_id}__v__").removesuffix(
+    version_ids = list(set([
+        x[0].removeprefix(f"{bundle_id}__v__").removesuffix(
             f"__{pipeline_id}") for x in runs
-    ])
-    return list(version_ids)
+    ]))
+    return version_ids
 
 
 def get_previous_default_versions(pipeline_id: str,
@@ -229,23 +234,40 @@ def get_previous_default_versions(pipeline_id: str,
     bundle and pipeline.
     """
     from airflow.models.dag import DagTag
-    from sqlalchemy.orm import aliased
-    tag1 = aliased(DagTag)
-    tag2 = aliased(DagTag)
-    tag3 = aliased(DagTag)
-    tag4 = aliased(DagTag)
+    from airflow.utils.session import create_session
+    from sqlalchemy import func
     with create_session() as session:
-        tags = session.query(tag4).join(tag1, tag4.dag_id == tag1.dag_id).join(
-            tag2, tag4.dag_id == tag2.dag_id).join(
-                tag3, tag4.dag_id == tag3.dag_id).filter(
-                    tag1.name == "op:is_current",
-                    tag2.name == f"op:bundle:{bundle_id}",
-                    tag3.name == f"op:pipeline:{pipeline_id}",
-                    tag4.name.like("op:version:%")).all()
+        # 1. Subquery to find dag_ids that have ALL THREE required tags.
+        # This uses a "Tag Intersection" pattern (GROUP BY + HAVING COUNT)
+        # which avoids multiple joins and table scans.
+        subquery = (
+            session.query(DagTag.dag_id)
+            .filter(DagTag.name.in_([
+                "op:is_current",
+                f"op:bundle:{bundle_id}",
+                f"op:pipeline:{pipeline_id}"
+            ]))
+            .group_by(DagTag.dag_id)
+            .having(func.count(DagTag.name) == 3)
+            .subquery()
+        )
+
+        # 2. Outer query to fetch ONLY the version tags for the matching DAGs.
+        # This is pure tag-based filtering and completely decouples the query
+        # from the dag_id naming convention.
+        tags = (
+            session.query(DagTag.dag_id, DagTag.name)
+            .filter(
+                DagTag.dag_id.in_(subquery),
+                DagTag.name.like("op:version:%")
+            )
+            .all()
+        )
+
         versions = set()
-        for tag in tags:
-            if tag.name.startswith("op:version:"):
-                version_id = tag.name.split("op:version:")[1]
-                if version_id:
-                    versions.add(version_id)
+        for _, tag_name in tags:
+            version_id = tag_name.removeprefix("op:version:")
+            if version_id:
+                versions.add(version_id)
+
         return list(versions)

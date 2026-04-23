@@ -13,9 +13,6 @@
 # limitations under the License.
 #
 """Email utilities for Airflow DAGs."""
-from airflow.utils.email import send_email
-from airflow.sdk import get_current_context
-
 
 def send_failure_notification_email(emails, context=None):
     """Sends an email when a DAG run fails.
@@ -25,6 +22,8 @@ def send_failure_notification_email(emails, context=None):
         context: The Airflow context dictionary. If not present, the current
             context can be retrieved from Task Context.
     """
+    from airflow.utils.email import send_email
+    from airflow.sdk import get_current_context
     if not context:
         context = get_current_context()
 

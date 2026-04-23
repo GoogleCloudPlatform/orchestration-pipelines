@@ -14,10 +14,9 @@
 #
 """Module to convert actions into Airflow 3 specific code."""
 
+from __future__ import annotations
 from typing import Any, Dict
 import json
-from airflow.sdk import Variable
-from airflow.providers.standard.operators.python import PythonOperator, PythonVirtualenvOperator
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import utils
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import task_utils
 from orchestration_pipelines_lib.scripts.dbt_wrapper import invoke_dbt_run
@@ -27,17 +26,20 @@ from orchestration_pipelines_lib.utils.duration_utils import duration_to_timedel
 def create_python_script_task(action: Dict[str, Any], _: Dict[str, Any],
                               dag) -> PythonOperator:
     """Converts an action into a PythonOperator."""
+    from airflow.providers.standard.operators.python import PythonOperator
     try:
         callable_path = action.filename
         entrypoint = action.config.pythonCallable
-        python_callable = utils.import_callable(callable_path, entrypoint)
-        if not callable(python_callable):
-            raise ValueError(
-                f"Action {action.name}: filename {callable_path} with "
-                f"callable {entrypoint} did not resolve to a callable object.")
+        user_kwargs = action.config.opKwargs or {}
+        def runtime_wrapper(**kwargs):
+            from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import utils
+            python_callable = utils.import_callable(callable_path, entrypoint)
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k in user_kwargs}
+            return python_callable(**filtered_kwargs)
+
         return PythonOperator(
             task_id=action.name,
-            python_callable=python_callable,
+            python_callable=runtime_wrapper,
             op_kwargs=action.config.opKwargs or {},
             execution_timeout=duration_to_timedelta(action.executionTimeout)
             if action.executionTimeout else None,
@@ -53,6 +55,7 @@ def create_python_script_task(action: Dict[str, Any], _: Dict[str, Any],
 def create_python_virtualenv_task(action: Dict[str, Any], _: Dict[str, Any],
                                   dag) -> PythonVirtualenvOperator:
     """Converts an action into a PythonVirtualenvOperator."""
+    from airflow.providers.standard.operators.python import PythonVirtualenvOperator
     try:
         callable_path = action.filename
         entrypoint = action.config.pythonCallable
@@ -104,6 +107,7 @@ def create_dataproc_operator_task(action: Dict[str, Any],
 def create_dbt_task(action: Dict[str, Any], _: Dict[str, Any],
                     dag) -> PythonOperator:
     """Converts an action into a PythonOperator for dbt."""
+    from airflow.providers.standard.operators.python import PythonOperator
     try:
         op_kwargs = {
             "project_dir": action.source.path,
@@ -132,6 +136,7 @@ def create_dataform_task(action: Dict[str, Any], pipeline: Dict[str, Any],
     Depending on the execution mode, it either runs a local KubernetesPodOperator
     or invokes the Dataform service workflow operator.
     """
+    from airflow.sdk import Variable
     if action.executionMode == "local":
         # Allow overriding with an Airflow variable for flexibility
         gcs_bucket_path = Variable.get("dataform_gcs_path",

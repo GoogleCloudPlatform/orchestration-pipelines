@@ -13,12 +13,11 @@
 # limitations under the License.
 #
 """Module with common conversion methods from action into Airflow code."""
+from __future__ import annotations
 from typing import Any, Dict
 from datetime import datetime
 import json
 import pytz
-from airflow.utils.trigger_rule import TriggerRule
-from airflow.utils.task_group import TaskGroup
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import dataproc_utils
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import gcs_utils
 from orchestration_pipelines_lib.utils.duration_utils import duration_to_timedelta
@@ -160,6 +159,9 @@ def dataproc_ephemeral_task(action: Dict[str, Any], dag) -> TaskGroup:
     Returns:
         An Airflow TaskGroup containing cluster creation, job submission, and deletion tasks.
     """
+    from airflow.utils.trigger_rule import TriggerRule
+    from airflow.utils.task_group import TaskGroup
+
     from airflow.providers.google.cloud.operators.dataproc import (
         DataprocCreateClusterOperator, DataprocSubmitJobOperator,
         DataprocDeleteClusterOperator)

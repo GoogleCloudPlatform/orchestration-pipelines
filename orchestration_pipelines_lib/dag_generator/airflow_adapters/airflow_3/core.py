@@ -14,76 +14,78 @@
 #
 """Module to validate and build pipeline from YAML in Airflow 3."""
 import json
+from typing import Any
 from functools import partial
-from airflow.sdk import DAG
-from airflow.providers.standard.operators.python import PythonOperator
 from . import task_factory
 from . import airflow_client_utils
 from . import email_utils
-import airflow_client.client
-from airflow_client.client.rest import ApiException
-from airflow_client.client.exceptions import ServiceException
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_exception_type
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import action_handler_registry
 from orchestration_pipelines_lib.internal_models.pipeline import PipelineModel
 from orchestration_pipelines_lib.internal_models.triggers import ScheduleTriggerModel
 
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_random(min=1, max=10),
-    retry=retry_if_exception_type(ServiceException),
-)
 def _update_metadata(dag_run, dag, additional_notes, dag_run_api,
                      task_instance_api):
     """Updates the DAG run and task instance metadata notes with retry mechanism."""
-    # 1. Update/Insert DAG RUN Note
-    dag_run_api.patch_dag_run(dag_id=dag_run.dag_id,
-                              dag_run_id=dag_run.run_id,
-                              dag_run_patch_body={"note": additional_notes},
-                              update_mask=["note"])
+    from airflow_client.client.exceptions import ServiceException
+    from tenacity import retry, stop_after_attempt, wait_random, retry_if_exception_type
+    import airflow_client.client
 
-    # 2. Update/Insert TASK INSTANCE Note
-    task_instances = task_instance_api.get_task_instances(
-        dag_id=dag_run.dag_id, dag_run_id=dag_run.run_id).task_instances
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_random(min=1, max=10),
+        retry=retry_if_exception_type(ServiceException),
+    )
+    def _do_update():
+        # 1. Update/Insert DAG RUN Note
+        dag_run_api.patch_dag_run(dag_id=dag_run.dag_id,
+                                  dag_run_id=dag_run.run_id,
+                                  dag_run_patch_body={"note": additional_notes},
+                                  update_mask=["note"])
 
-    existing_notes_map = {
-        (ti.task_id, ti.map_index): ti.note
-        for ti in task_instances
-    }
+        # 2. Update/Insert TASK INSTANCE Note
+        task_instances = task_instance_api.get_task_instances(
+            dag_id=dag_run.dag_id, dag_run_id=dag_run.run_id).task_instances
 
-    doc_md_map = {t.task_id: t.doc_md for t in dag.tasks}
-    entities = []
+        existing_notes_map = {
+            (ti.task_id, ti.map_index): ti.note
+            for ti in task_instances
+        }
 
-    for task_instance in task_instances:
-        new_content = doc_md_map.get(task_instance.task_id, "")
-        if not new_content:
-            continue
+        doc_md_map = {t.task_id: t.doc_md for t in dag.tasks}
+        entities = []
 
-        existing_note = existing_notes_map.get(
-            (task_instance.task_id, task_instance.map_index))
+        for task_instance in task_instances:
+            new_content = doc_md_map.get(task_instance.task_id, "")
+            if not new_content:
+                continue
 
-        if existing_note and existing_note == new_content:
-            continue
+            existing_note = existing_notes_map.get(
+                (task_instance.task_id, task_instance.map_index))
 
-        entities.append({
-            'task_id': task_instance.task_id,
-            'note': new_content
-        })
+            if existing_note and existing_note == new_content:
+                continue
 
-    if entities:
-        batch_body = airflow_client.client.BulkBodyBulkTaskInstanceBody.from_dict(
-            {
-                "actions": [{
-                    "action": "update",
-                    "action_on_non_existence": "skip",
-                    "entities": entities
-                }]
+            entities.append({
+                'task_id': task_instance.task_id,
+                'note': new_content
             })
-        task_instance_api.bulk_task_instances(
-            dag_id=dag_run.dag_id,
-            dag_run_id=dag_run.run_id,
-            bulk_body_bulk_task_instance_body=batch_body)
+
+        if entities:
+            batch_body = airflow_client.client.BulkBodyBulkTaskInstanceBody.from_dict(
+                {
+                    "actions": [{
+                        "action": "update",
+                        "action_on_non_existence": "skip",
+                        "entities": entities
+                    }]
+                })
+            task_instance_api.bulk_task_instances(
+                dag_id=dag_run.dag_id,
+                dag_run_id=dag_run.run_id,
+                bulk_body_bulk_task_instance_body=batch_body)
+
+    _do_update()
 
 
 def init_orchestration_pipeline_context(note_content: str, **context):
@@ -99,6 +101,8 @@ def init_orchestration_pipeline_context(note_content: str, **context):
     Raises:
         ApiException: If the Airflow API client fails to update the metadata.
     """
+    from airflow_client.client.rest import ApiException
+    import airflow_client.client
     dag_run = context.get("dag_run")
     dag = context.get("dag")
 
@@ -141,7 +145,9 @@ def init_orchestration_pipeline_context(note_content: str, **context):
 
 
 def generate(pipeline: PipelineModel, tags: list[str], dag_notes: str,
-             data_root: str) -> DAG:
+             data_root: str) -> Any:
+    from airflow.sdk import DAG
+    from airflow.providers.standard.operators.python import PythonOperator
     """Generates the Airflow DAG for the given pipeline model.
 
     Args:
@@ -232,6 +238,8 @@ def get_actively_running_versions(pipeline_id: str,
     Queries the Airflow API to find any DAG runs currently in 'running' or
     'queued' states that match the bundle and pipeline ID pattern.
     """
+    from airflow_client.client.rest import ApiException
+    import airflow_client.client
     active_states = ["running", "queued"]
     prefix = f"{bundle_id}__v__"
     suffix = f"__{pipeline_id}"
@@ -267,6 +275,8 @@ def get_previous_default_versions(pipeline_id: str,
     Queries the Airflow API for DAGs tagged as current for the specific
     bundle and pipeline.
     """
+    from airflow_client.client.rest import ApiException
+    import airflow_client.client
     api_client = airflow_client_utils.get_airflow_api_client()
     dag_api = airflow_client.client.DAGApi(api_client)
 

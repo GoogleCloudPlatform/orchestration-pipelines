@@ -14,14 +14,9 @@
 #
 """Converts v1 protobuf pipeline models to internal pydantic models."""
 
+from __future__ import annotations
 import yaml
 from typing import Dict
-from google.protobuf import struct_pb2
-from google.protobuf.message import Message
-from google.cloud.dataproc_v1.types.shared import (EnvironmentConfig,
-                                                   RuntimeConfig)
-from google.cloud.dataproc_v1.types.clusters import ClusterConfig
-from google.cloud.dataform_v1.types.dataform import WorkflowInvocation
 from orchestration_pipelines_lib.internal_models import (
     actions as internal_actions, pipeline as internal_pipeline, triggers as
     internal_triggers)
@@ -39,18 +34,22 @@ class ConverterV1ToInternal:
 
     def _normalize_environment_config(
             self, environment_config_msg: Message) -> EnvironmentConfig:
+        from google.cloud.dataproc_v1.types.shared import EnvironmentConfig
         return normalize_struct(environment_config_msg, EnvironmentConfig)
 
     def _normalize_runtime_config(
             self, runtime_config_msg: Message) -> RuntimeConfig:
+        from google.cloud.dataproc_v1.types.shared import RuntimeConfig
         return normalize_struct(runtime_config_msg, RuntimeConfig)
 
     def _normalize_cluster_config(
             self, cluster_config_msg: Message) -> ClusterConfig:
+        from google.cloud.dataproc_v1.types.clusters import ClusterConfig
         return normalize_struct(cluster_config_msg, ClusterConfig)
 
     def _normalize_workflow_invocation(
             self, workflow_invocation_msg: Message) -> WorkflowInvocation:
+        from google.cloud.dataform_v1.types.dataform import WorkflowInvocation
         return normalize_struct(workflow_invocation_msg, WorkflowInvocation)
 
     def _get_gce_cluster_config(self, resource_profile_msg: Message) -> Dict:
@@ -62,6 +61,7 @@ class ConverterV1ToInternal:
         Returns:
             A dictionary containing the parsed cluster configuration.
         """
+        from google.cloud.dataproc_v1.types.clusters import ClusterConfig
         cluster_config = None
         config_type = resource_profile_msg.WhichOneof("config")
 
@@ -106,6 +106,7 @@ class ConverterV1ToInternal:
         Returns:
             An internal ResourceProfile model populated with the configuration.
         """
+        from google.protobuf import struct_pb2
         runtime_config_msg = struct_pb2.Struct()
         environment_config_msg = struct_pb2.Struct()
         config_type = resource_profile_msg.WhichOneof("config")

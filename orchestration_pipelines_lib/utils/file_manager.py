@@ -21,8 +21,18 @@ no knowledge of versioning. It also defines a set of custom exceptions for
 handling various file-related errors.
 """
 import os
-from typing import Optional
-from google.cloud import storage
+from typing import Optional, Any
+
+
+_GCS_CLIENT = None
+
+def _get_gcs_client():
+    global _GCS_CLIENT
+    if _GCS_CLIENT is None:
+        from google.cloud import storage
+        _GCS_CLIENT = storage.Client()
+    return _GCS_CLIENT
+
 
 
 class OrchestrationPipelinesFileReadError(Exception):
@@ -53,14 +63,20 @@ class FileManager:
     knowledge of versioning or relative path structures.
     """
 
-    def __init__(self, gcs_client: Optional[storage.Client] = None):
+    def __init__(self, gcs_client: Optional[Any] = None):
         """Initializes the FileManager.
 
         Args:
-            gcs_client: An optional pre-configured google.cloud.storage.Client
-                        instance. If None, a new client will be created.
+            gcs_client: An optional pre-configured GCS client instance.
         """
-        self._gcs_client = gcs_client or storage.Client()
+        self._gcs_client = gcs_client or _get_gcs_client()
+
+    def _get_gcs_client(self):
+        """Lazily initializes the GCS client."""
+        if self._gcs_client is None:
+            from google.cloud import storage
+            self._gcs_client = storage.Client()
+        return self._gcs_client
 
     def resolve_path(self, file_path: str) -> str:
         """Resolves a file path.
@@ -119,16 +135,15 @@ class FileManager:
             OrchestrationPipelinesFileReadError: If an error occurs during reading.
         """
         full_path = self._construct_local_path(path)
-        if not os.path.exists(full_path):
-            raise OrchestrationPipelinesFileNotFoundError(
-                f"File '{full_path}' does not exist.")
-        if not os.path.isfile(full_path):
-            raise OrchestrationPipelinesInvalidPathError(
-                f"'{full_path}' is not a file.")
         try:
-
             with open(full_path, "r", encoding="utf-8") as f:
                 return f.read()
+        except FileNotFoundError as e:
+            raise OrchestrationPipelinesFileNotFoundError(
+                f"File '{full_path}' does not exist.") from e
+        except IsADirectoryError as e:
+            raise OrchestrationPipelinesInvalidPathError(
+                f"'{full_path}' is not a file.") from e
         except Exception as e:
             raise OrchestrationPipelinesFileReadError(
                 f"Error reading local file '{path}': {e}") from e
@@ -176,16 +191,14 @@ class FileManager:
         """
         bucket_name, blob_path = self._parse_gcs_uri(gcs_uri)
         try:
-            bucket = self._gcs_client.get_bucket(bucket_name)
+            bucket = self._get_gcs_client().get_bucket(bucket_name)
             blob = bucket.blob(blob_path)
-            if not blob.exists():
-                raise OrchestrationPipelinesFileNotFoundError(
-                    f"GCS object '{gcs_uri}' does not exist.")
             return blob.download_as_text()
-        except (OrchestrationPipelinesInvalidPathError,
-                OrchestrationPipelinesFileNotFoundError):
-            raise
         except Exception as e:
+            from google.api_core import exceptions
+            if isinstance(e, exceptions.NotFound):
+                raise OrchestrationPipelinesFileNotFoundError(
+                    f"GCS object '{gcs_uri}' does not exist.") from e
             raise OrchestrationPipelinesFileReadError(
                 f"Error accessing GCS object '{gcs_uri}': {e}") from e
 
@@ -203,15 +216,15 @@ class FileManager:
             OrchestrationPipelinesInvalidPathError: If the path is not a file.
             OrchestrationPipelinesFileReadError: If an error occurs during reading.
         """
-        if not os.path.exists(path):
-            raise OrchestrationPipelinesFileNotFoundError(
-                f"File '{path}' does not exist.")
-        if not os.path.isfile(path):
-            raise OrchestrationPipelinesInvalidPathError(
-                f"'{path}' is not a file.")
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return f.read()
+        except FileNotFoundError as e:
+            raise OrchestrationPipelinesFileNotFoundError(
+                f"File '{path}' does not exist.") from e
+        except IsADirectoryError as e:
+            raise OrchestrationPipelinesInvalidPathError(
+                f"'{path}' is not a file.") from e
         except Exception as e:
             raise OrchestrationPipelinesFileReadError(
                 f"Error reading local file '{path}': {e}") from e
@@ -226,13 +239,10 @@ class FileManager:
         Returns:
             File content read from the given path.
         """
-        file_content = None
         if self._is_gcs_blob(file_path):
-            file_content = self._read_gcs_file(file_path)
+            return self._read_gcs_file(file_path)
         else:
-            file_content = self._read_local_file(file_path)
-
-        return file_content
+            return self._read_local_file(file_path)
 
     def exists(self, file_path: str) -> bool:
         """Validates whether a file or location exists at the given path.

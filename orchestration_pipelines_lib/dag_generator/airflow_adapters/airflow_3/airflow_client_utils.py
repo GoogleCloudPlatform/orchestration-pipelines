@@ -14,40 +14,9 @@
 #
 """Module with Airflow 3 Python Client package methods."""
 import os
-import airflow_client.client
-import google.auth
-from airflow.configuration import conf
-from google.auth.transport.requests import Request
 
-
-def get_airflow_client_configuration():
-    """Gets the configuration for the Airflow Python client.
-
-    Retrieves default Google Cloud credentials and configures the Airflow
-    client with the webserver URL and access token. For now, it requires a
-    GCP environment or pre-configured Application Default Credentials (ADC).
-
-    Returns:
-        The configured Airflow client Configuration object.
-
-    Raises:
-        ValueError: If the Airflow webserver URL cannot be determined.
-    """
-    # TODO: Parameterize auth configuration based on environment variable,
-    # to accomodate open source solutions too.
-    credentials, _ = google.auth.default(
-        scopes=["https://www.googleapis.com/auth/cloud-platform"])
-    webserver_url = os.environ.get("AIRFLOW__WEBSERVER__BASE_URL") or conf.get(
-        'api', 'base_url')
-
-    if not webserver_url:
-        raise ValueError("Could not determine Airflow webserver URL.")
-
-    configuration = airflow_client.client.Configuration(host=webserver_url)
-    credentials.refresh(Request())
-    configuration.access_token = credentials.token
-
-    return configuration
+_API_CLIENT = None
+_CREDENTIALS = None
 
 
 def get_airflow_api_client():
@@ -56,5 +25,30 @@ def get_airflow_api_client():
     Returns:
         An instance of ApiClient configured for the current Airflow environment.
     """
-    configuration = get_airflow_client_configuration()
-    return airflow_client.client.ApiClient(configuration)
+    global _API_CLIENT, _CREDENTIALS
+    import google.auth
+    from google.auth.transport.requests import Request
+    from airflow.configuration import conf
+    import airflow_client.client
+
+    if _CREDENTIALS is None:
+        _CREDENTIALS, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        _CREDENTIALS.refresh(Request())
+    elif not _CREDENTIALS.valid:
+        _CREDENTIALS.refresh(Request())
+
+    if _API_CLIENT is None:
+        webserver_url = os.environ.get("AIRFLOW__WEBSERVER__BASE_URL") or conf.get(
+            'api', 'base_url')
+
+        if not webserver_url:
+            raise ValueError("Could not determine Airflow webserver URL.")
+
+        configuration = airflow_client.client.Configuration(host=webserver_url)
+        configuration.access_token = _CREDENTIALS.token
+        _API_CLIENT = airflow_client.client.ApiClient(configuration)
+    else:
+        _API_CLIENT.configuration.access_token = _CREDENTIALS.token
+
+    return _API_CLIENT
