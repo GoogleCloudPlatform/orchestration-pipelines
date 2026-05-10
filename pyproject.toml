@@ -41,3 +41,20 @@ include = ["orchestration_pipelines_lib*", "orchestration_pipelines_models*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+
+[tool.black]
+line-length = 80
+skip-string-normalization = true
+
+[tool.ruff]
+# Set the line length to match Black
+line-length = 80
+
+[tool.ruff.lint]
+# Enable Pyflakes (F), pycodestyle (E, W), isort (I), pyupgrade (UP), bugbear (B), and pydocstyle (D)
+select = ["E", "F", "W", "I", "B", "UP", "D"]
+ignore = []
+
+[tool.ruff.lint.pydocstyle]
+# Enforce Google style docstring conventions
+convention = "google"

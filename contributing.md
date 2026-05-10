@@ -30,3 +30,7 @@ Guidelines](https://opensource.google/conduct/).
 All submissions, including submissions by project members, require review. We
 use [GitHub pull requests](https://docs.github.com/articles/about-pull-requests)
 for this purpose.
+
+## Coding Style
+
+Please format and lint your code to follow the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html) before submitting.
