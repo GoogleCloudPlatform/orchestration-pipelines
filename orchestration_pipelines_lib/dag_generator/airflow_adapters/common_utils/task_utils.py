@@ -13,21 +13,34 @@
 # limitations under the License.
 #
 """Module with common conversion methods from action into Airflow code."""
+
+
 from __future__ import annotations
-from typing import Any, Dict
-from datetime import datetime
+
 import json
 import logging
 import os
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Dict
+
 import pytz
-from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import dataproc_utils
-from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import gcs_utils
-from orchestration_pipelines_lib.utils.duration_utils import duration_to_timedelta
+
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # pylint: disable=line-too-long
+    dataproc_utils,
+    gcs_utils,
+)
+from orchestration_pipelines_lib.utils.duration_utils import (
+    duration_to_timedelta,
+)
 from orchestration_pipelines_lib.utils.file_manager import FileManager
+
+if TYPE_CHECKING:
+    from airflow.utils.task_group import TaskGroup
 
 
 def get_pipeline_metadata(dag: Any) -> tuple[str, str, str]:
-    """Extracts bundle_id, version_id, and pipeline_id from a DAG object's doc_md property.
+    """Extracts bundle_id, version_id, and pipeline_id from a DAG object's
+    doc_md property.
 
     Expects the structured JSON metadata to be present in `dag.doc_md`.
     """
@@ -46,7 +59,7 @@ def get_pipeline_metadata(dag: Any) -> tuple[str, str, str]:
             else:
                 logging.warning("DAG '%s' doc_md is not a JSON dictionary: %s",
                                 pipeline_id, dag.doc_md)
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             logging.warning("Failed to parse 'doc_md' of DAG '%s' as JSON: %s",
                             pipeline_id, e)
 
@@ -59,8 +72,9 @@ def _upload_inline_query_to_gcs(dag: Any, query: str, gcs_bucket: str,
 
     The path is derived from DAG metadata to ensure isolation.
     """
-    from google.cloud import storage
     import hashlib
+
+    from google.cloud import storage
 
     if not gcs_bucket:
         raise ValueError("GCS bucket must be specified for inline SQL upload.")
@@ -69,7 +83,10 @@ def _upload_inline_query_to_gcs(dag: Any, query: str, gcs_bucket: str,
 
     hash_value = hashlib.sha256(query.encode("utf-8")).hexdigest()
 
-    blob_name = f"data/{bundle_id}/versions/{version_id}/managed-temp/{hash_value}.sql"
+    blob_name = (
+        f"data/{bundle_id}/versions/{version_id}/"
+        f"managed-temp/{hash_value}.sql"
+    )
     gcs_uri = f"gs://{gcs_bucket}/{blob_name}"
 
     storage_client = storage.Client()
@@ -89,10 +106,12 @@ _dataproc_create_batch_inline_sql_operator_class = None
 def get_dataproc_create_batch_inline_sql_operator_class():
     global _dataproc_create_batch_inline_sql_operator_class
     if _dataproc_create_batch_inline_sql_operator_class is None:
-        from airflow.providers.google.cloud.operators.dataproc import DataprocCreateBatchOperator
+        from airflow.providers.google.cloud.operators.dataproc import (
+            DataprocCreateBatchOperator,
+        )
 
-        class DataprocCreateBatchInlineSqlOperator(DataprocCreateBatchOperator
-                                                   ):
+        class DataprocCreateBatchInlineSqlOperator(DataprocCreateBatchOperator):
+            """Inline SQL operator for Dataproc Create Batch."""
 
             def __init__(self, *, query: str, gcs_bucket: str, **kwargs):
                 self.query = query
@@ -115,7 +134,9 @@ def get_dataproc_create_batch_inline_sql_operator_class():
 
                 return super().execute(context)
 
-        _dataproc_create_batch_inline_sql_operator_class = DataprocCreateBatchInlineSqlOperator
+        _dataproc_create_batch_inline_sql_operator_class = (
+            DataprocCreateBatchInlineSqlOperator
+        )
 
     return _dataproc_create_batch_inline_sql_operator_class
 
@@ -126,9 +147,12 @@ _dataproc_submit_job_inline_sql_operator_class = None
 def get_dataproc_submit_job_inline_sql_operator_class():
     global _dataproc_submit_job_inline_sql_operator_class
     if _dataproc_submit_job_inline_sql_operator_class is None:
-        from airflow.providers.google.cloud.operators.dataproc import DataprocSubmitJobOperator
+        from airflow.providers.google.cloud.operators.dataproc import (
+            DataprocSubmitJobOperator,
+        )
 
         class DataprocSubmitJobInlineSqlOperator(DataprocSubmitJobOperator):
+            """Inline SQL operator for Dataproc Submit Job."""
 
             def __init__(self, *, query: str, gcs_bucket: str, **kwargs):
                 self.query = query
@@ -151,7 +175,9 @@ def get_dataproc_submit_job_inline_sql_operator_class():
 
                 return super().execute(context)
 
-        _dataproc_submit_job_inline_sql_operator_class = DataprocSubmitJobInlineSqlOperator
+        _dataproc_submit_job_inline_sql_operator_class = (
+            DataprocSubmitJobInlineSqlOperator
+        )
 
     return _dataproc_submit_job_inline_sql_operator_class
 
@@ -168,9 +194,12 @@ def create_dataproc_create_batch_operator_task(action: Dict[str, Any],
     Returns:
         An instance of DataprocCreateBatchOperator.
     """
-    from airflow.providers.google.cloud.operators.dataproc import DataprocCreateBatchOperator
-    from google.cloud import dataproc_v1
     import uuid
+
+    from airflow.providers.google.cloud.operators.dataproc import (
+        DataprocCreateBatchOperator,
+    )
+    from google.cloud import dataproc_v1
 
     try:
         job_specific_config = {}
@@ -185,7 +214,8 @@ def create_dataproc_create_batch_operator_task(action: Dict[str, Any],
         if action.type == "sql":
             spark_sql_batch = {}
             if action.query:
-                operator_class = get_dataproc_create_batch_inline_sql_operator_class(
+                operator_class = (
+                    get_dataproc_create_batch_inline_sql_operator_class()
                 )
                 extra_kwargs["query"] = action.query
                 extra_kwargs["gcs_bucket"] = os.environ.get("GCS_BUCKET")
@@ -195,7 +225,9 @@ def create_dataproc_create_batch_operator_task(action: Dict[str, Any],
             job_specific_config["spark_sql_batch"] = spark_sql_batch
 
         runtime_config = action.config.resourceProfile.runtimeConfig or {}
-        environment_config = action.config.resourceProfile.environmentConfig or {}
+        environment_config = (
+            action.config.resourceProfile.environmentConfig or {}
+        )
 
         if action.type in ("pyspark", "notebook"):
             deps_bucket = action.depsBucket or ""
@@ -213,14 +245,20 @@ def create_dataproc_create_batch_operator_task(action: Dict[str, Any],
             region=action.region,
             project_id=pipeline.defaults.cloudDefault.project,
             batch=batch,
-            batch_id=
-            f"{action.name.lower().lstrip('_-').replace('_', '-')[:50]}-{uuid.uuid4().hex[:6]}",
-            execution_timeout=duration_to_timedelta(action.executionTimeout)
-            if action.executionTimeout else None,
+            batch_id=(
+                f"{action.name.lower().lstrip('_-').replace('_', '-')[:50]}-"
+                f"{uuid.uuid4().hex[:6]}"
+            ),
+            execution_timeout=(
+                duration_to_timedelta(action.executionTimeout)
+                if action.executionTimeout
+                else None
+            ),
             impersonation_chain=action.impersonationChain,
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
-            **extra_kwargs)
+            **extra_kwargs,
+        )
     except Exception as e:
         print(f"Error creating task for action '{action.name}': {e}")
         raise
@@ -238,7 +276,9 @@ def create_bq_operation_task(action: Dict[str, Any], pipeline: Dict[str, Any],
     Returns:
         An instance of BigQueryInsertJobOperator.
     """
-    from airflow.providers.google.cloud.operators.bigquery import BigQueryInsertJobOperator
+    from airflow.providers.google.cloud.operators.bigquery import (
+        BigQueryInsertJobOperator,
+    )
 
     try:
         if action.filename:
@@ -262,7 +302,8 @@ def create_bq_operation_task(action: Dict[str, Any], pipeline: Dict[str, Any],
             parts = action.config.destinationTable.split(".")
             if len(parts) != 3:
                 raise ValueError(
-                    "destinationTable should be in the format 'project.dataset.table'"
+                    "destinationTable should be in format "
+                    "'project.dataset.table'"
                 )
             configuration["query"]["destinationTable"] = {
                 "projectId": parts[0],
@@ -294,14 +335,16 @@ def dataproc_ephemeral_task(action: Dict[str, Any], dag) -> TaskGroup:
         dag: The Airflow DAG object.
 
     Returns:
-        An Airflow TaskGroup containing cluster creation, job submission, and deletion tasks.
+        An Airflow TaskGroup containing cluster creation, job submission, and
+        deletion tasks.
     """
-    from airflow.utils.trigger_rule import TriggerRule
-    from airflow.utils.task_group import TaskGroup
-
     from airflow.providers.google.cloud.operators.dataproc import (
-        DataprocCreateClusterOperator, DataprocSubmitJobOperator,
-        DataprocDeleteClusterOperator)
+        DataprocCreateClusterOperator,
+        DataprocDeleteClusterOperator,
+        DataprocSubmitJobOperator,
+    )
+    from airflow.utils.task_group import TaskGroup
+    from airflow.utils.trigger_rule import TriggerRule
 
     try:
         with TaskGroup(group_id=action.name, dag=dag) as task_group:
@@ -335,7 +378,8 @@ def dataproc_ephemeral_task(action: Dict[str, Any], dag) -> TaskGroup:
             if action.type == "sql":
                 spark_sql_job = {}
                 if action.query:
-                    operator_class = get_dataproc_submit_job_inline_sql_operator_class(
+                    operator_class = (
+                        get_dataproc_submit_job_inline_sql_operator_class()
                     )
                     extra_kwargs["query"] = action.query
                     extra_kwargs["gcs_bucket"] = os.environ.get("GCS_BUCKET")
@@ -376,6 +420,7 @@ def dataproc_ephemeral_task(action: Dict[str, Any], dag) -> TaskGroup:
                 dag=dag,
                 trigger_rule=TriggerRule.ALL_DONE)
 
+            # pylint: disable=pointless-statement
             create_cluster >> submit_job >> delete_cluster
         return task_group
     except Exception as e:
@@ -385,7 +430,8 @@ def dataproc_ephemeral_task(action: Dict[str, Any], dag) -> TaskGroup:
 
 def dataproc_existing_cluster(action: Dict[str, Any], pipeline: Dict[str, Any],
                               dag):
-    """Converts an action into a DataprocSubmitJobOperator for an existing cluster.
+    """Converts action into DataprocSubmitJobOperator for existing
+    cluster.
 
     Args:
         action: The action configuration object.
@@ -395,7 +441,9 @@ def dataproc_existing_cluster(action: Dict[str, Any], pipeline: Dict[str, Any],
     Returns:
         An instance of DataprocSubmitJobOperator.
     """
-    from airflow.providers.google.cloud.operators.dataproc import DataprocSubmitJobOperator
+    from airflow.providers.google.cloud.operators.dataproc import (
+        DataprocSubmitJobOperator,
+    )
 
     try:
         job = {
@@ -413,7 +461,8 @@ def dataproc_existing_cluster(action: Dict[str, Any], pipeline: Dict[str, Any],
         if action.type == "sql":
             spark_sql_job = {}
             if action.query:
-                operator_class = get_dataproc_submit_job_inline_sql_operator_class(
+                operator_class = (
+                    get_dataproc_submit_job_inline_sql_operator_class()
                 )
                 extra_kwargs["query"] = action.query
                 extra_kwargs["gcs_bucket"] = os.environ.get("GCS_BUCKET")
@@ -474,7 +523,7 @@ def create_dataproc_operator_task(action: Dict[str, Any],
         dag: The Airflow DAG object.
 
     Returns:
-        An Airflow operator or TaskGroup based on the engine type and cluster mode.
+        An Airflow operator or TaskGroup based on engine type and mode.
 
     Raises:
         ValueError: If the engine type or cluster mode is not supported.
@@ -503,7 +552,7 @@ def _get_config_or_default(config_obj,
         config_obj: The configuration object to check first.
         pipeline: The pipeline configuration containing defaults.
         action_attribute: The attribute name to look up in config_obj.
-        pipeline_attribute: The optional attribute name to look up in pipeline defaults.
+        pipeline_attribute: The optional attribute name to look up.
 
     Returns:
         The resolved configuration value.
@@ -528,7 +577,9 @@ def create_service_dataform_task(action: Dict[str, Any],
     Returns:
         An instance of DataformCreateWorkflowInvocationOperator.
     """
-    from airflow.providers.google.cloud.operators.dataform import DataformCreateWorkflowInvocationOperator
+    from airflow.providers.google.cloud.operators.dataform import (
+        DataformCreateWorkflowInvocationOperator,
+    )
 
     return DataformCreateWorkflowInvocationOperator(
         task_id=action.name,
@@ -551,20 +602,25 @@ def create_local_dataform_task(action: Dict[str, Any], _: Dict[str, Any],
     Args:
         action: The action configuration object.
         _: Ignored pipeline configuration object.
-        gcs_bucket_path_template: The GCS bucket path containing the Dataform workspace.
+        gcs_bucket_path_template: The GCS bucket path containing the workspace.
         dag: The Airflow DAG object.
 
     Returns:
         An instance of KubernetesPodOperator configured to run Dataform locally.
     """
-    from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
+    from airflow.providers.cncf.kubernetes.operators.pod import (
+        KubernetesPodOperator,
+    )
 
     return KubernetesPodOperator(
         task_id=action.name,
         name="dataform-runner",
         namespace="composer-user-workloads",
-        image=
-        "us-docker.pkg.dev/cloud-airflow-releaser/orchestration-pipelines-basic-dataform-executor/orchestration-pipelines-basic-dataform-executor@sha256:fd7cd9673fda5994f1f90bfb3170ff6aa5ae8ed862d8ea518dddc5c48f9bd8f4",
+        image="us-docker.pkg.dev/cloud-airflow-releaser/"
+        "orchestration-pipelines-basic-dataform-executor/"
+        "orchestration-pipelines-basic-dataform-executor"
+        "@sha256:fd7cd9673fda5994f1f90bfb3170ff6aa5ae8ed862d"
+        "8ea518dddc5c48f9bd8f4",
         env_vars={"GCS_BUCKET_PATH": gcs_bucket_path_template},
         cmds=["/bin/sh", "-c"],
         arguments=[
@@ -573,7 +629,11 @@ def create_local_dataform_task(action: Dict[str, Any], _: Dict[str, Any],
         get_logs=True,
         config_file="/home/airflow/composer_kube_config",
         image_pull_policy="Always",
-        execution_timeout=(duration_to_timedelta(action.executionTimeout)
-                           if action.executionTimeout else None),
+        execution_timeout=(
+            duration_to_timedelta(action.executionTimeout)
+            if action.executionTimeout
+            else None
+        ),
         doc_md=json.dumps({"op_action_name": action.name}),
-        dag=dag)
+        dag=dag,
+    )

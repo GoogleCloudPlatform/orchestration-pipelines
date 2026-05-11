@@ -13,11 +13,11 @@
 # limitations under the License.
 #
 """Module with uncommon util methods."""
+import importlib
+import logging
 import os
 import sys
 from typing import Any
-import importlib
-import logging
 
 
 def import_callable(path: str, function: str) -> Any:
@@ -49,6 +49,6 @@ def import_callable(path: str, function: str) -> Any:
     except (ImportError, AttributeError) as e:
         logging.error("Failed to import callable '%s' from '%s': %s", function,
                       path, e)
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logging.error("Unexpected error importing callable '%s' from '%s': %s",
                       function, path, e)

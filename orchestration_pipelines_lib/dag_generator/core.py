@@ -14,10 +14,12 @@
 #
 """Module to validate and build pipeline from yaml to actual airflow code."""
 
-from typing import Any
 from importlib.metadata import version
+from typing import Any
+
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.adapter_factory import (
-    get_adapter, )
+    get_adapter,
+)
 
 AIRFLOW_VERSION = version("apache-airflow").split("+")[0].replace(".", "_")
 

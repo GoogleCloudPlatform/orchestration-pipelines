@@ -15,11 +15,12 @@
 """Module for action handler registry."""
 
 from typing import Any, Dict
+
 from orchestration_pipelines_lib.internal_models import actions
 
 
 def get_action_handlers(task_factory) -> Dict[Any, Any]:
-    """Returns a static mapping of internal action models to their Airflow task factory methods.
+    """Returns a static mapping of action models to task factory methods.
 
     Args:
         task_factory: The task factory instance to use for creating tasks.

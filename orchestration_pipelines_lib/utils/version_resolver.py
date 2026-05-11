@@ -15,14 +15,15 @@
 """Provides the VersionResolver for determining a pipeline's version."""
 import logging
 from typing import Any, Dict, Optional
+
 import yaml
 
+from orchestration_pipelines_lib.utils import path_utils
 from orchestration_pipelines_lib.utils.file_manager import (
+    FileManager,
     OrchestrationPipelinesFileReadError,
     OrchestrationPipelinesInvalidPathError,
-    FileManager,
 )
-from orchestration_pipelines_lib.utils import path_utils
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,8 @@ class VersionResolver:
             dag_version: The pipeline version to validate.
 
         Raises:
-            OrchestrationPipelinesInvalidPathError: If the version path does not exist.
+            OrchestrationPipelinesInvalidPathError: If the version path does
+                not exist.
         """
         # Construct the absolute path to the versioned directory
         version_path = path_utils.get_version_path(self._local_data_root,
@@ -111,7 +113,8 @@ class VersionResolver:
         2.  If not in `params`, reading 'default_version' from the manifest.
 
         Args:
-            params: A dictionary of parameters that may contain the pipeline version.
+            params: A dictionary of parameters that may contain the
+                pipeline version.
 
         Returns:
             The resolved and validated pipeline version string.

@@ -13,15 +13,15 @@
 # limitations under the License.
 #
 """Module with various file util methods."""
-import os
 import importlib
 import importlib.resources
+import os
 
 BLOB_NAME_CLUSTER = "data/run_notebook.py"
 
 
 def upload_run_notebook_if_needed(gcs_path: str):
-    """Checks buckets for the existence of run_notebook.py and uploads it if missing.
+    """Checks buckets for existence of run_notebook.py and uploads if missing.
 
     Args:
         gcs_path: The GCS path where the notebook should be uploaded.
@@ -91,7 +91,7 @@ def get_gcs_file_content(gcs_path: str) -> str:
 
 
 def read_local_file_content(relative_path: str) -> str:
-    """Reads a local file from the DAGS_FOLDER and returns its content as a string.
+    """Reads local file from DAGS_FOLDER and returns its content as string.
 
     Args:
         relative_path: The relative path to the file from the DAGS_FOLDER.
@@ -101,12 +101,12 @@ def read_local_file_content(relative_path: str) -> str:
     """
     dags_folder = os.environ.get("DAGS_FOLDER", "/home/airflow/gcs/dags")
     full_path = os.path.join(dags_folder, relative_path)
-    with open(full_path, "r", encoding="utf-8") as f:
+    with open(full_path, encoding="utf-8") as f:
         return f.read()
 
 
 def read_local_file_content_from_path(file_path: str) -> str:
-    """Reads a local file from a specific path and returns its content as a string.
+    """Reads local file from specific path and returns its content as string.
 
     Args:
         file_path: The absolute or relative path to the file.
@@ -114,5 +114,5 @@ def read_local_file_content_from_path(file_path: str) -> str:
     Returns:
         The content of the local file as a string.
     """
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         return f.read()

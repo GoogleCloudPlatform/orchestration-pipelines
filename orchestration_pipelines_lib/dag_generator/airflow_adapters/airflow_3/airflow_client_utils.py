@@ -26,10 +26,10 @@ def get_airflow_api_client():
         An instance of ApiClient configured for the current Airflow environment.
     """
     global _API_CLIENT, _CREDENTIALS
-    import google.auth
-    from google.auth.transport.requests import Request
-    from airflow.configuration import conf
     import airflow_client.client
+    import google.auth
+    from airflow.configuration import conf
+    from google.auth.transport.requests import Request
 
     if _CREDENTIALS is None:
         _CREDENTIALS, _ = google.auth.default(
@@ -39,8 +39,9 @@ def get_airflow_api_client():
         _CREDENTIALS.refresh(Request())
 
     if _API_CLIENT is None:
-        webserver_url = os.environ.get("AIRFLOW__WEBSERVER__BASE_URL") or conf.get(
-            'api', 'base_url')
+        webserver_url = os.environ.get(
+            "AIRFLOW__WEBSERVER__BASE_URL"
+        ) or conf.get("api", "base_url")
 
         if not webserver_url:
             raise ValueError("Could not determine Airflow webserver URL.")

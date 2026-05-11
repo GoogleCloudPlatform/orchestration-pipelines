@@ -12,10 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+"""Factory to dynamically load version-specific Airflow adapters."""
 
 import importlib
 import os
-from distutils.version import LooseVersion
+
+from packaging.version import Version
+
+
+def _parse_version(version_str: str) -> Version:
+    """Parses a version string into a Version object for robust comparison."""
+    clean_str = version_str.replace("airflow_", "").replace("_", ".")
+    return Version(clean_str)
 
 
 def get_adapter(version):
@@ -35,14 +43,14 @@ def get_adapter(version):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     available_versions = []
     for dir_name in os.listdir(current_dir):
-        if os.path.isdir(os.path.join(
-                current_dir, dir_name)) and dir_name.startswith("airflow_"):
-            version_str = dir_name.replace("airflow_", "").replace("_", ".")
-            available_versions.append((LooseVersion(version_str), dir_name))
+        if os.path.isdir(
+            os.path.join(current_dir, dir_name)
+        ) and dir_name.startswith("airflow_"):
+            available_versions.append((_parse_version(dir_name), dir_name))
 
     available_versions.sort(key=lambda x: x[0], reverse=True)
 
-    input_version = LooseVersion(version.replace("_", "."))
+    input_version = _parse_version(version)
 
     best_match = None
     for version_obj, dir_name in available_versions:
@@ -54,12 +62,15 @@ def get_adapter(version):
         try:
             module_path = (
                 f"orchestration_pipelines_lib.dag_generator.airflow_adapters."
-                f"airflow_{best_match}.core")
+                f"airflow_{best_match}.core"
+            )
             adapter_module = importlib.import_module(module_path)
             return adapter_module
         except ImportError as e:
             raise ValueError(
-                f"Unsupported Airflow version: {version}. Error: {e}")
+                f"Unsupported Airflow version: {best_match}. Error: {e}"
+            ) from e
     else:
         raise ValueError(
-            f"No suitable adapter found for Airflow version: {version}")
+            f"No suitable adapter found for Airflow version: {version}"
+        )

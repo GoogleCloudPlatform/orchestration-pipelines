@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+"""Module to invoke dbt commands programmatically using dbtRunner."""
 
 import logging
 
@@ -27,12 +28,12 @@ def invoke_dbt_run(project_dir: str,
         select_models: An optional list of specific dbt models to run.
 
     Raises:
-        Exception: If the dbt run fails or encounters a system exception.
+        RuntimeError: If the dbt run fails or encounters a system exception.
     """
     from dbt.cli.main import dbtRunner, dbtRunnerResult
 
     logger = logging.getLogger("airflow.task")
-    logger.info(f"🚀 Initializing dbtRunner for project: {project_dir}")
+    logger.info("🚀 Initializing dbtRunner for project: %s", project_dir)
 
     # Initialize dbt Runner
     dbt = dbtRunner()
@@ -45,7 +46,7 @@ def invoke_dbt_run(project_dir: str,
     if select_models:
         cli_args.extend(["--select", " ".join(select_models)])
 
-    logger.info(f"Running command args: {cli_args}")
+    logger.info("Running command args: %s", cli_args)
 
     # Execute
     res: dbtRunnerResult = dbt.invoke(cli_args)
@@ -54,12 +55,12 @@ def invoke_dbt_run(project_dir: str,
     if res.success:
         logger.info("✅ dbt run finished successfully!")
         for r in res.result:
-            logger.info(f"   • {r.node.name}: {r.status}")
+            logger.info("   • %s: %s", r.node.name, r.status)
     else:
         if res.exception:
-            logger.error(f"❌ System Exception: {res.exception}")
+            logger.error("❌ System Exception: %s", res.exception)
         if res.result:
             for r in res.result:
-                if r.status != 'success':
-                    logger.error(f"❌ Failed: {r.node.name} - {r.message}")
-        raise Exception("dbt run failed. Check logs for details.")
+                if r.status != "success":
+                    logger.error("❌ Failed: %s - %s", r.node.name, r.message)
+        raise RuntimeError("dbt run failed. Check logs for details.")

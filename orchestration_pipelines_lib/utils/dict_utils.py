@@ -15,7 +15,8 @@
 """Dictionary manipulation utilities."""
 
 import re
-from typing import Dict, Type, Any
+from typing import Any, Dict, Type
+
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.message import Message
 
@@ -31,7 +32,8 @@ def to_snake_case(key: str) -> str:
     """
     # Handles cases like 'HTTPStatus' -> 'HTTP_Status'
     s1 = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", key)
-    # Handles cases like 'camelCase' -> 'camel_Case' and 'PascalCase' -> 'Pascal_Case'
+    # Handles cases like 'camelCase' -> 'camel_Case' and
+    # 'PascalCase' -> 'Pascal_Case'
     s2 = re.sub(r"([a-z\d])([A-Z])", r"\1_\2", s1)
     return s2.lower()
 
@@ -88,5 +90,5 @@ def dict_to_struct(message_dict: Dict[str, Any],
         the dictionary.
     """
     parsed_message = target_message_class()
-    ParseDict(js_dict=message_dict, message=parsed_message._pb)
+    ParseDict(js_dict=message_dict, message=parsed_message._pb)  # pylint: disable=protected-access
     return parsed_message

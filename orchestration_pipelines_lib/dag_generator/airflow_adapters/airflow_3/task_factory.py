@@ -15,12 +15,24 @@
 """Module to convert actions into Airflow 3 specific code."""
 
 from __future__ import annotations
-from typing import Any, Dict
+
 import json
-from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import utils
-from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import task_utils
+from typing import TYPE_CHECKING, Any, Dict
+
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (
+    task_utils,
+    utils,
+)
 from orchestration_pipelines_lib.scripts.dbt_wrapper import invoke_dbt_run
-from orchestration_pipelines_lib.utils.duration_utils import duration_to_timedelta
+from orchestration_pipelines_lib.utils.duration_utils import (
+    duration_to_timedelta,
+)
+
+if TYPE_CHECKING:
+    from airflow.providers.standard.operators.python import (
+        PythonOperator,
+        PythonVirtualenvOperator,
+    )
 
 
 def create_python_script_task(action: Dict[str, Any], _: Dict[str, Any],
@@ -32,9 +44,10 @@ def create_python_script_task(action: Dict[str, Any], _: Dict[str, Any],
         entrypoint = action.config.pythonCallable
         user_kwargs = action.config.opKwargs or {}
         def runtime_wrapper(**kwargs):
-            from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import utils
             python_callable = utils.import_callable(callable_path, entrypoint)
-            filtered_kwargs = {k: v for k, v in kwargs.items() if k in user_kwargs}
+            filtered_kwargs = {
+                k: v for k, v in kwargs.items() if k in user_kwargs
+            }
             return python_callable(**filtered_kwargs)
 
         return PythonOperator(
@@ -55,7 +68,10 @@ def create_python_script_task(action: Dict[str, Any], _: Dict[str, Any],
 def create_python_virtualenv_task(action: Dict[str, Any], _: Dict[str, Any],
                                   dag) -> PythonVirtualenvOperator:
     """Converts an action into a PythonVirtualenvOperator."""
-    from airflow.providers.standard.operators.python import PythonVirtualenvOperator
+    from airflow.providers.standard.operators.python import (
+        PythonVirtualenvOperator,
+    )
+
     try:
         callable_path = action.filename
         entrypoint = action.config.pythonCallable
@@ -88,12 +104,12 @@ def create_python_virtualenv_task(action: Dict[str, Any], _: Dict[str, Any],
 
 def create_bq_operation_task(action: Dict[str, Any], pipeline: Dict[str, Any],
                              dag):
-    """Converts an action into a SQL job running either on Bigquery directly or via Dataproc."""
+    """Converts action to SQL job running on BigQuery or Dataproc."""
     return task_utils.create_bq_operation_task(action, pipeline, dag=dag)
 
 
 def create_schedule_trigger_task(dag_kwargs, schedule_trigger):
-    """Converts the input trigger config into params for the Airflow pipeline."""
+    """Converts trigger config into params for Airflow pipeline."""
     return task_utils.create_schedule_trigger_task(dag_kwargs,
                                                    schedule_trigger)
 
@@ -133,8 +149,8 @@ def create_dataform_task(action: Dict[str, Any], pipeline: Dict[str, Any],
                          dag):
     """Converts an action into a Dataform operator.
 
-    Depending on the execution mode, it either runs a local KubernetesPodOperator
-    or invokes the Dataform service workflow operator.
+    Depending on the execution mode, it either runs a local
+    KubernetesPodOperator or invokes the Dataform service operator.
     """
     from airflow.sdk import Variable
     if action.executionMode == "local":

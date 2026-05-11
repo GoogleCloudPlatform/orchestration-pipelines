@@ -16,7 +16,7 @@
 
 import json
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
 from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
@@ -32,10 +32,12 @@ def create(dag_base_id: str, error_message: str, tags: List[str],
         dag_base_id: The base ID of the DAG that failed to parse.
         error_message: The error message detailing why the parsing failed.
         tags: A list of tags to associate with the dummy DAG.
-        doc_md: An optional JSON-formatted string containing documentation metadata.
+        doc_md: An optional JSON-formatted string containing documentation
+            metadata.
 
     Returns:
-        An instantiated Airflow DAG containing a single EmptyOperator indicating failure.
+        An instantiated Airflow DAG containing a single EmptyOperator
+        indicating failure.
     """
     dag_id = _ERROR_DAG_PREFIX + dag_base_id
     error_doc_md = {"op_error": f"\n\n````\n{error_message}\n````"}

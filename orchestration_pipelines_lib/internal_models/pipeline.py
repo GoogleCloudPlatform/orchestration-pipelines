@@ -12,31 +12,45 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-"""Defines the internal, version-agnostic data models for an orchestration pipeline."""
+"""Defines the internal data models for an orchestration pipeline."""
+
+# pylint: disable=invalid-name,missing-class-docstring
 
 from dataclasses import dataclass
-from typing import Optional, List, Union
 from enum import Enum
+from typing import List, Optional, Union
+
 from orchestration_pipelines_lib.internal_models.actions import (
-    DBTActionModel, DataformActionModel, DataprocOperatorActionModel,
-    PythonScriptActionModel, BqOperationActionModel,
-    PythonVirtualenvActionModel)
+    BqOperationActionModel,
+    DataformActionModel,
+    DataprocOperatorActionModel,
+    DBTActionModel,
+    PythonScriptActionModel,
+    PythonVirtualenvActionModel,
+)
 from orchestration_pipelines_lib.internal_models.triggers import (
-    ScheduleTriggerModel)
+    ScheduleTriggerModel,
+)
 
 # Define a Union of all possible action models for this version.
 # In the future, if you add a NewActionModel, just add it to this Union.
 # e.g., AnyAction = Union[PapermillActionModel, NewActionModel]
-AnyAction = Union[PythonScriptActionModel, DataprocOperatorActionModel,
-                  BqOperationActionModel, PythonVirtualenvActionModel,
-                  DBTActionModel, DataformActionModel]
+AnyAction = Union[
+    PythonScriptActionModel,
+    DataprocOperatorActionModel,
+    BqOperationActionModel,
+    PythonVirtualenvActionModel,
+    DBTActionModel,
+    DataformActionModel,
+]
 AnyScheduleTrigger = Union[ScheduleTriggerModel]
 
 
 class RunnerType(str, Enum):
-    """Enumeration for the different types of runners that can execute the pipeline."""
-    CORE = 'core'
-    AIRFLOW = 'airflow'
+    """Enumeration for types of runners that execute the pipeline."""
+
+    CORE = "core"
+    AIRFLOW = "airflow"
 
 
 @dataclass

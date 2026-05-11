@@ -17,14 +17,19 @@
 import json
 from typing import List, Optional
 
-from orchestration_pipelines_lib.internal_models.triggers import \
-    ScheduleTriggerModel
+from orchestration_pipelines_lib.internal_models.triggers import (
+    ScheduleTriggerModel,
+)
 from orchestration_pipelines_models.manifest.manifest import Manifest
-from orchestration_pipelines_models.manifest.manifest_pb2 import DeploymentOrigination
+from orchestration_pipelines_models.manifest.manifest_pb2 import (
+    DeploymentOrigination,
+)
 
 
 class PipelineMetadata:
-    """A class to encapsulate pipeline metadata for generating DAG tags and documentation."""
+    """A class to encapsulate pipeline metadata for generating DAG tags and
+    documentation.
+    """
 
     def __init__(self, pipeline_id: str, manifest: Manifest, version_id: str):
         """Initializes the PipelineMetadata object.
@@ -45,7 +50,9 @@ class PipelineMetadata:
         self._extract_deployment_details()
 
     def _extract_deployment_details(self):
-        """Extracts deployment details from the manifest and sets instance attributes."""
+        """Extracts deployment details from the manifest and sets instance
+        attributes.
+        """
         deployment_details = self._manifest.get_deployment_details(
             self._version_id)
 
@@ -127,7 +134,8 @@ class PipelineMetadata:
 
         Args:
             owner: The owner of the pipeline.
-            schedule_trigger: The schedule trigger model containing schedule details.
+            schedule_trigger: The schedule trigger model containing schedule
+                details.
 
         Returns:
             A JSON-formatted string representing the DAG documentation metadata.

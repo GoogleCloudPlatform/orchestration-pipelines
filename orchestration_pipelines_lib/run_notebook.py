@@ -14,8 +14,9 @@
 #
 """Wrapper script for pyspark script."""
 
-import sys
 import os
+import sys
+
 import papermill as pm
 
 print("Starting run_notebook.py")
@@ -27,7 +28,9 @@ file_name = os.path.basename(input_notebook)
 file_name, file_extension = os.path.splitext(file_name)
 
 OUTPUT_PATH = (
-    f"gs://{output_bucket}/composer_orchestration_pipelines_resources/{file_name}-output-{run_id}{file_extension}"
+    f"gs://{output_bucket}/"
+    "composer_orchestration_pipelines_resources/"
+    f"{file_name}-output-{run_id}{file_extension}"
 )
 
 print(f"Starting notebook execution for {input_notebook}")
@@ -36,7 +39,7 @@ try:
     pm.execute_notebook(
         input_notebook,
         OUTPUT_PATH,
-        kernel_name='python3',
+        kernel_name="python3",
     )
     print(f"Finished notebook execution for {input_notebook}")
 except Exception as e:

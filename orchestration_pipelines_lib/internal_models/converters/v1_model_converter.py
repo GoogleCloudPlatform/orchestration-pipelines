@@ -14,16 +14,41 @@
 #
 """Converts v1 protobuf pipeline models to internal pydantic models."""
 
+# pylint: disable=protected-access
+
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, Dict
+
 import yaml
-from typing import Dict
+
 from orchestration_pipelines_lib.internal_models import (
-    actions as internal_actions, pipeline as internal_pipeline, triggers as
-    internal_triggers)
-from orchestration_pipelines_lib.utils.dict_utils import normalize_struct, struct_to_dict, dict_to_struct
+    actions as internal_actions,
+)
+from orchestration_pipelines_lib.internal_models import (
+    pipeline as internal_pipeline,
+)
+from orchestration_pipelines_lib.internal_models import (
+    triggers as internal_triggers,
+)
+from orchestration_pipelines_lib.utils.dict_utils import (
+    dict_to_struct,
+    normalize_struct,
+    struct_to_dict,
+)
 from orchestration_pipelines_lib.utils.file_manager import FileManager
-from orchestration_pipelines_models.pipeline_v1_model.protos import \
-    orchestration_pipeline_pb2 as v1_pipeline_protos
+from orchestration_pipelines_models.pipeline_v1_model.protos import (
+    orchestration_pipeline_pb2 as v1_pipeline_protos,
+)
+
+if TYPE_CHECKING:
+    from google.cloud.dataform_v1.types.dataform import WorkflowInvocation
+    from google.cloud.dataproc_v1.types.clusters import ClusterConfig
+    from google.cloud.dataproc_v1.types.shared import (
+        EnvironmentConfig,
+        RuntimeConfig,
+    )
+    from google.protobuf.message import Message
 
 
 class ConverterV1ToInternal:
@@ -49,14 +74,17 @@ class ConverterV1ToInternal:
 
     def _normalize_workflow_invocation(
             self, workflow_invocation_msg: Message) -> WorkflowInvocation:
-        from google.cloud.dataform_v1.types.dataform import WorkflowInvocation
+        from google.cloud.dataform_v1.types.dataform import (
+            WorkflowInvocation,
+        )
         return normalize_struct(workflow_invocation_msg, WorkflowInvocation)
 
     def _get_gce_cluster_config(self, resource_profile_msg: Message) -> Dict:
         """Parses a resource profile message for Dataproc on GCE.
 
         Args:
-            resource_profile_msg: The resource profile protobuf message to parse.
+            resource_profile_msg: The resource profile protobuf message to
+                parse.
 
         Returns:
             A dictionary containing the parsed cluster configuration.
@@ -96,12 +124,14 @@ class ConverterV1ToInternal:
         return struct_to_dict(cluster_config._pb) if cluster_config else {}
 
     def _get_serverless_resource_profile(
-            self,
-            resource_profile_msg: Message) -> internal_actions.ResourceProfile:
+        self,
+        resource_profile_msg: Message,
+    ) -> internal_actions.ResourceProfile:
         """Parses a resource profile message for Dataproc Serverless.
 
         Args:
-            resource_profile_msg: The resource profile protobuf message to parse.
+            resource_profile_msg: The resource profile protobuf message to
+                parse.
 
         Returns:
             An internal ResourceProfile model populated with the configuration.
@@ -172,7 +202,6 @@ class ConverterV1ToInternal:
         Returns:
             The converted internal pipeline model.
         """
-
         internal_triggers_list = [
             self.convert_trigger(t) for t in v1_pipeline_model.triggers
         ]

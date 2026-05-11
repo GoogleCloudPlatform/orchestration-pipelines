@@ -14,33 +14,37 @@
 #
 """Module to validate and build pipeline from YAML in Airflow 2."""
 import json
-from typing import Any
 from functools import partial
+from typing import Any
 
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (
+    action_handler_registry,
+)
+from orchestration_pipelines_lib.internal_models.pipeline import PipelineModel
+from orchestration_pipelines_lib.internal_models.triggers import (
+    ScheduleTriggerModel,
+)
 
 # Airflow and SQLAlchemy imports moved inside functions to reduce import tax
 from . import task_factory
 from .email_utils import send_failure_notification_email
-from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import action_handler_registry
-from orchestration_pipelines_lib.internal_models.pipeline import PipelineModel
-from orchestration_pipelines_lib.internal_models.triggers import ScheduleTriggerModel
 
 
 def init_orchestration_pipeline_context(note_content: str, **context):
-    from airflow.utils.session import create_session
-    from airflow.models.dagrun import DagRunNote
-    from airflow.models.taskinstance import TaskInstanceNote
-    from airflow.models import TaskInstance
-    from sqlalchemy.exc import IntegrityError
     """Initializes the orchestration pipeline context for a DAG run.
 
     Extracts specific metadata from the provided notes content and applies
     it to the DAG Run and its Task Instances via the Airflow database.
 
     Args:
-        note_content: The JSON string containing the DAG documentation and metadata.
+        note_content: JSON string containing the DAG documentation.
         **context: The Airflow task execution context.
     """
+    from airflow.models import TaskInstance
+    from airflow.models.dagrun import DagRunNote
+    from airflow.models.taskinstance import TaskInstanceNote
+    from airflow.utils.session import create_session
+    from sqlalchemy.exc import IntegrityError
     dag_run = context.get("dag_run")
     dag = context.get("dag")
     # Filter note_content to keep only specific fields
@@ -113,24 +117,27 @@ def init_orchestration_pipeline_context(note_content: str, **context):
                     session.add(new_ti_note)
             session.commit()
         except IntegrityError:
-            # If a parallel task committed a note first, just roll back and move on
+            # If a parallel task committed a note first, roll back
+            # and move on
             session.rollback()
         except Exception:
             session.rollback()
             raise
 
 
-def generate(pipeline: PipelineModel, tags: list[str], dag_notes: str,
-             data_root: str) -> Any:
-    from airflow.models import DAG
-    from airflow.operators.python import PythonOperator
+def generate(
+    pipeline: PipelineModel,
+    tags: list[str],
+    dag_notes: str,
+    data_root: str,
+) -> Any:
     """Generates the Airflow DAG for the given pipeline model.
 
     Args:
         pipeline: The parsed pipeline model.
         tags: A list of tags to apply to the generated DAG.
         dag_notes: The markdown documentation/notes for the DAG.
-        data_root: The root directory for the pipeline data used for template search.
+        data_root: Root directory for pipeline data used for template search.
 
     Returns:
         The fully constructed Airflow DAG.
@@ -138,10 +145,13 @@ def generate(pipeline: PipelineModel, tags: list[str], dag_notes: str,
     Raises:
         ValueError: If a task dependency cannot be resolved.
     """
+    from airflow.models import DAG
+    from airflow.operators.python import PythonOperator
 
-    # Defines list of non-relative path to the additional folders where jinja will look for
-    # templates. For example, .txt file format is treated as jinja template. By default,
-    # it searches in /home/airflow/gcs/dags folder first.
+    # Defines list of non-relative path to the additional folders where
+    # jinja will look for templates. For example, .txt file format is
+    # treated as jinja template. By default, it searches in
+    # /home/airflow/gcs/dags folder first.
     template_searchpath = []
     if data_root:
         template_searchpath.append(data_root)
@@ -185,7 +195,8 @@ def generate(pipeline: PipelineModel, tags: list[str], dag_notes: str,
     for action in pipeline.actions:
         handler = action_handlers.get(type(action))
         if handler:
-            # IMPORTANT: Ensure your handler passes 'dag=dag' to the Operator constructor
+            # IMPORTANT: Ensure your handler passes 'dag=dag' to the
+            # Operator constructor
             task_obj = handler(action, pipeline, dag=dag)
             tasks[action.name] = task_obj
     # 3. Add cross-task dependencies
@@ -210,19 +221,20 @@ def get_actively_running_versions(pipeline_id, bundle_id) -> list[str]:
     Queries the Airflow database to find any DAG runs currently in 'running' or
     'queued' states that match the bundle and pipeline ID pattern.
     """
-    from airflow.utils.state import State
-    from airflow.utils.session import create_session
     from airflow.models import DagRun
+    from airflow.utils.session import create_session
+    from airflow.utils.state import State
+
     active_states = [State.RUNNING, State.QUEUED]
     with create_session() as session:
         runs = (session.query(DagRun.dag_id).filter(
             DagRun.state.in_(active_states),
             DagRun.dag_id.like(f"{bundle_id}__v__%__{pipeline_id}"),
         ).all())
-    version_ids = list(set([
+    version_ids = list({
         x[0].removeprefix(f"{bundle_id}__v__").removesuffix(
             f"__{pipeline_id}") for x in runs
-    ]))
+    })
     return version_ids
 
 

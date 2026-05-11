@@ -13,6 +13,10 @@
 # limitations under the License.
 #
 
+"""Declarative configuration trigger models."""
+
+# pylint: disable=invalid-name,missing-class-docstring
+
 from dataclasses import dataclass
 from typing import Literal, Optional
 

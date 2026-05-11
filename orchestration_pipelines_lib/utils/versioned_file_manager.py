@@ -14,11 +14,15 @@
 #
 """Provides the VersionedFileManager for version-aware file access."""
 from __future__ import annotations
+
 import os
-from typing import Optional, Any
+from typing import Any, Optional
+
 from orchestration_pipelines_lib.utils import path_utils
 from orchestration_pipelines_lib.utils.file_manager import (
-    OrchestrationPipelinesInitializationError, FileManager)
+    FileManager,
+    OrchestrationPipelinesInitializationError,
+)
 
 
 class VersionedFileManager(FileManager):
@@ -28,12 +32,14 @@ class VersionedFileManager(FileManager):
     structure before using the base FileManager to perform file operations.
     """
 
-    def __init__(self,
-                 pipeline_id: str,
-                 current_version: str,
-                 bundle_id: str,
-                 local_data_root: str = "/orchestration_pipelines",
-                 gcs_client: Optional[Any] = None):
+    def __init__(
+        self,
+        pipeline_id: str,
+        current_version: str,
+        bundle_id: str,
+        local_data_root: str = "/orchestration_pipelines",
+        gcs_client: Optional[Any] = None,
+    ):
         """Initializes the VersionedFileManager.
 
         Args:
@@ -44,8 +50,8 @@ class VersionedFileManager(FileManager):
             gcs_client: An optional pre-configured GCS client.
 
         Raises:
-            OrchestrationPipelinesInitializationError: If pipeline_id, current_version,
-                or bundle_id is empty.
+            OrchestrationPipelinesInitializationError: If pipeline_id,
+                current_version, or bundle_id is empty.
         """
         super().__init__(gcs_client)
         if not pipeline_id:
@@ -63,16 +69,18 @@ class VersionedFileManager(FileManager):
         self._local_data_root = local_data_root
 
     @classmethod
-    def from_file_manager(cls,
-                          base_manager: FileManager,
-                          pipeline_id: str,
-                          current_version: str,
-                          bundle_id: str,
-                          local_data_root: str = "/orchestration_pipelines") -> VersionedFileManager:
-        """Creates a VersionedFileManager by explicitly reusing an existing FileManager's GCS client.
+    def from_file_manager(
+        cls,
+        base_manager: FileManager,
+        pipeline_id: str,
+        current_version: str,
+        bundle_id: str,
+        local_data_root: str = "/orchestration_pipelines",
+    ) -> VersionedFileManager:
+        """Creates a VersionedFileManager by reusing GCS client.
 
         Args:
-            base_manager: The base FileManager instance to reuse the GCS client from.
+            base_manager: Base FileManager instance to reuse the client from.
             pipeline_id: The unique identifier of the current pipeline.
             current_version: The version hash of the current pipeline execution.
             bundle_id: The identifier of the bundle.
@@ -86,7 +94,7 @@ class VersionedFileManager(FileManager):
             current_version=current_version,
             bundle_id=bundle_id,
             local_data_root=local_data_root,
-            gcs_client=base_manager._gcs_client
+            gcs_client=base_manager._gcs_client  # pylint: disable=protected-access
         )
 
     def set_version(self, version_id: str):

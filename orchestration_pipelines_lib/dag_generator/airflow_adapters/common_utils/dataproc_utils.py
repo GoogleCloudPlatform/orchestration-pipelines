@@ -14,16 +14,17 @@
 #
 """Module with all dataproc related client methods."""
 from __future__ import annotations
+
 import os
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict
+
+if TYPE_CHECKING:
+    from google.cloud.dataproc_v1.types import session_templates
 
 
 def get_session_template(
-        region: str,
-        session_template_name: str) -> session_templates.SessionTemplate:
-    from google.api_core.client_options import ClientOptions
-    from google.cloud.dataproc_v1 import SessionTemplateControllerClient, GetSessionTemplateRequest
-    from google.cloud.dataproc_v1.types import session_templates
+    region: str, session_template_name: str
+) -> session_templates.SessionTemplate:
     """Retrieves the session template using the Dataproc client.
 
     Args:
@@ -33,15 +34,22 @@ def get_session_template(
     Returns:
         The retrieved SessionTemplate object.
     """
+    from google.api_core.client_options import ClientOptions
+    from google.cloud.dataproc_v1 import (
+        GetSessionTemplateRequest,
+        SessionTemplateControllerClient,
+    )
+
     client_options = ClientOptions(
-        api_endpoint=f"{region}-dataproc.googleapis.com:443")
+        api_endpoint=f"{region}-dataproc.googleapis.com:443"
+    )
     client = SessionTemplateControllerClient(client_options=client_options)
     request = GetSessionTemplateRequest(name=session_template_name)
     return client.get_session_template(request=request)
 
 
 def sanitized(
-    session_template: session_templates.SessionTemplate
+    session_template: session_templates.SessionTemplate,
 ) -> session_templates.SessionTemplate:
     """Removes unsupported fields for Batch Jobs.
 
@@ -52,13 +60,15 @@ def sanitized(
         The sanitized session template with unsupported fields removed.
     """
     if session_template.runtime_config and hasattr(
-            session_template.runtime_config, "repository_config"):
+        session_template.runtime_config, "repository_config"
+    ):
         session_template.runtime_config.repository_config = None
     return session_template
 
 
-def get_pyspark_batch_config(action: Dict[str, Any],
-                             wrapper_uri: str) -> Dict[str, Any]:
+def get_pyspark_batch_config(
+    action: Dict[str, Any], wrapper_uri: str
+) -> Dict[str, Any]:
     """Returns the pyspark_batch configuration.
 
     Args:

@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-"""
-Provides the FileManager utility for file access.
+"""Provides the FileManager utility for file access.
 
 This module defines a generic FileManager for reading files and checking for
 their existence. It operates on absolute local paths or full GCS URIs and has
@@ -21,8 +20,7 @@ no knowledge of versioning. It also defines a set of custom exceptions for
 handling various file-related errors.
 """
 import os
-from typing import Optional, Any
-
+from typing import Any, Optional
 
 _GCS_CLIENT = None
 
@@ -32,7 +30,6 @@ def _get_gcs_client():
         from google.cloud import storage
         _GCS_CLIENT = storage.Client()
     return _GCS_CLIENT
-
 
 
 class OrchestrationPipelinesFileReadError(Exception):
@@ -47,7 +44,9 @@ class OrchestrationPipelinesFileNotFoundError(
 
 
 class OrchestrationPipelinesInitializationError(Exception):
-    """Error while initializing a class from the orchestration pipelines library."""
+    """Error while initializing a class from the orchestration pipelines
+    library.
+    """
     pass
 
 
@@ -101,7 +100,8 @@ class FileManager:
 
         Args:
             full_path: The full path to extract the relative path from.
-            local_data_root: The root directory to resolve the relative path from.
+            local_data_root: The root directory to resolve the relative
+                path from.
 
         Returns:
             The extracted relative path.
@@ -109,7 +109,8 @@ class FileManager:
         return os.path.relpath(full_path, start=local_data_root)
 
     def _construct_local_path(self, relative_path: str) -> str:
-        """Constructs a local path based on the DAGS_FOLDER environment variable.
+        """Constructs a local path based on the DAGS_FOLDER environment
+        variable.
 
         Args:
             relative_path: The relative path to append to DAGS_FOLDER.
@@ -132,11 +133,12 @@ class FileManager:
         Raises:
             OrchestrationPipelinesFileNotFoundError: If the file does not exist.
             OrchestrationPipelinesInvalidPathError: If the path is not a file.
-            OrchestrationPipelinesFileReadError: If an error occurs during reading.
+            OrchestrationPipelinesFileReadError: If an error occurs during
+                reading.
         """
         full_path = self._construct_local_path(path)
         try:
-            with open(full_path, "r", encoding="utf-8") as f:
+            with open(full_path, encoding="utf-8") as f:
                 return f.read()
         except FileNotFoundError as e:
             raise OrchestrationPipelinesFileNotFoundError(
@@ -158,7 +160,8 @@ class FileManager:
             A tuple containing the bucket name and blob path.
 
         Raises:
-            OrchestrationPipelinesInvalidPathError: If the URI format is invalid or missing the bucket name.
+            OrchestrationPipelinesInvalidPathError: If the URI format is
+                invalid or missing the bucket name.
         """
         if not gcs_uri.startswith("gs://"):
             raise OrchestrationPipelinesInvalidPathError(
@@ -185,9 +188,12 @@ class FileManager:
             The content of the GCS object as a string.
 
         Raises:
-            OrchestrationPipelinesFileNotFoundError: If the object does not exist.
-            OrchestrationPipelinesInvalidPathError: If the URI format is invalid.
-            OrchestrationPipelinesFileReadError: If an error occurs during access.
+            OrchestrationPipelinesFileNotFoundError: If the object does not
+                exist.
+            OrchestrationPipelinesInvalidPathError: If the URI format is
+                invalid.
+            OrchestrationPipelinesFileReadError: If an error occurs during
+                access.
         """
         bucket_name, blob_path = self._parse_gcs_uri(gcs_uri)
         try:
@@ -214,10 +220,11 @@ class FileManager:
         Raises:
             OrchestrationPipelinesFileNotFoundError: If the file does not exist.
             OrchestrationPipelinesInvalidPathError: If the path is not a file.
-            OrchestrationPipelinesFileReadError: If an error occurs during reading.
+            OrchestrationPipelinesFileReadError: If an error occurs during
+                reading.
         """
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 return f.read()
         except FileNotFoundError as e:
             raise OrchestrationPipelinesFileNotFoundError(
@@ -278,7 +285,7 @@ class FileManager:
                 return any(bucket.list_blobs(prefix=prefix, max_results=1))
             else:
                 return os.path.exists(self._construct_local_path(file_path))
-        except Exception:  # Includes GCS errors and invalid paths
+        except Exception:  # pylint: disable=broad-exception-caught  # Includes GCS errors and invalid paths
             return False
 
     def get_blob_reference(self, resolved_path: str) -> str:
@@ -299,7 +306,8 @@ class FileManager:
             OrchestrationPipelinesFileNotFoundError: If the path does not exist.
             OrchestrationPipelinesInvalidPathError: If a local path cannot be
                 converted to a GCS URI.
-            OrchestrationPipelinesInitializationError: If GCS_BUCKET env var is not set.
+            OrchestrationPipelinesInitializationError: If GCS_BUCKET env var
+                is not set.
         """
         if not self.exists(resolved_path):
             raise OrchestrationPipelinesFileNotFoundError(
@@ -311,7 +319,8 @@ class FileManager:
         gcs_bucket = os.environ.get("GCS_BUCKET")
         if not gcs_bucket:
             raise OrchestrationPipelinesInitializationError(
-                "GCS_BUCKET environment variable not set. Cannot determine GCS path for local file."
+                "GCS_BUCKET environment variable not set. "
+                "Cannot determine GCS path for local file."
             )
 
         # In Cloud Composer, gs://<bucket> is mounted at /home/airflow/gcs
@@ -324,7 +333,8 @@ class FileManager:
 
         raise OrchestrationPipelinesInvalidPathError(
             f"Cannot determine GCS reference for local path '{resolved_path}'. "
-            "Path is not within the expected Cloud Composer mount point '/home/airflow/gcs/'."
+            "Path is not within the expected Cloud Composer mount point "
+            "'/home/airflow/gcs/'."
         )
 
     def _is_gcs_blob(self, file_path: str) -> bool:

@@ -14,13 +14,16 @@
 #
 """Module to convert any supported model to internal model."""
 
-from orchestration_pipelines_lib.internal_models.converters.v1_model_converter import \
-    ConverterV1ToInternal
+from orchestration_pipelines_lib.internal_models.converters.v1_model_converter import (
+    ConverterV1ToInternal,
+)
+from orchestration_pipelines_lib.internal_models.pipeline import (
+    PipelineModel as InternalModel,
+)
 from orchestration_pipelines_lib.utils.file_manager import FileManager
-from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipeline_pb2 import \
-    OrchestrationPipeline as V1Model
-from orchestration_pipelines_lib.internal_models.pipeline import \
-    PipelineModel as InternalModel
+from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipeline_pb2 import (
+    OrchestrationPipeline as V1Model,
+)
 
 
 def convert(model, file_manager: FileManager) -> InternalModel:

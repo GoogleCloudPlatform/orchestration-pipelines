@@ -13,8 +13,12 @@
 # limitations under the License.
 #
 
-from typing import Literal, Optional, List, Any, Dict, Union
+"""Declarative configuration action models."""
+
+# pylint: disable=invalid-name,missing-class-docstring
+
 from dataclasses import dataclass
+from typing import Any, Dict, List, Literal, Optional, Union
 
 
 @dataclass
@@ -142,7 +146,7 @@ class DataformServiceModel:
 
 @dataclass
 class DataformActionModel(ActionBaseModel):
-    type: Literal['dataform_pipeline']
-    executionMode: Literal['local', 'service']
+    type: Literal["dataform_pipeline"]
+    executionMode: Literal["local", "service"]
     dataform_project_path: Optional[str] = None
     dataformServiceConfig: Optional[DataformServiceModel] = None
