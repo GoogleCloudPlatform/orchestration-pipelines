@@ -259,8 +259,8 @@ def create_dataproc_create_batch_operator_task(action: Dict[str, Any],
             dag=dag,
             **extra_kwargs,
         )
-    except Exception as e:
-        print(f"Error creating task for action '{action.name}': {e}")
+    except Exception:
+        logging.exception("Error creating task for action '%s'", action.name)
         raise
 
 
@@ -322,8 +322,8 @@ def create_bq_operation_task(action: Dict[str, Any], pipeline: Dict[str, Any],
             impersonation_chain=action.impersonationChain,
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag)
-    except Exception as e:
-        print(f"Error creating task for action '{action.name}': {e}")
+    except Exception:
+        logging.exception("Error creating task for action '%s'", action.name)
         raise
 
 
@@ -423,8 +423,8 @@ def dataproc_ephemeral_task(action: Dict[str, Any], dag) -> TaskGroup:
             # pylint: disable=pointless-statement
             create_cluster >> submit_job >> delete_cluster
         return task_group
-    except Exception as e:
-        print(f"Error creating task for action '{action.name}': {e}")
+    except Exception:
+        logging.exception("Error creating task for action '%s'", action.name)
         raise
 
 
@@ -491,8 +491,8 @@ def dataproc_existing_cluster(action: Dict[str, Any], pipeline: Dict[str, Any],
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
             **extra_kwargs)
-    except Exception as e:
-        print(f"Error creating task for action '{action.name}': {e}")
+    except Exception:
+        logging.exception("Error creating task for action '%s'", action.name)
         raise
 
 
@@ -637,3 +637,93 @@ def create_local_dataform_task(action: Dict[str, Any], _: Dict[str, Any],
         doc_md=json.dumps({"op_action_name": action.name}),
         dag=dag,
     )
+
+
+def create_bq_dts_task(
+    action: dict[str, Any], pipeline: dict[str, Any], dag
+) -> TaskGroup:
+    """Converts an action into a TaskGroup for a BigQuery DTS workflow.
+
+    Args:
+        action: The action configuration object.
+        pipeline: The pipeline configuration object.
+        dag: The Airflow DAG object.
+
+    Returns:
+        An Airflow TaskGroup containing transfer run start and sensor tasks.
+    """
+    from airflow.providers.google.cloud.operators.bigquery_dts import (
+        BigQueryDataTransferServiceStartTransferRunsOperator,
+    )
+    from airflow.providers.google.cloud.sensors.bigquery_dts import (
+        BigQueryDataTransferServiceTransferRunSensor,
+    )
+    from airflow.utils.task_group import TaskGroup
+
+    try:
+        with TaskGroup(group_id=action.name, dag=dag) as task_group:
+            project_id = (
+                action.config.projectId
+                or pipeline.defaults.cloudDefault.project
+            )
+            location = (
+                action.config.location or pipeline.defaults.cloudDefault.region
+            )
+
+            requested_run_time = None
+            requested_time_range = None
+            if action.config.runtimeParams:
+                requested_run_time = action.config.runtimeParams.get(
+                    "requested_run_time"
+                )
+                requested_time_range = action.config.runtimeParams.get(
+                    "requested_time_range"
+                )
+
+            if requested_run_time is None and requested_time_range is None:
+                requested_run_time = {
+                    "seconds": (
+                        "{{ logical_date.timestamp() | int if logical_date is "
+                        "defined else execution_date.timestamp() | int }}"
+                    )
+                }
+
+            start_task = BigQueryDataTransferServiceStartTransferRunsOperator(
+                task_id=f"{action.name}_start",
+                transfer_config_id=action.config.transferConfigId,
+                project_id=project_id,
+                location=location,
+                requested_run_time=requested_run_time,
+                requested_time_range=requested_time_range,
+                impersonation_chain=action.config.impersonationChain,
+                execution_timeout=(
+                    duration_to_timedelta(action.executionTimeout)
+                    if action.executionTimeout
+                    else None
+                ),
+                doc_md=json.dumps({"op_action_name": action.name}),
+                dag=dag,
+            )
+
+            sensor_task = BigQueryDataTransferServiceTransferRunSensor(
+                task_id=f"{action.name}_sensor",
+                transfer_config_id=action.config.transferConfigId,
+                run_id=(
+                    "{{ task_instance.xcom_pull("
+                    f"task_ids='{action.name}.{action.name}_start', key='run_id')"
+                    " }}"
+                ),
+                project_id=project_id,
+                location=location,
+                impersonation_chain=action.config.impersonationChain,
+                doc_md=json.dumps({"op_action_name": action.name}),
+                dag=dag,
+            )
+
+            # pylint: disable=pointless-statement
+            start_task >> sensor_task
+
+        return task_group
+    except Exception:
+        logging.exception("Error creating task for action '%s'", action.name)
+        raise

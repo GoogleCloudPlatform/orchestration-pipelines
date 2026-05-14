@@ -23,6 +23,7 @@ from typing import List, Optional, Union
 from orchestration_pipelines_lib.internal_models.actions import (
     BqOperationActionModel,
     DataformActionModel,
+    DataIngestionActionModel,
     DataprocOperatorActionModel,
     DBTActionModel,
     PythonScriptActionModel,
@@ -42,6 +43,7 @@ AnyAction = Union[
     PythonVirtualenvActionModel,
     DBTActionModel,
     DataformActionModel,
+    DataIngestionActionModel,
 ]
 AnyScheduleTrigger = Union[ScheduleTriggerModel]
 

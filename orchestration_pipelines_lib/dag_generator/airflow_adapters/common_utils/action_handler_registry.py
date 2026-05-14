@@ -29,13 +29,11 @@ def get_action_handlers(task_factory) -> Dict[Any, Any]:
         A dictionary mapping internal action models to task factory methods.
     """
     return {
-        actions.PythonScriptActionModel:
-        task_factory.create_python_script_task,
-        actions.PythonVirtualenvActionModel:
-        task_factory.create_python_virtualenv_task,
+        actions.PythonScriptActionModel: task_factory.create_python_script_task,
+        actions.PythonVirtualenvActionModel: task_factory.create_python_virtualenv_task,
         actions.BqOperationActionModel: task_factory.create_bq_operation_task,
-        actions.DataprocOperatorActionModel:
-        task_factory.create_dataproc_operator_task,
+        actions.DataprocOperatorActionModel: task_factory.create_dataproc_operator_task,
         actions.DBTActionModel: task_factory.create_dbt_task,
         actions.DataformActionModel: task_factory.create_dataform_task,
+        actions.DataIngestionActionModel: task_factory.create_bq_dts_task,
     }

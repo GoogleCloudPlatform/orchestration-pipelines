@@ -165,3 +165,8 @@ def create_dataform_task(action: Dict[str, Any], pipeline: Dict[str, Any],
         return task_utils.create_service_dataform_task(action,
                                                        pipeline,
                                                        dag=dag)
+
+
+def create_bq_dts_task(action: Dict[str, Any], pipeline: Dict[str, Any], dag):
+    """Converts action to BigQuery DTS task group."""
+    return task_utils.create_bq_dts_task(action, pipeline, dag=dag)

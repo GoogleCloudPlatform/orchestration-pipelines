@@ -117,9 +117,12 @@ class DataprocOperatorActionModel(ActionBaseModel):
     depsBucket: Optional[str] = None
     labels: Optional[Dict[str, str]] = None
     impersonationChain: Optional[Union[str, list[str]]] = None
-    config: Union[DataprocGceExistingClusterConfigurationModel,
-                  DataprocEphemeralConfigurationModel,
-                  DataprocCreateBatchOperatorConfigurationModel, None] = None
+    config: Union[
+        DataprocGceExistingClusterConfigurationModel,
+        DataprocEphemeralConfigurationModel,
+        DataprocCreateBatchOperatorConfigurationModel,
+        None,
+    ] = None
 
 
 @dataclass
@@ -146,7 +149,26 @@ class DataformServiceModel:
 
 @dataclass
 class DataformActionModel(ActionBaseModel):
+    """Internal model representing a Dataform action."""
     type: Literal["dataform_pipeline"]
     executionMode: Literal["local", "service"]
     dataform_project_path: Optional[str] = None
     dataformServiceConfig: Optional[DataformServiceModel] = None
+
+
+@dataclass
+class BigQueryDtsSpecModel:
+    """BigQuery DTS spec model."""
+    transferConfigId: str
+    runtimeParams: Optional[Dict[str, Any]] = None
+    impersonationChain: Optional[Union[str, List[str]]] = None
+    projectId: Optional[str] = None
+    location: Optional[str] = None
+
+
+@dataclass
+class DataIngestionActionModel(ActionBaseModel):
+    """Internal model representing a Data Ingestion action."""
+    type: Literal["data_ingestion"]
+    config: BigQueryDtsSpecModel
+    labels: Optional[Dict[str, str]] = None

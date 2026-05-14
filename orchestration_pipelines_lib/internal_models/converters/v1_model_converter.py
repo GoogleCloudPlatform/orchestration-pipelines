@@ -273,7 +273,7 @@ class ConverterV1ToInternal:
 
     def convert_action(self, action: v1_pipeline_protos.Action,
                        defaults: v1_pipeline_protos.Defaults,
-                       labels: Dict[str, str]) -> internal_pipeline.AnyAction:
+                       labels: dict[str, str]) -> internal_pipeline.AnyAction:
         action_type = action.WhichOneof("action")
         if action_type == "python":
             return self._convert_python_action(action.python)
@@ -287,6 +287,10 @@ class ConverterV1ToInternal:
             return self._convert_sql_action(action.sql, defaults, labels)
         if action_type == "pipeline":
             return self._convert_pipeline_action(action.pipeline, defaults)
+        if action_type == "data_ingestion":
+            return self._convert_data_ingestion_action(
+                action.data_ingestion, defaults, labels
+            )
         raise TypeError(f"Unknown action type: {action_type}")
 
     def _convert_python_action(
@@ -571,6 +575,50 @@ class ConverterV1ToInternal:
                                          workflow_invocation=struct_to_dict(
                                              workflow_invocation._pb)))
         raise TypeError(f"Unknown pipeline framework: {framework_type}")
+
+    def _convert_data_ingestion_action(
+        self,
+        action: v1_pipeline_protos.DataIngestionAction,
+        defaults: v1_pipeline_protos.Defaults,
+        labels: dict[str, str],
+    ) -> internal_pipeline.AnyAction:
+        config_type = action.WhichOneof("config")
+        if config_type == "bigquery_dts":
+            dts_spec = action.bigquery_dts
+            transfer_config_oneof = dts_spec.WhichOneof("transfer_config")
+            if not transfer_config_oneof:
+                raise ValueError("BigQueryDtsSpec requires a transfer_config.")
+
+            runtime_params = None
+            if (
+                dts_spec.HasField("runtime_params")
+                and dts_spec.runtime_params
+            ):
+                runtime_params = struct_to_dict(dts_spec.runtime_params)
+
+            impersonation_chain = None
+            if dts_spec.impersonation_chain:
+                impersonation_chain = list(dts_spec.impersonation_chain)
+
+            spec_model = internal_actions.BigQueryDtsSpecModel(
+                transferConfigId=dts_spec.transfer_config_id,
+                runtimeParams=runtime_params,
+                impersonationChain=impersonation_chain,
+                projectId=dts_spec.project_id or defaults.project_id,
+                location=dts_spec.location or defaults.location,
+            )
+
+            return internal_actions.DataIngestionActionModel(
+                name=action.name,
+                type="data_ingestion",
+                executionTimeout=action.execution_timeout or None,
+                dependsOn=list(action.depends_on),
+                labels=labels,
+                config=spec_model,
+            )
+        raise TypeError(
+            f"Unknown DataIngestionAction config type: {config_type}"
+        )
 
     def _get_labels(self, tags: list[str]):
         labels = {"orchestration_pipeline": "true"}

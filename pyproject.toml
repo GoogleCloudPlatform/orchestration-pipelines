@@ -45,10 +45,14 @@ pythonpath = ["."]
 [tool.black]
 line-length = 80
 skip-string-normalization = true
+exclude = '.*_pb2\.py'
 
 [tool.ruff]
 # Set the line length to match Black
 line-length = 80
+exclude = [
+    "*_pb2.py",
+]
 
 [tool.ruff.lint]
 # Enable Pyflakes (F), pycodestyle (E, W), isort (I), pyupgrade (UP), bugbear (B), and pydocstyle (D)
