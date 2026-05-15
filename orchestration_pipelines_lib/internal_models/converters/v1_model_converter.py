@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING, Dict, Optional
 
 import yaml
 
@@ -286,7 +286,9 @@ class ConverterV1ToInternal:
         if action_type == "sql":
             return self._convert_sql_action(action.sql, defaults, labels)
         if action_type == "pipeline":
-            return self._convert_pipeline_action(action.pipeline, defaults)
+            return self._convert_pipeline_action(
+                action.pipeline, defaults, labels
+            )
         if action_type == "data_ingestion":
             return self._convert_data_ingestion_action(
                 action.data_ingestion, defaults, labels
@@ -521,8 +523,10 @@ class ConverterV1ToInternal:
         raise TypeError(f"Unknown SQL engine type: {engine_type}")
 
     def _convert_pipeline_action(
-            self, action: v1_pipeline_protos.PipelineAction,
-            defaults: v1_pipeline_protos.Defaults
+        self,
+        action: v1_pipeline_protos.PipelineAction,
+        defaults: v1_pipeline_protos.Defaults,
+        labels: Optional[Dict[str, str]] = None,
     ) -> internal_pipeline.AnyAction:
         framework_type = action.framework.WhichOneof("framework")
         if framework_type == "dbt":
@@ -554,7 +558,10 @@ class ConverterV1ToInternal:
                     executionMode="local",
                     dataform_project_path=self.file_manager.get_blob_reference(
                         self.file_manager.resolve_path(
-                            airflow_worker.project_directory_path)),
+                            airflow_worker.project_directory_path
+                        )
+                    ),
+                    labels=labels,
                 )
             if execution_type == "dataform_service":
                 service = dataform.dataform_service
@@ -566,14 +573,16 @@ class ConverterV1ToInternal:
                     dependsOn=list(action.depends_on),
                     type="dataform_pipeline",
                     executionMode="service",
-                    dataformServiceConfig=internal_actions.
-                    DataformServiceModel(project_id=service.project_id
-                                         or defaults.project_id,
-                                         region=service.location
-                                         or defaults.location,
-                                         repository_id=service.repository_id,
-                                         workflow_invocation=struct_to_dict(
-                                             workflow_invocation._pb)))
+                    dataformServiceConfig=internal_actions.DataformServiceModel(
+                        project_id=service.project_id or defaults.project_id,
+                        region=service.location or defaults.location,
+                        repository_id=service.repository_id,
+                        workflow_invocation=struct_to_dict(
+                            workflow_invocation._pb
+                        ),
+                    ),
+                    labels=labels,
+                )
         raise TypeError(f"Unknown pipeline framework: {framework_type}")
 
     def _convert_data_ingestion_action(

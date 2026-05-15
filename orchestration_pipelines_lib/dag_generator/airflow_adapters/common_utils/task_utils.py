@@ -612,6 +612,14 @@ def create_local_dataform_task(action: Dict[str, Any], _: Dict[str, Any],
         KubernetesPodOperator,
     )
 
+    labels = getattr(action, "labels", None) or {}
+    dataform_cmd = (
+        "gsutil -m cp -r $GCS_BUCKET_PATH/* . && dataform run --timeout=60s"
+    )
+    if labels:
+        vars_str = ",".join(f"{k}={v}" for k, v in labels.items())
+        dataform_cmd += f" --job-labels={vars_str}"
+
     return KubernetesPodOperator(
         task_id=action.name,
         name="dataform-runner",
@@ -623,9 +631,8 @@ def create_local_dataform_task(action: Dict[str, Any], _: Dict[str, Any],
         "8ea518dddc5c48f9bd8f4",
         env_vars={"GCS_BUCKET_PATH": gcs_bucket_path_template},
         cmds=["/bin/sh", "-c"],
-        arguments=[
-            "gsutil -m cp -r $GCS_BUCKET_PATH/* . && dataform run --timeout=60s"
-        ],
+        arguments=[dataform_cmd],
+        labels=labels,
         get_logs=True,
         config_file="/home/airflow/composer_kube_config",
         image_pull_policy="Always",

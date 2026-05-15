@@ -154,6 +154,7 @@ class DataformActionModel(ActionBaseModel):
     executionMode: Literal["local", "service"]
     dataform_project_path: Optional[str] = None
     dataformServiceConfig: Optional[DataformServiceModel] = None
+    labels: Optional[Dict[str, str]] = None
 
 
 @dataclass
