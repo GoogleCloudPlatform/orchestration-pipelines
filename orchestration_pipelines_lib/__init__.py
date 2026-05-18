@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
 """Orchestration Pipelines package."""
 
-__version__ = "0.1.2"
+__version__ = "0.2.0"
