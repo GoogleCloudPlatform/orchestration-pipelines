@@ -1,0 +1,52 @@
+pipelineId: "dataproc-ephemeral-gcs-resource-profile-pyspark-overrides"
+description: "A pipeline with a Dataproc Ephemeral cluster running the PySpark task."
+runner: "airflow"
+owner: "example-owner"
+tags: ["dataproc_create_batch", "example"]
+modelVersion: "1.0"
+
+defaults:
+  projectId: "example-project"
+  location: "us-central1"
+  executionConfig:
+    retries: 0
+
+triggers:
+  - schedule:
+      interval: "0 5 * * *"
+      startTime: "2025-10-01T00:00:00"
+      endTime: "2026-10-01T00:00:00"
+      catchup: false
+      timezone: "UTC"
+
+actions:
+  - pyspark:
+      name: "run_dataproc_ephemeral"
+      executionTimeout: "1h"
+      mainFilePath: "gs://example-bucket/data/my_spark_job.py"
+      engine:
+        dataprocOnGce:
+          ephemeralCluster:
+            projectId: "example-project"
+            location: "us-central1"
+            clusterName: "ephemeral-cluster-gcs"
+            resourceProfile:
+              externalConfigPath: "gs://example-bucket/dags/cluster-config-resource-profile.yml"
+              overrides:
+                config:
+                  masterConfig:
+                    numInstances: 1
+                    machineTypeUri: "n1-standard-4"
+                    diskConfig:
+                      bootDiskType: "pd-standard"
+                      bootDiskSizeGb: 1024
+                  workerConfig:
+                    numInstances: 2
+                    machineTypeUri: "n1-standard-4"
+                    diskConfig:
+                      bootDiskType: "pd-standard"
+                      bootDiskSizeGb: 1024
+            properties:
+              spark.submit.deployMode: "cluster"
+              spark.yarn.appMasterEnv.PYTHONPATH: "./libs/lib/python3.11/site-packages"
+              spark.executorEnv.PYTHONPATH: "./libs/lib/python3.11/site-packages"
