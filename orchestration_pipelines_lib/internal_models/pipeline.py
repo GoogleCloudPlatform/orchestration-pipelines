@@ -28,6 +28,7 @@ from orchestration_pipelines_lib.internal_models.actions import (
     DBTActionModel,
     PythonScriptActionModel,
     PythonVirtualenvActionModel,
+    OrchestrationPipelineActionModel,
 )
 from orchestration_pipelines_lib.internal_models.triggers import (
     ScheduleTriggerModel,
@@ -44,6 +45,7 @@ AnyAction = Union[
     DBTActionModel,
     DataformActionModel,
     DataIngestionActionModel,
+    OrchestrationPipelineActionModel,
 ]
 AnyScheduleTrigger = Union[ScheduleTriggerModel]
 

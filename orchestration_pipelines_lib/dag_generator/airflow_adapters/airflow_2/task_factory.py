@@ -17,7 +17,9 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, Dict
+import logging
+import re
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (
     task_utils,
@@ -33,6 +35,62 @@ if TYPE_CHECKING:
         PythonOperator,
         PythonVirtualenvOperator,
     )
+    from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+
+
+def _resolve_latest_pipeline_dag_id(
+    current_dag_id: str,
+    target_pipeline_id: str,
+    bundle_id: Optional[str] = None,
+) -> str:
+    """Resolves the trigger DAG ID against the latest version.
+
+    For Airflow 2, queries the database to find the latest version tagged as
+    current for the target pipeline. If the bundle_id is not provided, it
+    attempts to use the bundle from the current DAG ID.
+    """
+    if not bundle_id:
+        return target_pipeline_id
+
+    from airflow.models.dag import DagTag
+    from airflow.utils.session import create_session
+    from sqlalchemy import func
+
+    try:
+        # Query the Airflow database to find DAGs tagged as current
+        # for the target pipeline in this bundle
+        with create_session() as session:
+            # Find DAGs that have ALL THREE required tags
+            matching_dags = (
+                session.query(DagTag.dag_id)
+                .filter(
+                    DagTag.name.in_(
+                        [
+                            "op:is_current",
+                            f"op:bundle:{bundle_id}",
+                            f"op:pipeline:{target_pipeline_id}",
+                        ]
+                    )
+                )
+                .group_by(DagTag.dag_id)
+                .having(func.count(DagTag.name) == 3)
+                .first()
+            )
+
+            if matching_dags:
+                return matching_dags[0]
+            else:
+                logging.warning(
+                    f"No DAG found with pipeline ID '{target_pipeline_id}'. "
+                    f"Falling back to target pipeline ID."
+                )
+                return target_pipeline_id
+    except Exception as e:
+        logging.error(
+            f"Error resolving latest bundle version for bundle '{bundle_id}' "
+            f"and pipeline '{target_pipeline_id}': {e}. "
+        )
+        raise
 
 
 def create_python_script_task(
@@ -66,7 +124,7 @@ def create_python_script_task(
             dag=dag,
         )
     except Exception as e:
-        print(
+        logging.error(
             f"Error creating task for action '{action.name}'"
             f" from '{action.config.pythonCallable}': {e}"
         )
@@ -110,7 +168,7 @@ def create_python_virtualenv_task(
             dag=dag,
         )
     except Exception as e:
-        print(
+        logging.error(
             f"Error creating task for action '{action.name}' "
             f"from '{action.config.pythonCallable}': {e}"
         )
@@ -163,7 +221,7 @@ def create_dbt_task(
             dag=dag,
         )
     except Exception as e:
-        print(f"Error creating task for action '{action.name}': {e}")
+        logging.error(f"Error creating task for action '{action.name}': {e}")
         raise
 
 
@@ -192,3 +250,35 @@ def create_dataform_task(action: Dict[str, Any], pipeline: Dict[str, Any], dag):
 def create_bq_dts_task(action: Dict[str, Any], pipeline: Dict[str, Any], dag):
     """Converts action to BigQuery DTS task group."""
     return task_utils.create_bq_dts_task(action, pipeline, dag=dag)
+
+
+def create_orchestration_pipeline_trigger_task(
+    action: Dict[str, Any], pipeline: Dict[str, Any], dag
+) -> TriggerDagRunOperator:
+    """Converts an action into a TriggerDagRunOperator."""
+    from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+
+    try:
+        wait_for_completion = action.wait_for_completion or False
+
+        return TriggerDagRunOperator(
+            task_id=action.name,
+            trigger_dag_id="{{ params.resolve_latest_pipeline_dag_id(params.current_dag_id, params.target_pipeline_id, params.bundle_id) }}",
+            params={
+                "resolve_latest_pipeline_dag_id": _resolve_latest_pipeline_dag_id,
+                "current_dag_id": dag.dag_id,
+                "target_pipeline_id": action.pipeline_id,
+                "bundle_id": action.bundle_id,
+            },
+            wait_for_completion=wait_for_completion,
+            execution_timeout=(
+                duration_to_timedelta(action.executionTimeout)
+                if action.executionTimeout
+                else None
+            ),
+            doc_md=json.dumps({"op_action_name": action.name}),
+            dag=dag,
+        )
+    except Exception as e:
+        logging.error(f"Error creating task for action '{action.name}': {e}")
+        raise

@@ -350,6 +350,10 @@ class ConverterV1ToInternal:
             return self._convert_data_ingestion_action(
                 action.data_ingestion, defaults, labels
             )
+        if action_type == "orchestration_pipeline":
+            return self._convert_orchestration_pipeline_action(
+                action.orchestration_pipeline, defaults
+            )
         raise TypeError(f"Unknown action type: {action_type}")
 
     def _convert_python_action(
@@ -716,6 +720,21 @@ class ConverterV1ToInternal:
             )
         raise TypeError(
             f"Unknown DataIngestionAction config type: {config_type}"
+        )
+
+    def _convert_orchestration_pipeline_action(
+        self,
+        action: v1_pipeline_protos.OrchestrationPipelineAction,
+        defaults: v1_pipeline_protos.Defaults,
+    ) -> internal_pipeline.AnyAction:
+        return internal_actions.OrchestrationPipelineActionModel(
+            name=action.name,
+            type="orchestration_pipeline",
+            executionTimeout=action.execution_timeout or None,
+            dependsOn=list(action.depends_on),
+            pipeline_id=action.pipeline_id,
+            bundle_id=action.bundle_id,
+            wait_for_completion=action.wait_for_completion,
         )
 
     def _get_labels(self, tags: list[str]):

@@ -176,3 +176,13 @@ class DataIngestionActionModel(ActionBaseModel):
     type: Literal["data_ingestion"]
     config: BigQueryDtsSpecModel
     labels: Optional[Dict[str, str]] = None
+
+
+@dataclass
+class OrchestrationPipelineActionModel(ActionBaseModel):
+    """Internal model representing an action that triggers another orchestration pipeline."""
+
+    type: Literal["orchestration_pipeline"]
+    pipeline_id: str
+    bundle_id: Optional[str] = None
+    wait_for_completion: Optional[bool] = None

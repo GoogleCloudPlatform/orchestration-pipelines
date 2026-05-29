@@ -188,6 +188,7 @@ message Action {
     SqlAction sql = 4;
     PipelineAction pipeline = 5;
     DataIngestionAction data_ingestion = 6;
+    OrchestrationPipelineAction orchestration_pipeline = 7;
   }
 }
 
@@ -424,4 +425,27 @@ message BigQueryDtsSpec {
   repeated string impersonation_chain = 3;
   string project_id = 4;
   string location = 5;
+}
+
+/////////////////////////////////////
+// Orchestration Pipeline Action
+////////////////////////////////////
+message OrchestrationPipelineAction {
+  string name = 1 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.regex) = "^[a-zA-Z0-9_.-]+$",
+    (pipeline_models.validation.min_len) = 1,
+    (pipeline_models.validation.max_len) = 64
+  ];
+  repeated string depends_on = 2;
+  string execution_timeout = 3 [(pipeline_models.validation.is_iso8601_duration) = true];
+
+  string pipeline_id = 4 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.regex) = "^[a-zA-Z0-9_-]+$",
+    (pipeline_models.validation.min_len) = 1,
+    (pipeline_models.validation.max_len) = 64
+  ];
+  string bundle_id = 5; // Default: current bundle.
+  bool wait_for_completion = 6; // Default: false.
 }

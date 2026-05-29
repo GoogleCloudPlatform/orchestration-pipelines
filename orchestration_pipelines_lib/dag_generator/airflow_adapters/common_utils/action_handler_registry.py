@@ -22,6 +22,7 @@ from orchestration_pipelines_lib.internal_models.actions import (
     DataIngestionActionModel,
     DataprocOperatorActionModel,
     DBTActionModel,
+    OrchestrationPipelineActionModel,
     PythonScriptActionModel,
     PythonVirtualenvActionModel,
 )
@@ -44,4 +45,5 @@ def get_action_handlers(task_factory) -> Dict[Any, Any]:
         DBTActionModel: task_factory.create_dbt_task,
         DataformActionModel: task_factory.create_dataform_task,
         DataIngestionActionModel: task_factory.create_bq_dts_task,
+        OrchestrationPipelineActionModel: task_factory.create_orchestration_pipeline_trigger_task,
     }

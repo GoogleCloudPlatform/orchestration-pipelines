@@ -152,6 +152,32 @@ class TestConverterV1ToInternal(unittest.TestCase):
                                           defaults,
                                           labels=self.labels)
 
+    def test_convert_orchestration_pipeline_action(self):
+        """Tests conversion of an orchestration pipeline action."""
+        v1_action = v1_protos.OrchestrationPipelineAction(
+            name="orchestration-task",
+            pipeline_id="target-pipeline",
+            execution_timeout="120s",
+            depends_on=["dep1"],
+            wait_for_completion=True,
+            bundle_id="bundle-id",
+        )
+
+        internal_action = self.converter._convert_orchestration_pipeline_action(
+            v1_action, self.defaults
+        )
+
+        self.assertIsInstance(
+            internal_action, internal_actions.OrchestrationPipelineActionModel
+        )
+        self.assertEqual(internal_action.name, "orchestration-task")
+        self.assertEqual(internal_action.type, "orchestration_pipeline")
+        self.assertEqual(internal_action.pipeline_id, "target-pipeline")
+        self.assertEqual(internal_action.wait_for_completion, True)
+        self.assertEqual(internal_action.bundle_id, "bundle-id")
+        self.assertEqual(internal_action.executionTimeout, "120s")
+        self.assertEqual(internal_action.dependsOn, ["dep1"])
+
     def test_convert_python_action_script(self):
         """Tests conversion of a simple Python script action."""
         v1_action_script = v1_protos.PythonAction(name="py-script",

@@ -39,6 +39,9 @@ class ActionHandlerRegistryTest(unittest.TestCase):
         mock_task_factory.create_dbt_task = "dbt_handler"
         mock_task_factory.create_dataform_task = "dataform_handler"
         mock_task_factory.create_bq_dts_task = "data_ingestion_handler"
+        mock_task_factory.create_orchestration_pipeline_trigger_task = (
+            "orchestration_pipeline_handler"
+        )
 
         handlers = registry.get_action_handlers(mock_task_factory)
 
@@ -56,7 +59,11 @@ class ActionHandlerRegistryTest(unittest.TestCase):
         self.assertEqual(
             handlers[actions.DataIngestionActionModel], "data_ingestion_handler"
         )
-        self.assertEqual(len(handlers), 7)
+        self.assertEqual(
+            handlers[actions.OrchestrationPipelineActionModel],
+            "orchestration_pipeline_handler",
+        )
+        self.assertEqual(len(handlers), 8)
 
 
 if __name__ == "__main__":
