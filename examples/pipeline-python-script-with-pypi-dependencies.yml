@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 modelVersion: "1.0"
-pipelineId: "pipeline-python-virtual-env"
+pipelineId: "pipeline-python-script-with-pypi-dependencies"
 description: "A pipeline that runs Python script on isolated virtual environment with specified dependencies."
 runner: "airflow"
 owner: "data-eng-team"
@@ -37,19 +37,19 @@ actions:
   - python:
       name: "first_script_run"
       executionTimeout: "30m"
-      mainFilePath: "scripts/venv_test_script_1.py"
+      mainFilePath: "./scripts/venv_test_script_1.py"
       pythonCallable: "main"
       engine:
         local: {}
       environment:
         systemSitePackages: true
         requirements:
-          path: "scripts/requirements.txt"
+          path: "./scripts/requirements.txt"
 
   - python:
       name: "second_script_run"
       executionTimeout: "30m"
-      mainFilePath: "scripts/venv_test_script_1.py"
+      mainFilePath: "./scripts/venv_test_script_1.py"
       pythonCallable: "main"
       engine:
         local: {}
@@ -63,7 +63,7 @@ actions:
   - python:
       name: "third_script_run"
       executionTimeout: "30m"
-      mainFilePath: "scripts/venv_test_script_2.py"
+      mainFilePath: "./scripts/venv_test_script_2.py"
       pythonCallable: "main"
       engine:
         local: {}

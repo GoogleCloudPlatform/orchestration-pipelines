@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-pipelineId: "pipeline-dataproc-ephemeral-gcs-resource-profile-pyspark-overrides"
+pipelineId: "pipeline-dataproc-ephemeral-gcs-resource-profile-overrides"
 description: "A pipeline with a Dataproc Ephemeral cluster running the PySpark task."
 runner: "airflow"
 owner: "data-eng-team"

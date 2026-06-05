@@ -44,7 +44,7 @@ actions:
   - sql:
       name: "run_bigquery_insert_job_select"
       query:
-        path: "sql-scripts/count_rows.sql"
+        path: "./sql-scripts/count_rows.sql"
       engine:
         bigquery:
           location: "US"

@@ -37,7 +37,7 @@ actions:
   - sql:
       name: "run-sql-on-dataproc"
       query:
-        path: "sql-scripts/test_query.sql"
+        path: "./sql-scripts/test_query.sql"
       engine:
         dataprocServerless:
           location: "us-central1"

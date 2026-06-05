@@ -27,10 +27,10 @@ defaults:
 
 actions:
   - pyspark:
-      name: "run-notebook-on-dataproc-serverless"
-      mainFilePath: "./my_spark_job_with_pyfiles.py"
+      name: "run-pyspark-on-dataproc-serverless"
+      mainFilePath: "./scripts/my_spark_job_with_pyfiles.py"
       pyFiles:
-        - "./data/lib1.py"
+        - "./scripts/lib1.py"
       engine:
         dataprocServerless:
           location: "us-central1"
@@ -43,7 +43,7 @@ actions:
               runtimeConfig:
                 version: "2.3"
                 properties:
-                  spark.app.name: "run-notebook-on-dataproc-serverless-10nov"
+                  spark.app.name: "run-pyspark-on-dataproc-serverless-10nov"
                   spark.executor.instances: "2"
                   spark.driver.cores: "4"
                   spark.dataproc.driverEnv.PYTHONPATH: "./libs/lib/python3.11/site-packages"

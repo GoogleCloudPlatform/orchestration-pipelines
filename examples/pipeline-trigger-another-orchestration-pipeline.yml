@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 modelVersion: "1.0"
-pipelineId: "orchestration-pipeline-trigger-from-action"
+pipelineId: "pipeline-trigger-another-orchestration-pipeline"
 description: "Example of a pipeline that triggers another pipeline using action."
 runner: airflow
 owner: "example-owner"

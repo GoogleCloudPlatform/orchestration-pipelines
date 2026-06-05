@@ -44,4 +44,4 @@ actions:
         dataprocServerless:
           location: "us-central1"
           resourceProfile:
-            path: "batch-resource-profile.yml"
+            path: "./resource-profile/batch-resource-profile.yml"

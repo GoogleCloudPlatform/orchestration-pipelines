@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-modelVersion: "1.0"
-pipelineId: "pipeline-sql-on-dataproc-gce-existing"
-description: "A pipeline running a SQL query on an existing Dataproc GCE cluster."
+pipelineId: "pipeline-dataproc-ephemeral-relative-resource-profile"
+description: "A pipeline with a Dataproc Ephemeral cluster running the PySpark task."
 runner: "airflow"
 owner: "data-eng-team"
-tags: ["dataproc-gce", "example"]
+tags: ["dataproc_create_batch", "example"]
+modelVersion: "1.0"
 
 defaults:
   projectId: "your-gcp-project-id"
@@ -34,20 +34,19 @@ triggers:
       timezone: "UTC"
 
 actions:
-  - sql:
-      name: "run-sql-on-existing-cluster"
-      query:
-        path: "sql-scripts/test_query.sql"
+  - pyspark:
+      name: "run_dataproc_ephemeral"
+      executionTimeout: "1h"
+      mainFilePath: "./scripts/my_spark_job.py"
       engine:
         dataprocOnGce:
-          existingCluster:
-            clusterName: "cluster-sql"
+          ephemeralCluster:
             projectId: "your-gcp-project-id"
             location: "us-central1"
-            impersonationChain:
-              ["dataproc-sa@your-gcp-project-id.iam.gserviceaccount.com"]
+            clusterName: "ephemeral-cluster-relative-path"
+            resourceProfile:
+              path: "./resource-profile/cluster-config-resource-profile.yml"
             properties:
-              spark.sql.catalog.bigquery: "com.google.cloud.spark.bigquery.BigQueryCatalog"
-              spark.sql.catalog.bigquery.project: "your-gcp-project-id"
-              # This field is needed and important for the Spark-BigQuery connector.
-              spark.jars: "gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.12-0.42.3.jar"
+              spark.submit.deployMode: "cluster"
+              spark.yarn.appMasterEnv.PYTHONPATH: "./libs/lib/python3.11/site-packages"
+              spark.executorEnv.PYTHONPATH: "./libs/lib/python3.11/site-packages"

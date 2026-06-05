@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 modelVersion: "1.0"
-pipelineId: "bigquery-dts-pipeline"
+pipelineId: "pipeline-bigquery-dts"
 description: "Orchestrate and monitor the test-dts BigQuery Data Transfer Service run."
 runner: "airflow"
 owner: "data_eng"
