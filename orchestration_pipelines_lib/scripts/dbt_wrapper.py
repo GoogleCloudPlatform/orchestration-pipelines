@@ -14,11 +14,15 @@
 #
 """Module to invoke dbt commands programmatically using dbtRunner."""
 
+import json
 import logging
 
 
 def invoke_dbt_run(
-    project_dir: str, profiles_dir: str, select_models: list = None
+    project_dir: str,
+    profiles_dir: str,
+    select_models: list = None,
+    params: dict = None,
 ):
     """Wraps dbtRunner to execute dbt commands programmatically.
 
@@ -26,6 +30,7 @@ def invoke_dbt_run(
         project_dir: The directory containing the dbt project.
         profiles_dir: The directory containing the dbt profiles.yml file.
         select_models: An optional list of specific dbt models to run.
+        params: An optional dictionary of dbt parameters/variables.
 
     Raises:
         RuntimeError: If the dbt run fails or encounters a system exception.
@@ -49,6 +54,9 @@ def invoke_dbt_run(
 
     if select_models:
         cli_args.extend(["--select", " ".join(select_models)])
+
+    if params:
+        cli_args.extend(["--vars", json.dumps(params)])
 
     logger.info("Running command args: %s", cli_args)
 

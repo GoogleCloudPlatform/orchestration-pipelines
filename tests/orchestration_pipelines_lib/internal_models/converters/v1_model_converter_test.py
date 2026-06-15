@@ -866,6 +866,30 @@ class TestConverterV1ToInternal(unittest.TestCase):
         self.assertIsInstance(internal_dbt, internal_actions.DBTActionModel)
         self.assertEqual(internal_dbt.source.path, "resolved/dbt/project")
         self.assertEqual(internal_dbt.select_models, ["model1"])
+        self.assertIsNone(internal_dbt.params)
+
+    def test_convert_pipeline_action_dbt_local_with_params(self):
+        """Tests conversion of a dbt local execution action with params."""
+        dbt_action = v1_protos.PipelineAction(
+            name="dbt-task-params",
+            depends_on=["dep1"],
+            params={"my_param": "my_value"},
+            framework=v1_protos.PipelineFramework(
+                dbt=v1_protos.DbtFrameworkSpec(
+                    airflow_worker=v1_protos.DbtAirflowExecution(
+                        project_directory_path="dbt/project",
+                        select_models=["model1"],
+                    )
+                )
+            ),
+        )
+        internal_dbt = self.converter._convert_pipeline_action(
+            dbt_action, self.defaults
+        )
+        self.assertIsInstance(internal_dbt, internal_actions.DBTActionModel)
+        self.assertEqual(internal_dbt.source.path, "resolved/dbt/project")
+        self.assertEqual(internal_dbt.select_models, ["model1"])
+        self.assertEqual(internal_dbt.params, {"my_param": "my_value"})
 
     def test_convert_pipeline_action_dataform_local(self):
         """Tests conversion of a Dataform local execution action."""

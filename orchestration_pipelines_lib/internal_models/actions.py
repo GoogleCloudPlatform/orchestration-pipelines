@@ -138,6 +138,7 @@ class DBTActionModel(ActionBaseModel):
     executionMode: Literal["local"]
     source: DbtLocalExecutionModel
     select_models: Optional[List[str]] = None
+    params: Optional[Dict[str, str]] = None
 
 
 @dataclass

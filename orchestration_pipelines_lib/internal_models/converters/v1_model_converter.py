@@ -669,6 +669,11 @@ class ConverterV1ToInternal:
             execution_type = dbt.WhichOneof("execution")
             if execution_type == "airflow_worker":
                 airflow_worker = dbt.airflow_worker
+                params = (
+                    dict(action.params)
+                    if action.params
+                    else None
+                )
                 return internal_actions.DBTActionModel(
                     name=action.name,
                     executionTimeout=action.execution_timeout or None,
@@ -683,6 +688,7 @@ class ConverterV1ToInternal:
                         )
                     ),
                     select_models=list(airflow_worker.select_models),
+                    params=params,
                 )
         elif framework_type == "dataform":
             dataform = action.framework.dataform

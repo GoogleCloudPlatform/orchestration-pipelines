@@ -209,6 +209,8 @@ def create_dbt_task(
         }
         if action.select_models:
             op_kwargs["select_models"] = action.select_models
+        if action.params:
+            op_kwargs["params"] = action.params
 
         return PythonOperator(
             task_id=action.name,
