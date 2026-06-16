@@ -222,8 +222,13 @@ def create_dataproc_create_batch_operator_task(
 
         operator_class = DataprocCreateBatchOperator
         extra_kwargs = {}
+
         if action.type == "sql":
             spark_sql_batch = {}
+
+            if action.params:
+                spark_sql_batch["query_variables"] = action.params
+
             if action.query:
                 operator_class = (
                     get_dataproc_create_batch_inline_sql_operator_class()
@@ -396,8 +401,13 @@ def dataproc_ephemeral_task(action: Dict[str, Any], dag) -> TaskGroup:
 
             operator_class = DataprocSubmitJobOperator
             extra_kwargs = {}
+
             if action.type == "sql":
                 spark_sql_job = {}
+
+                if action.params:
+                    spark_sql_job["script_variables"] = action.params
+
                 if action.query:
                     operator_class = (
                         get_dataproc_submit_job_inline_sql_operator_class()
@@ -483,8 +493,13 @@ def dataproc_existing_cluster(
 
         operator_class = DataprocSubmitJobOperator
         extra_kwargs = {}
+
         if action.type == "sql":
             spark_sql_job = {}
+
+            if action.params:
+                spark_sql_job["script_variables"] = action.params
+
             if action.query:
                 operator_class = (
                     get_dataproc_submit_job_inline_sql_operator_class()

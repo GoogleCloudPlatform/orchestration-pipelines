@@ -91,7 +91,10 @@ message ScheduleTrigger {
     (pipeline_models.validation.is_required) = true,
     (pipeline_models.validation.is_cron_expression) = true
   ];
-  string start_time = 2 [(pipeline_models.validation.is_required) = true, (pipeline_models.validation.is_iso8601_timestamp) = true];
+  string start_time = 2 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.is_iso8601_timestamp) = true
+  ];
   // Cross-field validation (e.g. end_time > start_time) should be handled
   // in custom validation logic.
   string end_time = 3 [(pipeline_models.validation.is_iso8601_timestamp) = true];
@@ -108,8 +111,7 @@ message Trigger {
 /////////////////////////
 // Engines
 ////////////////////////
-message LocalEngine {
-}
+message LocalEngine {}
 
 message BigQueryEngine {
   string location = 1;
@@ -143,21 +145,21 @@ message DataprocEphemeralConfiguration {
 
 message DataprocClusterResourceProfile {
   message InlineConfig {
-      oneof config_alias {
-        // A Dataproc cluster config.
-        // See: https://docs.cloud.google.com/dataproc/docs/reference/rest/v1/ClusterConfig
-        google.protobuf.Struct cluster_config = 1 [deprecated = true];
+    oneof config_alias {
+      // A Dataproc cluster config.
+      // See: https://docs.cloud.google.com/dataproc/docs/reference/rest/v1/ClusterConfig
+      google.protobuf.Struct cluster_config = 1 [deprecated = true];
 
-        // A Dataproc cluster config.
-        // See: https://docs.cloud.google.com/dataproc/docs/reference/rest/v1/ClusterConfig
-        google.protobuf.Struct config = 2;
-      }
+      // A Dataproc cluster config.
+      // See: https://docs.cloud.google.com/dataproc/docs/reference/rest/v1/ClusterConfig
+      google.protobuf.Struct config = 2;
+    }
   }
   oneof config {
-      InlineConfig inline = 1;
-      string path = 2;
-      string external_config_path = 3;
-   }
+    InlineConfig inline = 1;
+    string path = 2;
+    string external_config_path = 3;
+  }
   // Overrides are applied with deep merge onto the provided config. Works with inline, path and external config path.
   InlineConfig overrides = 4;
 }
@@ -185,7 +187,6 @@ message DataprocServerlessBatchEngine {
   DataprocBatchResourceProfile resource_profile = 2 [(pipeline_models.validation.is_required) = true];
   repeated string impersonation_chain = 3;
 }
-
 
 /////////////////////////
 // Actions
@@ -242,7 +243,6 @@ message PythonEngine {
     LocalEngine local = 1;
   }
 }
-
 
 /////////////////////////
 // PySpark Action
@@ -344,7 +344,10 @@ message SqlAction {
   SqlEngine engine = 4 [(pipeline_models.validation.is_required) = true];
   Query query = 5 [(pipeline_models.validation.is_required) = true];
   TriggerRule trigger_rule = 6; // Default: all_success.
-  // Note: The `7` was left empty for for 'params' field.
+  map<string, string> params = 7 [
+    (pipeline_models.validation.map_key_regex) = "^[a-zA-Z0-9_-]+$",
+    (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$"
+  ];
   map<string, string> labels = 8;
 }
 
@@ -352,7 +355,7 @@ message Query {
   oneof query {
     string inline = 1;
     string path = 2;
-   }
+  }
 }
 
 message SqlEngine {
@@ -362,7 +365,6 @@ message SqlEngine {
     DataprocOnGceEngine dataproc_on_gce = 3;
   }
 }
-
 
 /////////////////////////
 // Pipeline

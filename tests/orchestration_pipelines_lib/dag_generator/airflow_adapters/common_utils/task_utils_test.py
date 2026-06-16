@@ -183,6 +183,7 @@ class TaskUtilsTest(unittest.TestCase):
 
         action.config.resourceProfile.runtimeConfig = {}
         action.config.resourceProfile.environmentConfig = {}
+        action.params = None
 
         pipeline = MagicMock()
         pipeline.defaults.cloudDefault.project = "my-pipeline-project"

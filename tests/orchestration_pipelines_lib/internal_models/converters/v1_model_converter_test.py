@@ -794,6 +794,7 @@ class TestConverterV1ToInternal(unittest.TestCase):
         sql_dp_serverless_inline = v1_protos.SqlAction(
             name="dp-sql-inline",
             query=v1_protos.Query(inline="SELECT 1"),
+            params={"test_param": "test_value"},
             engine=v1_protos.SqlEngine(
                 dataproc_serverless=v1_protos.DataprocServerlessBatchEngine(
                     location="us-west1",
@@ -820,6 +821,9 @@ class TestConverterV1ToInternal(unittest.TestCase):
             internal_dp_sql_inline.config.resourceProfile.runtimeConfig,
             {"version": "2.1"})
         self.assertEqual(internal_dp_sql_inline.labels, self.labels)
+        self.assertEqual(
+            internal_dp_sql_inline.params, {"test_param": "test_value"}
+        )
 
     def test_convert_sql_action_dataproc_gce_existing(self):
         """Tests conversion of a Dataproc GCE Existing Cluster SQL action."""

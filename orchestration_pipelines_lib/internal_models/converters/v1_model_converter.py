@@ -551,10 +551,13 @@ class ConverterV1ToInternal:
     ) -> internal_pipeline.AnyAction:
         engine_type = action.engine.WhichOneof("engine")
         query_type = action.query.WhichOneof("query")
+
         query = None
         filename = None
+
         if query_type == "inline":
             query = action.query.inline
+
         elif query_type == "path":
             resolved_path = self.file_manager.resolve_path(action.query.path)
             if engine_type in ["dataproc_serverless", "dataproc_on_gce"]:
@@ -562,12 +565,18 @@ class ConverterV1ToInternal:
             else:
                 filename = resolved_path
 
+        else:
+            raise TypeError(f"Unknown SQL query type: {query_type}")
+
         merged_labels = dict(shared_labels)
         if action.labels:
             merged_labels.update(dict(action.labels))
 
+        params = dict(action.params) if action.params else None
+
         if engine_type == "bigquery":
             bq_engine = action.engine.bigquery
+
             return internal_actions.BqOperationActionModel(
                 name=action.name,
                 type="operation",
@@ -584,6 +593,7 @@ class ConverterV1ToInternal:
                     destinationTable=bq_engine.destination_table,
                 ),
             )
+
         if engine_type == "dataproc_serverless":
             config = action.engine.dataproc_serverless
             region = config.location or defaults.location
@@ -612,6 +622,7 @@ class ConverterV1ToInternal:
                 region=region,
                 impersonationChain=impersonation_chain,
                 engine=internal_engine,
+                params=params,
                 config=internal_config,
             )
 
@@ -668,6 +679,7 @@ class ConverterV1ToInternal:
                 region=region,
                 impersonationChain=impersonation_chain,
                 engine=internal_engine,
+                params=params,
                 config=internal_config,
             )
 

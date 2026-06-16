@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections.abc import MutableMapping
 import re
 import warnings
 from datetime import datetime
 
-from google.protobuf.descriptor import FieldDescriptor
+from google.protobuf.descriptor import Descriptor, FieldDescriptor
 from google.protobuf.message import Message
 
 # This assumes that the compiled protobuf files (e.g., validation_pb2.py)
@@ -166,6 +167,14 @@ class PipelineValidator:
                 field, value, options.Extensions[validation_pb2.regex], path
             )
 
+        if options.HasExtension(validation_pb2.map_key_regex):
+            pattern = options.Extensions[validation_pb2.map_key_regex]
+            cls._validate_map_key_regex(field, value, pattern, path)
+
+        if options.HasExtension(validation_pb2.map_value_regex):
+            pattern = options.Extensions[validation_pb2.map_value_regex]
+            cls._validate_map_value_regex(field, value, pattern, path)
+
         if options.HasExtension(validation_pb2.max_len):
             cls._validate_max_len(
                 field, value, options.Extensions[validation_pb2.max_len], path
@@ -225,11 +234,16 @@ class PipelineValidator:
     ):
         """Validates that a string field matches a regex pattern."""
         if field.cpp_type == FieldDescriptor.CPPTYPE_STRING and pattern:
-            if not re.match(pattern, value):
-                raise ValueError(
-                    f"Error for field '{path}': value '{value}' does not match "
-                    f"regex pattern '{pattern}'."
-                )
+            cls._validate_string_regex(value, pattern, path)
+
+    @staticmethod
+    def _validate_string_regex(value: str, pattern: str, path: str):
+        """Validates that a string matches given regex pattern."""
+        if not re.match(pattern, value):
+            raise ValueError(
+                f"Error for field '{path}': value '{value}' does not match "
+                f"regex pattern '{pattern}'."
+            )
 
     @classmethod
     def _validate_min_value(
@@ -369,9 +383,7 @@ class PipelineValidator:
             return
 
         action_name_map = {}  # Maps action name to its index in the pipeline.
-        all_dependencies = (
-            []
-        )  # Stores tuples of (dependency_name, action_index, action_type, action_name).
+        all_dependencies = []  # Stores tuples of (dependency_name, action_index, action_type, action_name).
 
         for i, action_wrapper in enumerate(pipeline.actions):
             action_type = action_wrapper.WhichOneof("action")
@@ -407,3 +419,63 @@ class PipelineValidator:
                     f"Error for field 'actions[{action_index}].{action_type}.depends_on': "
                     f"Action '{action_name}' depends on undefined action '{dep_name}'."
                 )
+
+    @staticmethod
+    def _is_map_field(field: FieldDescriptor) -> bool:
+        """Checks if the FieldDescriptor represents a Protobuf map field."""
+        return (
+            field.cpp_type == FieldDescriptor.CPPTYPE_MESSAGE
+            and isinstance(field.message_type, Descriptor)
+            and field.message_type.GetOptions().map_entry
+        )
+
+    @classmethod
+    def _validate_map_key_regex(
+        cls, field: FieldDescriptor, value, pattern: str, path: str
+    ):
+        """Validates the keys of a Protobuf map against a regex pattern."""
+        if not cls._is_map_field(field):
+            raise RuntimeError(
+                f"Internal Error: Map key regex validation called on field "
+                f"'{path}' which is not defined as a Protobuf map."
+            )
+
+        if not isinstance(value, MutableMapping):
+            raise TypeError(
+                f"Field '{path}' expected a map-like object, "
+                f"got '{type(value).__name__}'."
+            )
+
+        for key in value.keys():
+            if not isinstance(key, str):
+                raise TypeError(
+                    f"Map key at '{path}' expected type 'str', "
+                    f"got '{type(key).__name__}'."
+                )
+
+            cls._validate_string_regex(key, pattern, f"{path}.<{key}>")
+
+    @classmethod
+    def _validate_map_value_regex(
+        cls, field: FieldDescriptor, value, pattern: str, path: str
+    ):
+        if not cls._is_map_field(field):
+            raise RuntimeError(
+                f"Internal Error: Map value regex validation called on field "
+                f"'{path}' which is not defined as a Protobuf map."
+            )
+
+        if not isinstance(value, MutableMapping):
+            raise TypeError(
+                f"Field '{path}' expected a map-like object, "
+                f"got '{type(value).__name__}'."
+            )
+
+        for key, val in value.items():
+            if not isinstance(val, str):
+                raise TypeError(
+                    f"Map value at '{path}'['{key}'] expected type 'str', "
+                    f"got '{type(val).__name__}'."
+                )
+
+            cls._validate_string_regex(val, pattern, f"{path}['{key}']")

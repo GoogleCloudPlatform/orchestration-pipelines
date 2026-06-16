@@ -27,7 +27,8 @@
 import unittest
 
 from orchestration_pipelines_models.pipeline_v1_model.pipeline_validation import (
-    PipelineValidator, )
+    PipelineValidator,
+)
 from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipeline_pb2 import (
     Action,
     Defaults,
@@ -38,7 +39,10 @@ from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipel
     PysparkAction,
     PythonAction,
     PythonEngine,
+    Query,
     ScheduleTrigger,
+    SqlAction,
+    SqlEngine,
     Trigger,
 )
 
@@ -296,6 +300,48 @@ class TestPipelineValidator(unittest.TestCase):
         except ValueError as e:
             self.fail(
                 f"Validation failed unexpectedly for valid duration: {e}")
+
+    def test_invalid_map_key(self):
+        """Tests failure when a map key does not match its regex pattern."""
+        action = Action(
+            sql=SqlAction(
+                name="test-SQL",
+                params={"": "value"},
+                engine=SqlEngine(),
+                query=Query(inline="SELECT 1 WHERE name='{{ params.name }}'"),
+            )
+        )
+        self.pipeline.actions.extend([action])
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                r"Error for field 'actions\[1\]\.sql.params\.<>': "
+                r"value '' does not match regex pattern .+"
+            ),
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_invalid_map_value(self):
+        """Tests failure when a map value does not match its regex pattern."""
+        action = Action(
+            sql=SqlAction(
+                name="test-SQL",
+                params={"name": "';"},
+                engine=SqlEngine(),
+                query=Query(inline="SELECT 1 WHERE name='{{ params.name }}'"),
+            )
+        )
+        self.pipeline.actions.extend([action])
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                r"Error for field 'actions\[1\]\.sql.params\['name'\]': "
+                r"value '';' does not match regex pattern .+"
+            ),
+        ):
+            PipelineValidator.validate(self.pipeline)
 
     def test_duplicate_action_name_fails(self):
         """Tests failure when two actions have the same name."""

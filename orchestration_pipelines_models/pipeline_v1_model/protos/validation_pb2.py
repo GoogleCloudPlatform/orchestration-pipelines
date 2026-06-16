@@ -28,7 +28,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import descriptor_pb2 as google_dot_protobuf_dot_descriptor__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\nHorchestration_pipelines_models/pipeline_v1_model/protos/validation.proto\x12\x1apipeline_models.validation\x1a google/protobuf/descriptor.proto:4\n\x0bis_required\x12\x1d.google.protobuf.FieldOptions\x18\xd0\x86\x03 \x01(\x08:.\n\x05regex\x12\x1d.google.protobuf.FieldOptions\x18\xd1\x86\x03 \x01(\t:2\n\tmin_value\x12\x1d.google.protobuf.FieldOptions\x18\xd2\x86\x03 \x01(\x01:2\n\tmin_items\x12\x1d.google.protobuf.FieldOptions\x18\xd3\x86\x03 \x01(\r:;\n\x12\x64isallow_zero_enum\x12\x1d.google.protobuf.FieldOptions\x18\xd4\x86\x03 \x01(\x08:0\n\x07min_len\x12\x1d.google.protobuf.FieldOptions\x18\xd5\x86\x03 \x01(\r:0\n\x07max_len\x12\x1d.google.protobuf.FieldOptions\x18\xd6\x86\x03 \x01(\r:;\n\x12is_cron_expression\x12\x1d.google.protobuf.FieldOptions\x18\xd7\x86\x03 \x01(\x08:=\n\x14is_iso8601_timestamp\x12\x1d.google.protobuf.FieldOptions\x18\xd8\x86\x03 \x01(\x08:<\n\x13is_iso8601_duration\x12\x1d.google.protobuf.FieldOptions\x18\xd9\x86\x03 \x01(\x08:9\n\x10is_iana_timezone\x12\x1d.google.protobuf.FieldOptions\x18\xda\x86\x03 \x01(\x08\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\nHorchestration_pipelines_models/pipeline_v1_model/protos/validation.proto\x12\x1apipeline_models.validation\x1a google/protobuf/descriptor.proto:4\n\x0bis_required\x12\x1d.google.protobuf.FieldOptions\x18\xd0\x86\x03 \x01(\x08:.\n\x05regex\x12\x1d.google.protobuf.FieldOptions\x18\xd1\x86\x03 \x01(\t:2\n\tmin_value\x12\x1d.google.protobuf.FieldOptions\x18\xd2\x86\x03 \x01(\x01:2\n\tmin_items\x12\x1d.google.protobuf.FieldOptions\x18\xd3\x86\x03 \x01(\r:;\n\x12\x64isallow_zero_enum\x12\x1d.google.protobuf.FieldOptions\x18\xd4\x86\x03 \x01(\x08:0\n\x07min_len\x12\x1d.google.protobuf.FieldOptions\x18\xd5\x86\x03 \x01(\r:0\n\x07max_len\x12\x1d.google.protobuf.FieldOptions\x18\xd6\x86\x03 \x01(\r:;\n\x12is_cron_expression\x12\x1d.google.protobuf.FieldOptions\x18\xd7\x86\x03 \x01(\x08:=\n\x14is_iso8601_timestamp\x12\x1d.google.protobuf.FieldOptions\x18\xd8\x86\x03 \x01(\x08:<\n\x13is_iso8601_duration\x12\x1d.google.protobuf.FieldOptions\x18\xd9\x86\x03 \x01(\x08:9\n\x10is_iana_timezone\x12\x1d.google.protobuf.FieldOptions\x18\xda\x86\x03 \x01(\x08:6\n\rmap_key_regex\x12\x1d.google.protobuf.FieldOptions\x18\xdb\x86\x03 \x01(\t:8\n\x0fmap_value_regex\x12\x1d.google.protobuf.FieldOptions\x18\xdc\x86\x03 \x01(\tb\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'orchestration_pipelines_models.pipeline_v1_model.protos.validation_pb2', globals())
@@ -44,6 +44,8 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   google_dot_protobuf_dot_descriptor__pb2.FieldOptions.RegisterExtension(is_iso8601_timestamp)
   google_dot_protobuf_dot_descriptor__pb2.FieldOptions.RegisterExtension(is_iso8601_duration)
   google_dot_protobuf_dot_descriptor__pb2.FieldOptions.RegisterExtension(is_iana_timezone)
+  google_dot_protobuf_dot_descriptor__pb2.FieldOptions.RegisterExtension(map_key_regex)
+  google_dot_protobuf_dot_descriptor__pb2.FieldOptions.RegisterExtension(map_value_regex)
 
   DESCRIPTOR._options = None
 # @@protoc_insertion_point(module_scope)
