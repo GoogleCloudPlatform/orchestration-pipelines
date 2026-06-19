@@ -15,3 +15,5 @@
 defaultProject: your-gcp-project-id
 defaultDataset: dataform_staging
 defaultLocation: US
+vars:
+  target_status: pending

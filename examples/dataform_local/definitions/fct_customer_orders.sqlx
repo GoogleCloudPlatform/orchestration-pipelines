@@ -33,3 +33,4 @@ SELECT
 FROM ${ref("stg_orders")} AS o
 LEFT JOIN ${ref("raw_customers")} AS c
   ON o.customer_id = c.customer_id
+WHERE o.status = '${dataform.projectConfig.vars.target_status}'

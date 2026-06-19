@@ -159,6 +159,7 @@ class DataformActionModel(ActionBaseModel):
     dataform_project_path: Optional[str] = None
     dataformServiceConfig: Optional[DataformServiceModel] = None
     labels: Optional[Dict[str, str]] = None
+    params: Optional[Dict[str, str]] = None
 
 
 @dataclass

@@ -655,17 +655,23 @@ def create_local_dataform_task(
     Returns:
         An instance of KubernetesPodOperator configured to run Dataform locally.
     """
+    import shlex
     from airflow.providers.cncf.kubernetes.operators.pod import (
         KubernetesPodOperator,
     )
 
     labels = getattr(action, "labels", None) or {}
+    params = getattr(action, "params", None) or {}
+
     dataform_cmd = (
         "gsutil -m cp -r $GCS_BUCKET_PATH/* . && dataform run --timeout=60s"
     )
     if labels:
-        vars_str = ",".join(f"{k}={v}" for k, v in labels.items())
-        dataform_cmd += f" --job-labels={vars_str}"
+        labels_str = ",".join(shlex.quote(f"{k}={v}") for k, v in labels.items())
+        dataform_cmd += f" --job-labels={labels_str}"
+    if params:
+        params_str = ",".join(shlex.quote(f"{k}={v}") for k, v in params.items())
+        dataform_cmd += f" --vars={params_str}"
 
     return KubernetesPodOperator(
         task_id=action.name,

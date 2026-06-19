@@ -374,6 +374,8 @@ message PipelineAction {
   string execution_timeout = 3 [(pipeline_models.validation.is_iso8601_duration) = true];
   PipelineFramework framework = 4 [(pipeline_models.validation.is_required) = true];
   TriggerRule trigger_rule = 5; // Default: all_success.
+
+  // Note: 'params' is currently not supported when executing Dataform using Dataform Service.
   map<string, string> params = 6;
 }
 

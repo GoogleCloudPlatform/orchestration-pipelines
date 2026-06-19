@@ -32,6 +32,8 @@ triggers:
 actions:
   - pipeline:
       name: "run_dataform"
+      params:
+        target_status: "completed"
       framework:
         dataform:
           airflowWorker:

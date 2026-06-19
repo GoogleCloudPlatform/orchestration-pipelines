@@ -381,8 +381,8 @@ class TaskUtilsTest(unittest.TestCase):
         )
         self.assertIsNone(start_task.requested_time_range)
 
-    def test_create_local_dataform_task_with_labels(self):
-        """Tests creating local Dataform task with labels."""
+    def test_create_local_dataform_task_with_labels_and_params(self):
+        """Tests creating local Dataform task with labels and params."""
         import pendulum
         from airflow.models import DAG
         from airflow.providers.cncf.kubernetes.operators.pod import (
@@ -396,6 +396,7 @@ class TaskUtilsTest(unittest.TestCase):
         action = MagicMock()
         action.name = "my_dataform_action"
         action.labels = {"env": "prod", "team": "data"}
+        action.params = {"run_date": "2024-01-01", "id": "123"}
         action.executionTimeout = "600s"
         action.triggerRule = "all_success"
 
@@ -414,13 +415,14 @@ class TaskUtilsTest(unittest.TestCase):
 
         expected_cmd = (
             "gsutil -m cp -r $GCS_BUCKET_PATH/* . && dataform run "
-            "--timeout=60s --job-labels=env=prod,team=data"
+            "--timeout=60s --job-labels=env=prod,team=data "
+            "--vars=run_date=2024-01-01,id=123"
         )
         self.assertEqual(task.arguments, [expected_cmd])
         self.assertEqual(task.cmds, ["/bin/sh", "-c"])
 
-    def test_create_local_dataform_task_without_labels(self):
-        """Tests creating local Dataform task without labels."""
+    def test_create_local_dataform_task_without_labels_and_params(self):
+        """Tests creating local Dataform task without labels and params."""
         import pendulum
         from airflow.models import DAG
         from airflow.providers.cncf.kubernetes.operators.pod import (
@@ -434,6 +436,7 @@ class TaskUtilsTest(unittest.TestCase):
         action = MagicMock()
         action.name = "my_dataform_action"
         action.labels = None
+        action.params = None
         action.executionTimeout = None
         action.triggerRule = "all_success"
 

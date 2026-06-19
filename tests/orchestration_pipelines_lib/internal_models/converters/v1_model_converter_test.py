@@ -899,6 +899,7 @@ class TestConverterV1ToInternal(unittest.TestCase):
         """Tests conversion of a Dataform local execution action."""
         dataform_local_action = v1_protos.PipelineAction(
             name="dataform-local-task",
+            params={"var1": "value1"},
             framework=v1_protos.PipelineFramework(
                 dataform=v1_protos.DataformFrameworkSpec(
                     airflow_worker=v1_protos.DataformAirflowExecution(
@@ -910,6 +911,7 @@ class TestConverterV1ToInternal(unittest.TestCase):
         self.assertEqual(internal_df_local.executionMode, "local")
         self.assertEqual(internal_df_local.dataform_project_path,
                          "gs://bucket/resolved/dataform/project")
+        self.assertEqual(internal_df_local.params, {"var1": "value1"})
 
     def test_convert_pipeline_action_dataform_service(self):
         """Tests conversion of a Dataform service execution action."""
@@ -971,6 +973,27 @@ class TestConverterV1ToInternal(unittest.TestCase):
         df_config = internal_df_service_defaults.dataformServiceConfig
         self.assertEqual(df_config.project_id, "default-project")
         self.assertEqual(df_config.region, "default-location")
+
+    def test_convert_pipeline_action_dataform_service_params_validation(self):
+        """Tests that params raises a ValueError for Dataform service."""
+        workflow_invocation_struct = struct_pb2.Struct()
+        workflow_invocation_struct.update({
+            "compilationResult": "some-compilation-result",
+        })
+
+        dataform_service_invalid = v1_protos.PipelineAction(
+            name="dataform-service-task-invalid",
+            framework=v1_protos.PipelineFramework(
+                dataform=v1_protos.DataformFrameworkSpec(
+                    dataform_service=v1_protos.DataformServiceExecution(
+                        repository_id="repo",
+                        workflow_invocation=workflow_invocation_struct,
+                    ))),
+            params={"some_param": "some_value"})
+
+        with self.assertRaisesRegex(ValueError, "not supported when executing Dataform using Dataform Service"):
+            self.converter._convert_pipeline_action(dataform_service_invalid,
+                                                    self.defaults)
 
     def test_convert_pipeline_action_unknown_framework(self):
         """Tests that an unknown pipeline framework raises a TypeError."""

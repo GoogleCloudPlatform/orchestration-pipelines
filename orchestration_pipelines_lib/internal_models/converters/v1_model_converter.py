@@ -701,6 +701,11 @@ class ConverterV1ToInternal:
             execution_type = dataform.WhichOneof("execution")
             if execution_type == "airflow_worker":
                 airflow_worker = dataform.airflow_worker
+                params = (
+                    dict(action.params)
+                    if action.params
+                    else None
+                )
                 return internal_actions.DataformActionModel(
                     name=action.name,
                     executionTimeout=action.execution_timeout or None,
@@ -714,8 +719,14 @@ class ConverterV1ToInternal:
                         )
                     ),
                     labels=labels,
+                    params=params,
                 )
             if execution_type == "dataform_service":
+                if action.params:
+                    raise ValueError(
+                        f"Action {action.name}: `params` are not supported when executing Dataform using Dataform Service. "
+                        "Please remove `params` or use local execution."
+                    )
                 service = dataform.dataform_service
                 workflow_invocation = self._normalize_workflow_invocation(
                     service.workflow_invocation
