@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import logging
 from enum import Enum
 from typing import TYPE_CHECKING, Dict, Optional
 
@@ -364,28 +365,29 @@ class ConverterV1ToInternal:
         self,
         action: v1_pipeline_protos.Action,
         defaults: v1_pipeline_protos.Defaults,
-        labels: dict[str, str],
+        shared_labels: dict[str, str],
     ) -> internal_pipeline.AnyAction:
         action_type = action.WhichOneof("action")
+
         if action_type == "python":
             return self._convert_python_action(action.python)
         if action_type == "pyspark":
             return self._convert_dataproc_action(
-                action.pyspark, "pyspark", defaults, labels
+                action.pyspark, "pyspark", defaults, shared_labels
             )
         if action_type == "notebook":
             return self._convert_dataproc_action(
-                action.notebook, "notebook", defaults, labels
+                action.notebook, "notebook", defaults, shared_labels
             )
         if action_type == "sql":
-            return self._convert_sql_action(action.sql, defaults, labels)
+            return self._convert_sql_action(action.sql, defaults, shared_labels)
         if action_type == "pipeline":
             return self._convert_pipeline_action(
-                action.pipeline, defaults, labels
+                action.pipeline, defaults, shared_labels
             )
         if action_type == "data_ingestion":
             return self._convert_data_ingestion_action(
-                action.data_ingestion, defaults, labels
+                action.data_ingestion, defaults, shared_labels
             )
         if action_type == "orchestration_pipeline":
             return self._convert_orchestration_pipeline_action(
@@ -450,7 +452,7 @@ class ConverterV1ToInternal:
         action,
         action_type: str,
         defaults: v1_pipeline_protos.Defaults,
-        labels: Dict[str, str],
+        shared_labels: Dict[str, str],
     ) -> internal_actions.DataprocOperatorActionModel:
         engine_type = action.engine.WhichOneof("engine")
         internal_engine = None
@@ -515,6 +517,10 @@ class ConverterV1ToInternal:
                     else None
                 )
 
+        merged_labels = dict(shared_labels)
+        if action.labels:
+            merged_labels.update(dict(action.labels))
+
         return internal_actions.DataprocOperatorActionModel(
             name=action.name,
             type=action_type,
@@ -528,7 +534,7 @@ class ConverterV1ToInternal:
             dependsOn=list(action.depends_on),
             triggerRule=self._convert_trigger_rule(action.trigger_rule),
             region=region,
-            labels=labels,
+            labels=merged_labels,
             params=params,
             impersonationChain=impersonation_chain,
             archives=list(action.archive_uris),
@@ -541,7 +547,7 @@ class ConverterV1ToInternal:
         self,
         action: v1_pipeline_protos.SqlAction,
         defaults: v1_pipeline_protos.Defaults,
-        labels: Dict[str, str],
+        shared_labels: Dict[str, str],
     ) -> internal_pipeline.AnyAction:
         engine_type = action.engine.WhichOneof("engine")
         query_type = action.query.WhichOneof("query")
@@ -556,6 +562,10 @@ class ConverterV1ToInternal:
             else:
                 filename = resolved_path
 
+        merged_labels = dict(shared_labels)
+        if action.labels:
+            merged_labels.update(dict(action.labels))
+
         if engine_type == "bigquery":
             bq_engine = action.engine.bigquery
             return internal_actions.BqOperationActionModel(
@@ -564,7 +574,7 @@ class ConverterV1ToInternal:
                 engine="bq",
                 query=query,
                 filename=filename,
-                labels=labels,
+                labels=merged_labels,
                 executionTimeout=action.execution_timeout or None,
                 dependsOn=list(action.depends_on),
                 triggerRule=self._convert_trigger_rule(action.trigger_rule),
@@ -595,7 +605,7 @@ class ConverterV1ToInternal:
                 type="sql",
                 filename=filename,
                 query=query,
-                labels=labels,
+                labels=merged_labels,
                 executionTimeout=action.execution_timeout or None,
                 dependsOn=list(action.depends_on),
                 triggerRule=self._convert_trigger_rule(action.trigger_rule),
@@ -651,7 +661,7 @@ class ConverterV1ToInternal:
                 type="sql",
                 filename=filename,
                 query=query,
-                labels=labels,
+                labels=merged_labels,
                 executionTimeout=action.execution_timeout or None,
                 dependsOn=list(action.depends_on),
                 triggerRule=self._convert_trigger_rule(action.trigger_rule),
@@ -667,11 +677,16 @@ class ConverterV1ToInternal:
         self,
         action: v1_pipeline_protos.PipelineAction,
         defaults: v1_pipeline_protos.Defaults,
-        labels: Optional[Dict[str, str]] = None,
+        shared_labels: Optional[Dict[str, str]] = None,
     ) -> internal_pipeline.AnyAction:
         framework_type = action.framework.WhichOneof("framework")
         if framework_type == "dbt":
             dbt = action.framework.dbt
+            if action.labels:
+                logging.warning(
+                    f"Action {action.name}: 'labels' field is not supported for DBT action. "
+                    f"Found labels: {action.labels}. These will be ignored."
+                )
             execution_type = dbt.WhichOneof("execution")
             if execution_type == "airflow_worker":
                 airflow_worker = dbt.airflow_worker
@@ -706,6 +721,10 @@ class ConverterV1ToInternal:
                     if action.params
                     else None
                 )
+                shared_labels = shared_labels or {}
+                merged_labels = dict(shared_labels)
+                if action.labels:
+                    merged_labels.update(dict(action.labels))
                 return internal_actions.DataformActionModel(
                     name=action.name,
                     executionTimeout=action.execution_timeout or None,
@@ -718,7 +737,7 @@ class ConverterV1ToInternal:
                             airflow_worker.project_directory_path
                         )
                     ),
-                    labels=labels,
+                    labels=merged_labels,
                     params=params,
                 )
             if execution_type == "dataform_service":
@@ -726,6 +745,11 @@ class ConverterV1ToInternal:
                     raise ValueError(
                         f"Action {action.name}: `params` are not supported when executing Dataform using Dataform Service. "
                         "Please remove `params` or use local execution."
+                    )
+                if action.labels:
+                    logging.warning(
+                        f"Action {action.name}: 'labels' field is not supported for Dataform using Dataform Service. "
+                        f"Found labels: {action.labels}. These will be ignored."
                     )
                 service = dataform.dataform_service
                 workflow_invocation = self._normalize_workflow_invocation(
@@ -746,7 +770,7 @@ class ConverterV1ToInternal:
                             workflow_invocation._pb
                         ),
                     ),
-                    labels=labels,
+                    labels=shared_labels,
                 )
         raise TypeError(f"Unknown pipeline framework: {framework_type}")
 
@@ -754,7 +778,7 @@ class ConverterV1ToInternal:
         self,
         action: v1_pipeline_protos.DataIngestionAction,
         defaults: v1_pipeline_protos.Defaults,
-        labels: dict[str, str],
+        shared_labels: dict[str, str],
     ) -> internal_pipeline.AnyAction:
         config_type = action.WhichOneof("config")
         if config_type == "bigquery_dts":
@@ -785,7 +809,7 @@ class ConverterV1ToInternal:
                 executionTimeout=action.execution_timeout or None,
                 dependsOn=list(action.depends_on),
                 triggerRule=self._convert_trigger_rule(action.trigger_rule),
-                labels=labels,
+                labels=shared_labels,
                 config=spec_model,
             )
         raise TypeError(

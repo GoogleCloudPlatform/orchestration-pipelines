@@ -185,7 +185,48 @@ class TestConverterV1ToInternal(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, "Unknown action type"):
             self.converter.convert_action(v1_action,
                                           defaults,
-                                          labels=self.labels)
+                                          shared_labels=self.labels)
+
+    def test_convert_action_labels_merging(self):
+        """Tests that action labels are properly merged without leaking."""
+        action1 = v1_protos.Action(sql=v1_protos.SqlAction(
+            name="sql1",
+            query=v1_protos.Query(inline="SELECT 1"),
+            labels={"action_specific_label": "value1"},
+            engine=v1_protos.SqlEngine(
+                bigquery=v1_protos.BigQueryEngine(location="US")
+            )
+        ))
+        action2 = v1_protos.Action(sql=v1_protos.SqlAction(
+            name="sql2",
+            query=v1_protos.Query(inline="SELECT 2"),
+            engine=v1_protos.SqlEngine(
+                bigquery=v1_protos.BigQueryEngine(location="US")
+            )
+        ))
+
+        base_labels = {"pipeline_label": "pipeline_value"}
+
+        internal_action1 = self.converter.convert_action(action1, self.defaults, base_labels)
+        internal_action2 = self.converter.convert_action(action2, self.defaults, base_labels)
+
+        # First action should have both base labels and its own specific labels
+        self.assertEqual(
+            internal_action1.labels,
+            {"pipeline_label": "pipeline_value", "action_specific_label": "value1"}
+        )
+
+        # Second action shouldn't receive the first action's specific labels (no state leak)
+        self.assertEqual(
+            internal_action2.labels,
+            {"pipeline_label": "pipeline_value"}
+        )
+
+        # The base labels dict should remain unmutated
+        self.assertEqual(
+            base_labels,
+            {"pipeline_label": "pipeline_value"}
+        )
 
     def test_convert_orchestration_pipeline_action(self):
         """Tests conversion of an orchestration pipeline action."""

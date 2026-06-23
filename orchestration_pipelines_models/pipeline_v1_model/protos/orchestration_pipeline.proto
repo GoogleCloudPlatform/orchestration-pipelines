@@ -264,6 +264,7 @@ message PysparkAction {
   PysparkEnvironment environment = 9;
   TriggerRule trigger_rule = 10; // Default: all_success.
   map<string, string> params = 11;
+  map<string, string> labels = 12;
 }
 
 message PysparkEngine {
@@ -305,6 +306,7 @@ message NotebookAction {
   NotebookEnvironment environment = 8;
   TriggerRule trigger_rule = 9; // Default: all_success.
   map<string, string> params = 10;
+  map<string, string> labels = 11;
 }
 
 message NotebookEngine {
@@ -342,6 +344,8 @@ message SqlAction {
   SqlEngine engine = 4 [(pipeline_models.validation.is_required) = true];
   Query query = 5 [(pipeline_models.validation.is_required) = true];
   TriggerRule trigger_rule = 6; // Default: all_success.
+  // Note: The `7` was left empty for for 'params' field.
+  map<string, string> labels = 8;
 }
 
 message Query {
@@ -377,6 +381,8 @@ message PipelineAction {
 
   // Note: 'params' is currently not supported when executing Dataform using Dataform Service.
   map<string, string> params = 6;
+  // Note: 'labels' is currently not supported when executing DBT or Dataform using Dataform Service.
+  map<string, string> labels = 7;
 }
 
 message PipelineFramework {
