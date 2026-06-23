@@ -735,6 +735,9 @@ def create_bq_dts_task(
         BigQueryDataTransferServiceTransferRunSensor,
     )
     from airflow.utils.task_group import TaskGroup
+    from orchestration_pipelines_lib.utils.dict_utils import (
+        iso_to_timestamp_dict,
+    )
 
     try:
         with TaskGroup(group_id=action.name, dag=dag) as task_group:
@@ -746,15 +749,27 @@ def create_bq_dts_task(
                 action.config.location or pipeline.defaults.cloudDefault.region
             )
 
-            requested_run_time = None
-            requested_time_range = None
+            requested_run_time = action.config.requestedRunTime
+            requested_time_range = action.config.requestedTimeRange
+
             if action.config.runtimeParams:
-                requested_run_time = action.config.runtimeParams.get(
-                    "requested_run_time"
-                )
-                requested_time_range = action.config.runtimeParams.get(
-                    "requested_time_range"
-                )
+                if requested_run_time is None:
+                    requested_run_time = action.config.runtimeParams.get(
+                        "requested_run_time"
+                    )
+                if requested_time_range is None:
+                    requested_time_range = action.config.runtimeParams.get(
+                        "requested_time_range"
+                    )
+
+            if isinstance(requested_run_time, str):
+                requested_run_time = iso_to_timestamp_dict(requested_run_time)
+
+            if isinstance(requested_time_range, dict):
+                requested_time_range = {
+                    k: iso_to_timestamp_dict(v) if isinstance(v, str) else v
+                    for k, v in requested_time_range.items()
+                }
 
             if requested_run_time is None and requested_time_range is None:
                 requested_run_time = {

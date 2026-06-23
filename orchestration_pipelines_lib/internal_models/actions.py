@@ -168,6 +168,8 @@ class BigQueryDtsSpecModel:
 
     transferConfigId: str
     runtimeParams: Optional[Dict[str, Any]] = None
+    requestedRunTime: Optional[str] = None
+    requestedTimeRange: Optional[Dict[str, str]] = None
     impersonationChain: Optional[Union[str, List[str]]] = None
     projectId: Optional[str] = None
     location: Optional[str] = None

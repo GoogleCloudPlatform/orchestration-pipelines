@@ -296,7 +296,9 @@ class TaskUtilsTest(unittest.TestCase):
         action.config.projectId = "dts-proj"
         action.config.location = "dts-loc"
         action.config.transferConfigId = "config-789"
-        action.config.runtimeParams = {"requested_run_time": {"seconds": 999}}
+        action.config.runtimeParams = None
+        action.config.requestedRunTime = "2026-06-23T00:00:00Z"
+        action.config.requestedTimeRange = None
         action.config.impersonationChain = ["dts-sa@dts-proj.iam.gserviceaccount.com"]
         action.executionTimeout = "1000s"
         action.triggerRule = "all_success"
@@ -326,7 +328,7 @@ class TaskUtilsTest(unittest.TestCase):
         self.assertEqual(start_task.transfer_config_id, "config-789")
         self.assertEqual(start_task.project_id, "dts-proj")
         self.assertEqual(start_task.location, "dts-loc")
-        self.assertEqual(start_task.requested_run_time, {"seconds": 999})
+        self.assertEqual(start_task.requested_run_time, {"seconds": 1782172800})
         self.assertEqual(start_task.impersonation_chain, ["dts-sa@dts-proj.iam.gserviceaccount.com"])
 
         self.assertEqual(sensor_task.transfer_config_id, "config-789")
@@ -335,6 +337,72 @@ class TaskUtilsTest(unittest.TestCase):
             sensor_task.run_id,
             "{{ task_instance.xcom_pull("
             "task_ids='my_dts_action.my_dts_action_start', "
+            "key='run_id') }}",
+        )
+
+    def test_create_bq_dts_task_with_time_range(self):
+        """Tests creating BigQuery DTS TaskGroup with requestedTimeRange."""
+        import pendulum
+        from airflow.models import DAG
+        from airflow.utils.task_group import TaskGroup
+
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            create_bq_dts_task,
+        )
+
+        action = MagicMock()
+        action.name = "my_dts_action_range"
+        action.config.projectId = "dts-proj"
+        action.config.location = "dts-loc"
+        action.config.transferConfigId = "config-789"
+        action.config.runtimeParams = None
+        action.config.requestedRunTime = None
+        action.config.requestedTimeRange = {"start_time": "2026-06-20T00:00:00Z", "end_time": "2026-06-21T00:00:00Z"}
+        action.config.impersonationChain = ["dts-sa@dts-proj.iam.gserviceaccount.com"]
+        action.executionTimeout = "1000s"
+        action.triggerRule = "all_success"
+
+        pipeline = MagicMock()
+        pipeline.defaults.cloudDefault.project = "default-proj"
+        pipeline.defaults.cloudDefault.region = "default-reg"
+
+        dag = DAG(
+            dag_id="test_dts_dag_range",
+            start_date=pendulum.today("UTC"),
+        )
+
+        task_group = create_bq_dts_task(action, pipeline, dag)
+
+        self.assertIsInstance(task_group, TaskGroup)
+        self.assertEqual(task_group.group_id, "my_dts_action_range")
+
+        children = task_group.children
+        self.assertEqual(len(children), 2)
+        self.assertIn("my_dts_action_range.my_dts_action_range_start", children)
+        self.assertIn("my_dts_action_range.my_dts_action_range_sensor", children)
+
+        start_task = children["my_dts_action_range.my_dts_action_range_start"]
+        sensor_task = children["my_dts_action_range.my_dts_action_range_sensor"]
+
+        self.assertEqual(start_task.transfer_config_id, "config-789")
+        self.assertEqual(start_task.project_id, "dts-proj")
+        self.assertEqual(start_task.location, "dts-loc")
+        self.assertIsNone(start_task.requested_run_time)
+        self.assertEqual(
+            start_task.requested_time_range,
+            {
+                "start_time": {"seconds": 1781913600},
+                "end_time": {"seconds": 1782000000},
+            },
+        )
+        self.assertEqual(start_task.impersonation_chain, ["dts-sa@dts-proj.iam.gserviceaccount.com"])
+
+        self.assertEqual(sensor_task.transfer_config_id, "config-789")
+        self.assertEqual(sensor_task.project_id, "dts-proj")
+        self.assertEqual(
+            sensor_task.run_id,
+            "{{ task_instance.xcom_pull("
+            "task_ids='my_dts_action_range.my_dts_action_range_start', "
             "key='run_id') }}",
         )
 
@@ -353,6 +421,8 @@ class TaskUtilsTest(unittest.TestCase):
         action.config.location = None
         action.config.transferConfigId = "config-123"
         action.config.runtimeParams = None
+        action.config.requestedRunTime = None
+        action.config.requestedTimeRange = None
         action.config.impersonationChain = None
         action.executionTimeout = None
         action.triggerRule = "all_success"
@@ -462,4 +532,3 @@ class TaskUtilsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

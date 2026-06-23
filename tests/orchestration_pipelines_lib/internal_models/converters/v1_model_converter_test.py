@@ -1078,7 +1078,7 @@ class TestConverterV1ToInternal(unittest.TestCase):
         spec.location = "loc"
         spec.transfer_config_id = "config-123"
         spec.impersonation_chain.append("sa@impersonate.com")
-        spec.runtime_params.update({"requested_run_time": {"seconds": 12345}})
+        spec.requested_run_time = "2026-06-23T00:00:00Z"
 
         internal_dts = self.converter._convert_data_ingestion_action(
             data_ingestion_action, self.defaults, self.labels
@@ -1097,11 +1097,35 @@ class TestConverterV1ToInternal(unittest.TestCase):
         self.assertEqual(
             internal_dts.config.impersonationChain, ["sa@impersonate.com"]
         )
+        self.assertIsNone(internal_dts.config.runtimeParams)
         self.assertEqual(
-            internal_dts.config.runtimeParams,
-            {"requested_run_time": {"seconds": 12345}},
+            internal_dts.config.requestedRunTime, "2026-06-23T00:00:00Z"
         )
+        self.assertIsNone(internal_dts.config.requestedTimeRange)
         self.assertEqual(internal_dts.labels, self.labels)
+
+    def test_convert_data_ingestion_action_with_time_range(self):
+        """Tests conversion of a DataIngestion action with requested_time_range."""
+        data_ingestion_action = v1_protos.DataIngestionAction(
+            name="test-dts-range",
+        )
+        spec = data_ingestion_action.bigquery_dts
+        spec.transfer_config_id = "config-456"
+        spec.requested_time_range.start_time = "2026-06-20T00:00:00Z"
+        spec.requested_time_range.end_time = "2026-06-21T00:00:00Z"
+
+        internal_dts = self.converter._convert_data_ingestion_action(
+            data_ingestion_action, self.defaults, self.labels
+        )
+
+        self.assertIsNone(internal_dts.config.requestedRunTime)
+        self.assertEqual(
+            internal_dts.config.requestedTimeRange, 
+            {
+                "start_time": "2026-06-20T00:00:00Z",
+                "end_time": "2026-06-21T00:00:00Z"
+            }
+        )
 
     def test_convert_data_ingestion_action_defaults(self):
         """Tests DataIngestion action conversion falling back to defaults."""

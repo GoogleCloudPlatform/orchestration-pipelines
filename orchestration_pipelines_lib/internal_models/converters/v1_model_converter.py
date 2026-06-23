@@ -810,6 +810,8 @@ class ConverterV1ToInternal:
             spec_model = internal_actions.BigQueryDtsSpecModel(
                 transferConfigId=dts_spec.transfer_config_id,
                 runtimeParams=runtime_params,
+                requestedRunTime=dts_spec.requested_run_time if dts_spec.WhichOneof("time") == "requested_run_time" else None,
+                requestedTimeRange={"start_time": dts_spec.requested_time_range.start_time, "end_time": dts_spec.requested_time_range.end_time} if dts_spec.WhichOneof("time") == "requested_time_range" else None,
                 impersonationChain=impersonation_chain,
                 projectId=dts_spec.project_id or defaults.project_id,
                 location=dts_spec.location or defaults.location,

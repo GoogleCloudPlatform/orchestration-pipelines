@@ -17,6 +17,7 @@
 import re
 from typing import Any, Dict, Type
 
+from datetime import datetime
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.message import Message
 
@@ -98,3 +99,11 @@ def dict_to_struct(
         js_dict=message_dict, message=parsed_message._pb # pylint: disable=protected-access
     )
     return parsed_message
+
+
+def iso_to_timestamp_dict(iso_str: str) -> Dict[str, int]:
+    """Converts an ISO 8601 timestamp string to a protobuf Timestamp dict."""
+    if not iso_str:
+        return None
+    dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+    return {"seconds": int(dt.timestamp())}

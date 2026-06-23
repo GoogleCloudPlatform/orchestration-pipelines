@@ -457,8 +457,18 @@ message BigQueryDtsSpec {
   oneof transfer_config {
     string transfer_config_id = 1 [(pipeline_models.validation.is_required) = true];
   }
+  google.protobuf.Struct runtime_params = 2 [deprecated = true];
 
-  google.protobuf.Struct runtime_params = 2;
+  message TimeRange {
+    string start_time = 1 [(pipeline_models.validation.is_iso8601_timestamp) = true];
+    string end_time = 2 [(pipeline_models.validation.is_iso8601_timestamp) = true];
+  }
+  oneof time {
+    // See: https://docs.cloud.google.com/bigquery/docs/reference/datatransfer/rpc/google.cloud.bigquery.datatransfer.v1#timerange
+    TimeRange requested_time_range = 6;
+    string requested_run_time = 7 [(pipeline_models.validation.is_iso8601_timestamp) = true];
+  }
+
   repeated string impersonation_chain = 3;
   string project_id = 4;
   string location = 5;

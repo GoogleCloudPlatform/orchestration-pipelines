@@ -39,3 +39,6 @@ actions:
         transferConfigId: "your-transfer-config-id"
         projectId: "your-gcp-project-id"
         location: "us"
+        requestedTimeRange:
+          startTime: "2026-06-23T00:00:00Z"
+          endTime: "2026-06-23T01:00:00Z"
