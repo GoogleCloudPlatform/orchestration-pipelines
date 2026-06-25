@@ -588,6 +588,7 @@ class ConverterV1ToInternal:
                 dependsOn=list(action.depends_on),
                 triggerRule=self._convert_trigger_rule(action.trigger_rule),
                 impersonationChain=list(bq_engine.impersonation_chain),
+                params=params,
                 config=internal_actions.BqOperationConfigurationModel(
                     location=bq_engine.location or defaults.location,
                     destinationTable=bq_engine.destination_table,

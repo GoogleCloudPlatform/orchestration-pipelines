@@ -82,6 +82,7 @@ class BqOperationActionModel(ActionBaseModel):
     filename: Optional[str] = None
     labels: Optional[Dict[str, str]] = None
     impersonationChain: Optional[Union[str, list[str]]] = None
+    params: Optional[Dict[str, str]] = None
 
 
 @dataclass

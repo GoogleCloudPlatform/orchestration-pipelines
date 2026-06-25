@@ -76,6 +76,13 @@ actions:
           location: "US"
 ```
 
+> **Known Limitations**
+>
+> Parameters provided to actions (e.g., in SQL queries, scripts) are always passed as strings.
+Users must handle type casting within their scripts, queries, or notebooks if different data types
+are required (e.g., using `CAST` in SQL).
+
+
 ### 2. Generate the Airflow DAG
 
 Create a Python file named `my_pipeline.py` in your Airflow DAGs folder:

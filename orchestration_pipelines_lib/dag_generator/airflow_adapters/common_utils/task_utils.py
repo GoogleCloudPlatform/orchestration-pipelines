@@ -309,12 +309,30 @@ def create_bq_operation_task(
             query = action.query
 
         configuration = {
+            # Will be converted to JobConfigurationQuery in Protobuf.
+            # It can be set up via the QueryJobConfig Python class,
+            # which can be imported from google.cloud.bigquery.job.query
             "query": {
                 "query": query,
                 "useLegacySql": False,
             },
             "labels": action.labels,
         }
+
+        if action.params:
+            configuration["query"]["queryParameters"] = []
+
+            for key, value in action.params.items():
+                param = {
+                    "name": key,
+                    # NOTE: The limitation of dataproc engine that requires
+                    # string typed arguments is applicable as well to SQL
+                    # actions run on BigQuerys.
+                    "parameterType": {"type": "STRING"},
+                    "parameterValue": {"value": value},
+                }
+                configuration["query"]["queryParameters"].append(param)
+
         if not query.strip().upper().startswith("CREATE"):
             configuration["query"]["writeDisposition"] = "WRITE_TRUNCATE"
             configuration["query"]["createDisposition"] = "CREATE_IF_NEEDED"

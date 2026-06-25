@@ -889,6 +889,23 @@ class TestConverterV1ToInternal(unittest.TestCase):
         self.assertEqual(internal_dp_sql.config.cluster_name, "temp-cluster")
         self.assertEqual(internal_dp_sql.config.cluster_config, {"config_bucket": "some-bucket"})
 
+    def test_convert_sql_action_bigquery_with_params(self):
+        """Tests conversion of a BigQuery SQL action with parameters."""
+        sql_bq_inline = v1_protos.SqlAction(
+            name="bq-sql-params",
+            query=v1_protos.Query(inline="SELECT 1"),
+            engine=v1_protos.SqlEngine(bigquery=v1_protos.BigQueryEngine()),
+            params={"test_param": "test_value"},
+        )
+
+        internal_bq_sql_inline = self.converter._convert_sql_action(
+            sql_bq_inline, self.defaults, self.labels
+        )
+
+        self.assertEqual(
+            internal_bq_sql_inline.params, {"test_param": "test_value"}
+        )
+
     def test_convert_sql_action_unknown_engine(self):
         """Tests that an unknown SQL engine type raises a TypeError."""
         sql_unknown_engine = v1_protos.SqlAction(
