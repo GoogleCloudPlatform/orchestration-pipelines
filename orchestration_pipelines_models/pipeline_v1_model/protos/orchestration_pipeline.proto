@@ -263,7 +263,10 @@ message PysparkAction {
   repeated string py_files = 8;
   PysparkEnvironment environment = 9;
   TriggerRule trigger_rule = 10; // Default: all_success.
-  map<string, string> params = 11;
+  map<string, string> params = 11 [
+    (pipeline_models.validation.map_key_regex) = "^[a-zA-Z0-9_-]+$",
+    (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$"
+  ];
   map<string, string> labels = 12;
 }
 
@@ -305,7 +308,10 @@ message NotebookAction {
   string staging_bucket = 7;
   NotebookEnvironment environment = 8;
   TriggerRule trigger_rule = 9; // Default: all_success.
-  map<string, string> params = 10;
+  map<string, string> params = 10 [
+    (pipeline_models.validation.map_key_regex) = "^[a-zA-Z0-9_-]+$",
+    (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$"
+  ];
   map<string, string> labels = 11;
 }
 
@@ -382,7 +388,10 @@ message PipelineAction {
   TriggerRule trigger_rule = 5; // Default: all_success.
 
   // Note: 'params' is currently not supported when executing Dataform using Dataform Service.
-  map<string, string> params = 6;
+  map<string, string> params = 6 [
+    (pipeline_models.validation.map_key_regex) = "^[a-zA-Z0-9_-]+$",
+    (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$"
+  ];
   // Note: 'labels' is currently not supported when executing DBT or Dataform using Dataform Service.
   map<string, string> labels = 7;
 }
