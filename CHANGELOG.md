@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ...
 
+## [0.3.0] - 2026-07-08
+
+### Added
+- Params support for SQL, Pyspark and Notebook actions.
+- Params support for DBT pipeline and Dataform pipeline local (on Airflow) executions.
+- Support for custom labels in Dataproc, SQL, and Dataform local execution.
+- Inline requirements support for Notebook/PySpark run on Dataproc.
+- Support for trigger rules in all actions.
+- New action, supporting triggering another orchestration pipeline.
+
+### Changed
+- Replaced `runtime_params` from BigQuery DTS action with two specific fields: `requested_run_time` and `requested_time_range`.
+
+### Fixed
+- Improved error message for datetime/cron/duration/timezone validation.
+- Adjusted examples to comply with validation rules.
+
 ## [0.2.0] - 2026-05-15
 
 ### Added

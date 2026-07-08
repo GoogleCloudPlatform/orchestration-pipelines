@@ -125,6 +125,7 @@ Runs a PySpark script on Dataproc.
     *   `environment` (`PysparkEnvironment`): Environment requirements.
         *   Can be `inline` (list of pip packages) or `path` to a `requirements.txt`.
     *   `params` (`map<string, string>`): Parameters passed to the PySpark job.
+    *   `labels` (`map<string, string>`): Labels to apply to the PySpark job.
 *   **Examples**:
     *   [pipeline-dataproc-create-batch-pyspark.yml (Serverless)](../examples/pipeline-dataproc-create-batch-pyspark.yml)
     *   [pipeline-dataproc-existing-cluster-script.yml (GCE Existing Basic)](../examples/pipeline-dataproc-existing-cluster-script.yml)
@@ -144,6 +145,7 @@ Executes a Jupyter Notebook (`.ipynb`) on Dataproc.
     *   `environment` (`NotebookEnvironment`): Environment requirements.
         *   Can be `inline` (list of pip packages) or `path` to a `requirements.txt`.
     *   `params` (`map<string, string>`): Parameters passed to the Notebook.
+    *   `labels` (`map<string, string>`): Labels to apply to the Notebook.
 *   **Examples**:
     *   [pipeline-dataproc-create-batch.yml (Serverless)](../examples/pipeline-dataproc-create-batch.yml)
 
@@ -159,6 +161,8 @@ Executes SQL queries on BigQuery or Spark.
     *   `query` (`Query`, **Required**, `oneof`):
         *   `inline`: The SQL query string directly in YAML.
         *   `path`: Path to a `.sql` file.
+    *   `params` (`map<string, string>`): Parameters passed to the SQL job.
+    *   `labels` (`map<string, string>`): Labels to apply to the SQL job.
 *   **Examples**:
     *   [pipeline-sql-on-bigquery.yml (BigQuery)](../examples/pipeline-sql-on-bigquery.yml)
     *   [pipeline-sql-on-dataproc-serverless.yml (Spark SQL Serverless)](../examples/pipeline-sql-on-dataproc-serverless.yml)
@@ -183,7 +187,8 @@ Orchestrates third-party transformation frameworks.
         *   `airflow_worker` (`DataformAirflowExecution`): Runs Dataform CLI on Airflow worker.
             *   `project_directory_path` (string, **Required**): Path to Dataform project.
 *   **Key Fields**:
-    *   `params` (`map<string, string>`): Parameters passed to the pipeline execution.
+    *   `params` (`map<string, string>`): Parameters passed to the pipeline execution. Note: currently not supported when executing Dataform using Dataform Service.
+    *   `labels` (`map<string, string>`): Labels to apply. Note: currently not supported when executing DBT or Dataform using Dataform Service.
 *   **Examples**:
     *   [pipeline-dbt.yml (dbt)](../examples/pipeline-dbt.yml)
     *   [pipeline-dataform-service.yml (Dataform Service)](../examples/pipeline-dataform-service.yml)
@@ -195,7 +200,9 @@ Handles data ingestion tasks. Currently supports BigQuery Data Transfer Service 
 
 *   **Config**: `BigQueryDtsSpec` (`oneof`):
     *   `transfer_config_id` (string, **Required**): Resource name of the DTS transfer config.
-    *   `runtime_params` (`google.protobuf.Struct`): Parameters for the transfer run.
+    *   `requested_time_range` (`TimeRange`): Time range (`start_time` and `end_time` ISO 8601 timestamps) for the transfer run.
+    *   `requested_run_time` (string, ISO 8601 timestamp): Requested run time.
+    *   `runtime_params` (`google.protobuf.Struct`): **[DEPRECATED]** Parameters for the transfer run.
     *   `impersonation_chain` (`repeated string`): Service accounts to impersonate.
     *   `project_id` / `location` (string): Target project/location.
 *   **Examples**:
@@ -269,3 +276,5 @@ The framework enforces strict validation using custom Proto annotations.
 *   `is_iso8601_timestamp` (bool): String must be an ISO 8601 timestamp.
 *   `is_iso8601_duration` (bool): String must be an ISO 8601 duration (e.g., `PT1H`).
 *   `is_iana_timezone` (bool): String must be a valid IANA timezone (e.g., `UTC`).
+*   `map_key_regex` (string): Map key must match the regex pattern.
+*   `map_value_regex` (string): Map value must match the regex pattern.
