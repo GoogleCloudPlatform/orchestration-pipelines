@@ -64,7 +64,7 @@ exclude = [
 [tool.ruff.lint]
 # Enable Pyflakes (F), pycodestyle (E, W), isort (I), pyupgrade (UP), bugbear (B), and pydocstyle (D)
 select = ["E", "F", "W", "I", "B", "UP", "D"]
-ignore = []
+ignore = ["D400", "D205", "UP006"] # D400: First line should end with a period, D205: 1-blank-line-after-summary, UP006: Use dict instead of typing.Dict
 
 [tool.ruff.lint.pydocstyle]
 # Enforce Google style docstring conventions

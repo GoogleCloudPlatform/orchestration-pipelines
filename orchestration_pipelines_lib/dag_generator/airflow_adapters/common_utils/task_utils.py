@@ -20,18 +20,16 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 import pytz
 
-from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # pylint: disable=line-too-long
-    dataproc_utils,
-    gcs_utils,
-)
 from orchestration_pipelines_lib.utils.duration_utils import (
     duration_to_timedelta,
 )
 from orchestration_pipelines_lib.utils.file_manager import FileManager
+
+from . import dataproc_utils, gcs_utils
 
 if TYPE_CHECKING:
     from airflow.utils.task_group import TaskGroup
@@ -90,8 +88,9 @@ def _upload_inline_query_to_gcs(
 
     hash_value = hashlib.sha256(query.encode("utf-8")).hexdigest()
 
-    blob_name = (
-        f"data/{bundle_id}/versions/{version_id}/managed-temp/{hash_value}.sql"
+    blob_name = (  # pylint: disable=line-too-long
+        f"data/{bundle_id}/versions/{version_id}/managed-temp/"
+        f"{hash_value}.sql"
     )
     gcs_uri = f"gs://{gcs_bucket}/{blob_name}"
 
@@ -111,6 +110,7 @@ _dataproc_create_batch_inline_sql_operator_class = None
 
 
 def get_dataproc_create_batch_inline_sql_operator_class():
+    """Returns the DataprocCreateBatchInlineSqlOperator class."""
     global _dataproc_create_batch_inline_sql_operator_class
     if _dataproc_create_batch_inline_sql_operator_class is None:
         from airflow.providers.google.cloud.operators.dataproc import (
@@ -153,6 +153,7 @@ _dataproc_submit_job_inline_sql_operator_class = None
 
 
 def get_dataproc_submit_job_inline_sql_operator_class():
+    """Returns the DataprocSubmitJobInlineSqlOperator class."""
     global _dataproc_submit_job_inline_sql_operator_class
     if _dataproc_submit_job_inline_sql_operator_class is None:
         from airflow.providers.google.cloud.operators.dataproc import (
@@ -192,7 +193,7 @@ def get_dataproc_submit_job_inline_sql_operator_class():
 
 
 def create_dataproc_create_batch_operator_task(
-    action: Dict[str, Any], pipeline: Dict[str, Any], dag
+    action: dict[str, Any], pipeline: dict[str, Any], dag
 ):
     """Converts an action into a DataprocCreateBatchOperator.
 
@@ -264,9 +265,9 @@ def create_dataproc_create_batch_operator_task(
             region=action.region,
             project_id=pipeline.defaults.cloudDefault.project,
             batch=batch,
-            batch_id=(
-                f"{action.name.lower().lstrip('_-').replace('_', '-')[:50]}-"
-                f"{uuid.uuid4().hex[:6]}"
+            batch_id=(  # pylint: disable=line-too-long
+                f"{action.name.lower().lstrip('_-').replace('_', '-')[:50]}"
+                f"-{uuid.uuid4().hex[:6]}"
             ),
             execution_timeout=(
                 duration_to_timedelta(action.executionTimeout)
@@ -285,7 +286,7 @@ def create_dataproc_create_batch_operator_task(
 
 
 def create_bq_operation_task(
-    action: Dict[str, Any], pipeline: Dict[str, Any], dag
+    action: dict[str, Any], pipeline: dict[str, Any], dag
 ):
     """Converts an action into a BigQueryInsertJobOperator.
 
@@ -371,7 +372,7 @@ def create_bq_operation_task(
         raise
 
 
-def dataproc_ephemeral_task(action: Dict[str, Any], dag) -> TaskGroup:
+def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
     """Converts an action into a TaskGroup for an ephemeral Dataproc workflow.
 
     Args:
@@ -483,7 +484,7 @@ def dataproc_ephemeral_task(action: Dict[str, Any], dag) -> TaskGroup:
 
 
 def dataproc_existing_cluster(
-    action: Dict[str, Any], pipeline: Dict[str, Any], dag
+    action: dict[str, Any], pipeline: dict[str, Any], dag
 ):
     """Converts action into DataprocSubmitJobOperator for existing
     cluster.
@@ -581,7 +582,7 @@ def create_schedule_trigger_task(dag_kwargs, schedule_trigger):
 
 
 def create_dataproc_operator_task(
-    action: Dict[str, Any], pipeline: Dict[str, Any], dag
+    action: dict[str, Any], pipeline: dict[str, Any], dag
 ):
     """Converts an action into a specific Dataproc operator or task group.
 
@@ -634,7 +635,7 @@ def _get_config_or_default(
 
 
 def create_service_dataform_task(
-    action: Dict[str, Any], pipeline: Dict[str, Any], dag
+    action: dict[str, Any], pipeline: dict[str, Any], dag
 ):
     """Converts an action into a DataformCreateWorkflowInvocationOperator.
 
@@ -672,8 +673,8 @@ def create_service_dataform_task(
 
 
 def create_local_dataform_task(
-    action: Dict[str, Any],
-    _: Dict[str, Any],
+    action: dict[str, Any],
+    _: dict[str, Any],
     gcs_bucket_path_template: str,
     dag,
 ):
@@ -697,7 +698,10 @@ def create_local_dataform_task(
     labels = getattr(action, "labels", None) or {}
     params = getattr(action, "params", None) or {}
 
-    dataform_cmd = "gcloud storage cp --recursive $GCS_BUCKET_PATH/* . && dataform run --timeout=60s"
+    dataform_cmd = (  # pylint: disable=line-too-long
+        "gcloud storage cp --recursive $GCS_BUCKET_PATH/* . && "
+        "dataform run --timeout=60s"
+    )
     if labels:
         labels_str = ",".join(
             shlex.quote(f"{k}={v}") for k, v in labels.items()
@@ -713,11 +717,13 @@ def create_local_dataform_task(
         task_id=action.name,
         name="dataform-runner",
         namespace="composer-user-workloads",
-        image="us-docker.pkg.dev/cloud-airflow-releaser/"
-        "orchestration-pipelines-basic-dataform-executor/"
-        "orchestration-pipelines-basic-dataform-executor"
-        "@sha256:fd7cd9673fda5994f1f90bfb3170ff6aa5ae8ed862d"
-        "8ea518dddc5c48f9bd8f4",
+        image=(  # pylint: disable=line-too-long
+            "us-docker.pkg.dev/cloud-airflow-releaser/"
+            "orchestration-pipelines-basic-dataform-executor/"
+            "orchestration-pipelines-basic-dataform-executor"
+            "@sha256:fd7cd9673fda5994f1f90bfb3170ff6aa5ae8ed862d"
+            "8ea518dddc5c48f9bd8f4"
+        ),
         env_vars={"GCS_BUCKET_PATH": gcs_bucket_path_template},
         cmds=["/bin/sh", "-c"],
         arguments=[dataform_cmd],

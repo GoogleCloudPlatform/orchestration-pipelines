@@ -29,7 +29,9 @@ from airflow.providers.google.cloud.operators.bigquery import BigQueryInsertJobO
 from airflow.providers.google.cloud.operators.dataproc import (
     DataprocCreateBatchOperator,
     DataprocSubmitJobOperator,
+    DataprocDeleteClusterOperator,
 )
+from airflow.utils.trigger_rule import TriggerRule
 
 from orchestration_pipelines_lib import api
 
@@ -41,6 +43,40 @@ _TEST_DEFAULT_VERSION_ID = "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p"
 _TEST_NON_DEFAULT_VERSION_ID = "7d3b9e4a1f8c2b5d0e6a3f9c8d2a1b7e4f0c6b9d"
 
 _API_MODULE = sys.modules["orchestration_pipelines_lib.api"]
+
+
+
+def _get_dynamic_exists_side_effect(pipeline_id):
+    """
+    Returns a side_effect function for mock_fm_exists that dynamically checks 
+    for the existence of the *pipeline definition file* (.yml or .yaml)
+    in the real file system and returns True for all other file paths to
+    preserve the original intent of mocking referenced files as existing.
+    """
+    test_data_root = _get_data_root_path()
+    bundle_version_path = os.path.join(test_data_root, _TEST_BUNDLE_ID, "versions", _TEST_DEFAULT_VERSION_ID)
+
+    yml_path_abs = os.path.join(bundle_version_path, f"{pipeline_id}.yml")
+    yaml_path_abs = os.path.join(bundle_version_path, f"{pipeline_id}.yaml")
+
+    yml_exists_in_fs = os.path.exists(yml_path_abs)
+    yaml_exists_in_fs = os.path.exists(yaml_path_abs)
+
+    def exists_side_effect(path):
+        is_pipeline_check = f"/{pipeline_id}." in path
+
+        if is_pipeline_check:
+            is_yml_check = path.endswith(f"{pipeline_id}.yml")
+            is_yaml_check = path.endswith(f"{pipeline_id}.yaml")
+
+            if is_yml_check:
+                return yml_exists_in_fs
+
+            if is_yaml_check:
+                return yaml_exists_in_fs
+        return True
+
+    return exists_side_effect
 
 
 class TestApi(unittest.TestCase):
@@ -90,17 +126,22 @@ class TestApi(unittest.TestCase):
                                               expected_operator_type,
                                               mock_get_versions,
                                               is_paused=False,
-                                              is_current=True):
+                                              is_current=True,
+                                              mock_fm_exists=None):
         """
         Helper to run DAG generation and assert its successful creation.
 
         This encapsulates the common test logic for success scenarios.
+        Accepts mock_fm_exists to dynamically set the side_effect for robust file checks.
         """
         expected_dag_id = _get_expected_dag_id(pipeline_id,
                                                is_current=is_current)
         mock_get_versions.return_value = [
             _TEST_DEFAULT_VERSION_ID, _TEST_NON_DEFAULT_VERSION_ID
         ]
+
+        if mock_fm_exists:
+            mock_fm_exists.side_effect = _get_dynamic_exists_side_effect(pipeline_id)
 
         if hasattr(_API_MODULE, expected_dag_id):
             delattr(_API_MODULE, expected_dag_id)
@@ -169,14 +210,14 @@ class TestApi(unittest.TestCase):
     @patch(
         "orchestration_pipelines_lib.utils.versions_utils.get_versions_to_parse"
     )
-    @patch("orchestration_pipelines_lib.api._read_parse_and_convert_pipeline")
+    @patch("orchestration_pipelines_lib.utils.pipeline_repository.PipelineRepository.get_versioned_pipeline")
     def test_generate_dag_with_model_validation_error_creates_dummy_dag(
-            self, mock_read_parse, mock_get_versions, mock_session):
+            self, mock_get_versioned_pipeline, mock_get_versions, mock_session):
         """Tests that a schema validation error results in a dummy DAG."""
         pipeline_id = "fail-step2-model-validation"
         error_message = "Model validation failed"
         self._setup_and_generate_dags_with_error(pipeline_id, mock_get_versions,
-                                                 mock_read_parse, error_message)
+                                                 mock_get_versioned_pipeline, error_message)
         self._assert_dummy_dag_was_created(pipeline_id)
 
     @patch("airflow.utils.db.create_session")
@@ -222,11 +263,12 @@ class TestApi(unittest.TestCase):
             self, mock_get_versions, mock_session, mock_fm_exists,
             mock_upload_notebook):
         """Tests successful DAG generation for dataproc-create-batch-pipeline.yml."""
-        # Mock that the referenced files exist to avoid actual file system checks.
-        mock_fm_exists.return_value = True
+        pipeline_id = "dataproc-create-batch-pipeline"
+
+        mock_fm_exists.side_effect = _get_dynamic_exists_side_effect(pipeline_id)
 
         self._run_and_assert_successful_generation(
-            pipeline_id="dataproc-create-batch-pipeline",
+            pipeline_id=pipeline_id,
             expected_operator_type=DataprocCreateBatchOperator,
             mock_get_versions=mock_get_versions,
             is_paused=True)
@@ -247,11 +289,13 @@ class TestApi(unittest.TestCase):
             self, mock_get_versions, mock_session, mock_fm_exists,
             mock_read_gcs_file, mock_upload_notebook):
         """Tests successful DAG generation for dataproc-create-batch-pipeline-resource-profile-gcs-overrides.yml."""
-        mock_fm_exists.return_value = True
+        pipeline_id = "dataproc-create-batch-pipeline-resource-profile-gcs-overrides"
+
+        mock_fm_exists.side_effect = _get_dynamic_exists_side_effect(pipeline_id)
+
         mock_read_gcs_file.return_value = "definition:\n  runtimeConfig:\n    properties:\n      prop1: val1"
         self._run_and_assert_successful_generation(
-            pipeline_id=
-            "dataproc-create-batch-pipeline-resource-profile-gcs-overrides",
+            pipeline_id=pipeline_id,
             expected_operator_type=DataprocCreateBatchOperator,
             mock_get_versions=mock_get_versions)
 
@@ -268,13 +312,14 @@ class TestApi(unittest.TestCase):
             self, mock_get_versions, mock_session, mock_fm_exists,
             mock_upload_notebook):
         """Tests successful DAG generation for a pyspark job on an ephemeral Dataproc cluster with inline config."""
-        from airflow.utils.trigger_rule import TriggerRule
-        from airflow.providers.google.cloud.operators.dataproc import DataprocDeleteClusterOperator
+        pipeline_id = "dataproc-ephemeral-inline-pyspark"
 
-        mock_fm_exists.return_value = True
+        mock_fm_exists.side_effect = _get_dynamic_exists_side_effect(pipeline_id)
+
+        self.mock_get_blob_ref.return_value = "gs://fake/path/to/script.py"
 
         self._run_and_assert_successful_generation(
-            pipeline_id="dataproc-ephemeral-inline-pyspark",
+            pipeline_id=pipeline_id,
             expected_operator_type=DataprocSubmitJobOperator,
             mock_get_versions=mock_get_versions)
 
@@ -302,11 +347,14 @@ class TestApi(unittest.TestCase):
             self, mock_get_versions, mock_session, mock_fm_exists,
             mock_read_gcs_file, mock_upload_notebook):
         """Tests successful DAG generation for a pyspark job on an ephemeral Dataproc cluster with GCS config."""
-        mock_fm_exists.return_value = True
+        pipeline_id = "dataproc-ephemeral-gcs-resource-profile-pyspark"
+
+        mock_fm_exists.side_effect = _get_dynamic_exists_side_effect(pipeline_id)
+
         mock_read_gcs_file.return_value = "definition:\n config:\n    gceClusterConfig:\n      zoneUri: some-zone"
 
         self._run_and_assert_successful_generation(
-            pipeline_id="dataproc-ephemeral-gcs-resource-profile-pyspark",
+            pipeline_id=pipeline_id,
             expected_operator_type=DataprocSubmitJobOperator,
             mock_get_versions=mock_get_versions)
 
@@ -326,12 +374,14 @@ class TestApi(unittest.TestCase):
             self, mock_get_versions, mock_session, mock_fm_exists,
             mock_read_gcs_file, mock_upload_notebook):
         """Tests successful DAG generation for a pyspark job on an ephemeral Dataproc cluster with GCS config and overrides."""
-        mock_fm_exists.return_value = True
+        pipeline_id = "dataproc-ephemeral-gcs-resource-profile-pyspark-overrides"
+
+        mock_fm_exists.side_effect = _get_dynamic_exists_side_effect(pipeline_id)
+
         mock_read_gcs_file.return_value = "definition:\n config:\n    gceClusterConfig:\n      zoneUri: some-zone"
 
         self._run_and_assert_successful_generation(
-            pipeline_id=
-            "dataproc-ephemeral-gcs-resource-profile-pyspark-overrides",
+            pipeline_id=pipeline_id,
             expected_operator_type=DataprocSubmitJobOperator,
             mock_get_versions=mock_get_versions)
 
@@ -351,11 +401,15 @@ class TestApi(unittest.TestCase):
             self, mock_get_versions, mock_session, mock_fm_exists,
             mock_read_local, mock_upload_notebook):
         """Tests successful DAG generation for a pyspark job on an ephemeral Dataproc cluster with relative path config."""
-        mock_fm_exists.return_value = True
+        pipeline_id = "dataproc-ephemeral-relative-resource-profile-pyspark"
+
+        mock_fm_exists.side_effect = _get_dynamic_exists_side_effect(pipeline_id)
+
+        self.mock_get_blob_ref.return_value = "gs://fake/path/to/script.py"
         mock_read_local.return_value = "gceClusterConfig:\n  zoneUri: some-zone"
 
         self._run_and_assert_successful_generation(
-            pipeline_id="dataproc-ephemeral-relative-resource-profile-pyspark",
+            pipeline_id=pipeline_id,
             expected_operator_type=DataprocSubmitJobOperator,
             mock_get_versions=mock_get_versions)
 
@@ -475,7 +529,7 @@ class TestApi(unittest.TestCase):
     def test_generate_dags_skips_pipelines_not_in_bundle_version(
             self, mock_get_versions):
         """
-        Tests that generate_dags does not create a DAG if the pipeline is 
+        Tests that generate_dags does not create a DAG if the pipeline is
         missing from the specified bundle version.
         """
         pipeline_id = "a-pipeline"

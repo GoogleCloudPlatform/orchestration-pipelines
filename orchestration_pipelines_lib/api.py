@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import traceback
 from typing import TYPE_CHECKING, Any
 
@@ -24,6 +23,9 @@ if TYPE_CHECKING:
     from orchestration_pipelines_lib.utils.file_manager import FileManager
     from orchestration_pipelines_lib.utils.pipeline_metadata import (
         PipelineMetadata,
+    )
+    from orchestration_pipelines_lib.utils.pipeline_repository import (
+        PipelineRepository,
     )
     from orchestration_pipelines_lib.utils.versioned_file_manager import (
         VersionedFileManager,
@@ -39,13 +41,22 @@ def validate(pipeline_definition_file: str) -> None:
             definition file.
     """
     from orchestration_pipelines_lib.utils.file_manager import FileManager
+    from orchestration_pipelines_lib.utils.pipeline_repository import (
+        PipelineRepository,
+    )
 
-    _read_parse_and_convert_pipeline(FileManager(), pipeline_definition_file)
+    repository = PipelineRepository(data_root="")
+    file_manager = FileManager()
+    _get_and_convert_pipeline(
+        repository=repository,
+        file_manager=file_manager,
+        pipeline_definition_path=pipeline_definition_file,
+    )
 
 
 def generate(
     pipeline_definition_file: str, globals_dict: dict[str, Any] = None
-):
+) -> None:
     """Generates the DAG based on the input pipeline.
 
     Args:
@@ -54,11 +65,18 @@ def generate(
         globals_dict (Dict[str, Any], optional): The global dictionary to
             register the DAG in. Defaults to None.
     """
-    dag_id = os.path.splitext(os.path.basename(pipeline_definition_file))[0]
+    import os
+
     from orchestration_pipelines_lib.utils.file_manager import FileManager
     from orchestration_pipelines_lib.utils.pipeline_metadata import (
         PipelineMetadata,
     )
+    from orchestration_pipelines_lib.utils.pipeline_repository import (
+        PipelineRepository,
+    )
+
+    dag_id = os.path.splitext(os.path.basename(pipeline_definition_file))[0]
+    repository = PipelineRepository(data_root="")
 
     file_manager = FileManager()
     source_filepath = file_manager.get_blob_reference(
@@ -67,9 +85,13 @@ def generate(
     _generate_dag(
         file_manager,
         pipeline_definition_file,
+        repository,
         dag_id=dag_id,
         metadata=PipelineMetadata(
-            pipeline_id=dag_id, source_filepath=source_filepath
+            pipeline_id=dag_id,
+            manifest=None,
+            version_id="",
+            source_filepath=source_filepath,
         ),
         data_root=None,
         globals_dict=globals_dict,
@@ -82,8 +104,7 @@ def generate_dags(
     pipeline_id: str,
     globals_dict: dict[str, Any] = None,
 ):
-    """Validates and generates DAGs for all versions of a pipeline from a.
-
+    """Validates and generates DAGs for all versions of a pipeline from a
     bundle.
 
     Args:
@@ -94,6 +115,9 @@ def generate_dags(
             register the DAGs in. Defaults to None.
     """
     from orchestration_pipelines_lib.utils.file_manager import FileManager
+    from orchestration_pipelines_lib.utils.pipeline_repository import (
+        PipelineRepository,
+    )
     from orchestration_pipelines_lib.utils.versioned_file_manager import (
         VersionedFileManager,
     )
@@ -101,9 +125,11 @@ def generate_dags(
         get_versions_to_parse,
     )
 
-    # Use base FileManager to read manifest (version independent)
     base_file_manager = FileManager()
-    manifest = get_manifest(data_root, bundle_id, base_file_manager)
+    repository = PipelineRepository(
+        data_root=data_root, file_manager=base_file_manager
+    )
+    manifest = repository.get_manifest(bundle_id)
 
     versions_to_parse = get_versions_to_parse(pipeline_id, manifest)
     logging.info("Versions to parse: %s", versions_to_parse)
@@ -124,6 +150,7 @@ def generate_dags(
 
             _generate_dag_for_version(
                 data_root,
+                repository,
                 manifest,
                 bundle_id=bundle_id,
                 version_id=version,
@@ -133,43 +160,46 @@ def generate_dags(
             )
 
 
-def _read_parse_and_convert_pipeline(
-    file_manager: FileManager, pipeline_definition_path: str
+def _get_and_convert_pipeline(
+    repository: PipelineRepository,
+    file_manager: FileManager,
+    pipeline_definition_path: str,
+    bundle_id: str | None = None,
+    pipeline_id: str | None = None,
+    version_id: str | None = None,
 ):
-    """Reads, parses, and converts a pipeline definition to an internal model.
-
-    Args:
-        file_manager (FileManager): The file manager instance to read the file.
-        pipeline_definition_path (str): The path to the pipeline
-            definition file.
-
-    Returns:
-        The internal pipeline model object.
-    """
-    import yaml
-
-    from orchestration_pipelines_lib.internal_models.converters import converter
-    from orchestration_pipelines_models.orchestration_pipelines_model import (
-        OrchestrationPipelinesModel,
+    """Reads the pipeline and converts to its internal representation."""
+    from orchestration_pipelines_lib.internal_models.converters import (
+        converter as pipeline_converter,
     )
 
-    # Step 1: Read pipeline definition
-    definition_content = file_manager.read(pipeline_definition_path)
-    pipeline_definition = yaml.safe_load(definition_content)
+    if version_id:
+        parsed_pipeline = repository.get_versioned_pipeline(
+            bundle_id=bundle_id,
+            pipeline_id=pipeline_id,
+            version_id=version_id,
+            file_manager=file_manager,
+        )
+    else:
+        parsed_pipeline = repository.get_pipeline(
+            pipeline_definition_path,
+            file_manager=file_manager,
+        )
 
-    # Step 2: Parse pipeline and convert to internal model
-    parsed_pipeline = OrchestrationPipelinesModel.build(pipeline_definition)
-    internal_pipeline_model = converter.convert(parsed_pipeline, file_manager)
-    return internal_pipeline_model
+    return pipeline_converter.convert(parsed_pipeline, file_manager)
 
 
 def _generate_dag(
     file_manager: FileManager,
     pipeline_definition_path: str,
+    repository: PipelineRepository,
     dag_id: str,
     metadata: PipelineMetadata,
     data_root: str,
     globals_dict: dict[str, Any],
+    bundle_id: str | None = None,
+    pipeline_id: str | None = None,
+    version_id: str | None = None,
 ):
     """Generates a single DAG based on the provided pipeline definition.
 
@@ -177,11 +207,15 @@ def _generate_dag(
         file_manager (FileManager): The file manager instance.
         pipeline_definition_path (str): The path to the pipeline
             definition file.
+        repository (PipelineRepository): The pipeline repository instance.
         dag_id (str): The ID to assign to the generated DAG.
         metadata (PipelineMetadata): The pipeline metadata.
         data_root (str): The root directory containing the data.
         globals_dict (Dict[str, Any]): The global dictionary to register the
             DAG in.
+        bundle_id (Optional[str]): The ID of the bundle.
+        pipeline_id (Optional[str]): The ID of the pipeline.
+        version_id (Optional[str]): The version ID.
     """
     from orchestration_pipelines_lib.dag_generator import core
     from orchestration_pipelines_lib.internal_models.triggers import (
@@ -197,9 +231,13 @@ def _generate_dag(
     internal_pipeline = None
 
     try:
-        # Step 1: Read, parse and convert pipeline to internal model
-        internal_pipeline = _read_parse_and_convert_pipeline(
-            file_manager, pipeline_definition_path
+        internal_pipeline = _get_and_convert_pipeline(
+            repository=repository,
+            file_manager=file_manager,
+            pipeline_definition_path=pipeline_definition_path,
+            bundle_id=bundle_id,
+            pipeline_id=pipeline_id,
+            version_id=version_id,
         )
 
         # Override dag_id to desired form
@@ -277,6 +315,7 @@ def _generate_dag(
 
 def _generate_dag_for_version(
     data_root: str,
+    repository: PipelineRepository,
     manifest: Manifest,
     bundle_id: str,
     version_id: str,
@@ -284,12 +323,13 @@ def _generate_dag_for_version(
     globals_dict: dict[str, Any],
     file_manager: VersionedFileManager,
 ):
-    """Validates and generates the DAG based on the bundle, version, and.
-
-    pipeline ID.
+    """Validates and generates the DAG based on the bundle, version,
+    and pipeline ID.
 
     Args:
         data_root (str): The root directory containing the data.
+        repository (PipelineRepository): The pipeline repository
+            instance.
         manifest (Manifest): The manifest object.
         bundle_id (str): The ID of the bundle.
         version_id (str): The version ID.
@@ -312,33 +352,17 @@ def _generate_dag_for_version(
             file_manager.resolve_path(pipeline_definition_path)
         ),
     )
+    pipeline_filename = f"{pipeline_id}.yml"
+
     _generate_dag(
         file_manager,
-        pipeline_definition_path,
+        pipeline_filename,
+        repository,
         dag_id=f"{bundle_id}__v__{version_id}__{pipeline_id}",
         metadata=metadata,
         data_root=data_root,
         globals_dict=globals_dict,
+        bundle_id=bundle_id,
+        pipeline_id=pipeline_id,
+        version_id=version_id,
     )
-
-
-def get_manifest(data_root: str, bundle_id: str, file_manager: FileManager):
-    """Retrieves and parses the manifest for a given bundle.
-
-    Args:
-        data_root (str): The root directory containing the data.
-        bundle_id (str): The ID of the bundle.
-        file_manager (FileManager): The file manager instance to use.
-
-    Returns:
-        Manifest: The parsed manifest object.
-    """
-    import yaml
-
-    from orchestration_pipelines_lib.utils.path_utils import get_manifest_path
-    from orchestration_pipelines_models.manifest.manifest import Manifest
-
-    manifest_path = get_manifest_path(data_root, bundle_id)
-    manifest_content = file_manager.read(manifest_path)
-    parsed_manifest = yaml.safe_load(manifest_content)
-    return Manifest.from_dict(parsed_manifest)
