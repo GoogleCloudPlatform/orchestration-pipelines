@@ -14,8 +14,8 @@ A library for defining and generating Apache Airflow DAGs declaratively using YA
 
 `orchestration-pipelines` allows you to define complex data workflows in simple, human-readable YAML files. It abstracts away the boilerplate of writing Airflow DAGs in Python, making it easier for non-Python experts to create and manage pipelines.
 
-- **Documentation**: [docs/doc.md](docs/doc.md)
-- **Changelog**: [CHANGELOG.md](CHANGELOG.md)
+- **Documentation**: [docs/doc.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/docs/doc.md)
+- **Changelog**: [CHANGELOG.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/CHANGELOG.md)
 
 ## Supported Python Versions
 
@@ -108,8 +108,8 @@ See the `examples/` directory for a sample `manifest.yaml` and how to use it.
 
 ## Contributing
 
-Contributions are welcome! Please see [contributing.md](contributing.md) for guidelines.
+Contributions are welcome! Please see [contributing.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/contributing.md) for guidelines.
 
 ## License
 
-This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache 2.0 License - see the [LICENSE](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/LICENSE) file for details.
