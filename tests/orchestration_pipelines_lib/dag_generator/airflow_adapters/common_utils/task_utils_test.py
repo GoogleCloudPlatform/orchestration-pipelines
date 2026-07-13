@@ -485,7 +485,7 @@ class TaskUtilsTest(unittest.TestCase):
         self.assertEqual(task.labels, {"env": "prod", "team": "data"})
 
         expected_cmd = (
-            "gsutil -m cp -r $GCS_BUCKET_PATH/* . && dataform run "
+            "gcloud storage cp --recursive $GCS_BUCKET_PATH/* . && dataform run "
             "--timeout=60s --job-labels=env=prod,team=data "
             "--vars=run_date=2024-01-01,id=123"
         )
@@ -525,7 +525,7 @@ class TaskUtilsTest(unittest.TestCase):
         self.assertEqual(task.labels, {})
 
         expected_cmd = (
-            "gsutil -m cp -r $GCS_BUCKET_PATH/* . && dataform run --timeout=60s"
+            "gcloud storage cp --recursive $GCS_BUCKET_PATH/* . && dataform run --timeout=60s"
         )
         self.assertEqual(task.arguments, [expected_cmd])
 

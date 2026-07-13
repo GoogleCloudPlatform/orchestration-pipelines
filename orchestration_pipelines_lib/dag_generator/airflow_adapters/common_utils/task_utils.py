@@ -697,7 +697,7 @@ def create_local_dataform_task(
     params = getattr(action, "params", None) or {}
 
     dataform_cmd = (
-        "gsutil -m cp -r $GCS_BUCKET_PATH/* . && dataform run --timeout=60s"
+        "gcloud storage cp --recursive $GCS_BUCKET_PATH/* . && dataform run --timeout=60s"
     )
     if labels:
         labels_str = ",".join(shlex.quote(f"{k}={v}") for k, v in labels.items())
