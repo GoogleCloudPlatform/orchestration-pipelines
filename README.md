@@ -81,6 +81,10 @@ actions:
 > Parameters provided to actions (e.g., in SQL queries, scripts) are always passed as strings.
 Users must handle type casting within their scripts, queries, or notebooks if different data types
 are required (e.g., using `CAST` in SQL).
+>
+> Avoid using `n` or `y` (as well as `yes`, `no`, `on`, or `off`) as unquoted keys in your YAML definitions.
+> Due to YAML 1.1 parsing specifications, these unquoted words are implicitly evaluated as boolean `false`/`true` rather than strings.
+> *If you must use them as strings*, they **must** be wrapped in explicit quotes (e.g. `'n'` or `"y"`).
 
 
 ### 2. Generate the Airflow DAG
