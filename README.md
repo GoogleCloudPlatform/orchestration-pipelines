@@ -106,9 +106,9 @@ Airflow will parse this Python file and automatically generate the DAG based on 
 
 ### Versioning and Manifests
 
-You can manage multiple versions of your pipelines using a `manifest.yaml` file. This allows you to specify which version of a pipeline should be active.
+You can manage multiple versions of your pipelines using a `manifest.yml` file. This allows you to specify which version of a pipeline should be active.
 
-See the `examples/` directory for a sample `manifest.yaml` and how to use it.
+See the `examples/` directory for a sample `manifest.yml` and how to use it.
 
 ## Contributing
 

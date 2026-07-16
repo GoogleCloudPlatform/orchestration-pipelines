@@ -11,7 +11,7 @@ Reference Codebase Path: `../orchestration_pipelines_models/pipeline_v1_model/pr
 ## 1. Overview
 
 Orchestration Pipelines (formerly known as Declarative Pipelines) provide a **YAML-based DSL** (Domain Specific Language) for defining orchestration workflows on Google Cloud. It is designed to:
-*   **Abstract Underlying Infrastructure**: Users don't need to manage Dataproc clusters, Vertex AI, or Dataform service details directly.
+*   **Abstract Underlying Infrastructure**: Users don't need to manage Dataproc clusters, or Dataform service details directly.
 *   **No-Code/Low-Code**: Define complex pipelines without writing Python/Java orchestration code (like Apache Airflow DAGs).
 *   **CI/CD Friendly**: YAML files can be easily versioned, tracked, and deployed via Git-based workflows.
 *   **Agent-Friendly**: Easy for LLMs/AI Agents to generate and modify.
