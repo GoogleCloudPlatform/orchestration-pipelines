@@ -76,6 +76,9 @@ class FileManager:
             gcs_client: An optional pre-configured GCS client instance.
         """
         self._gcs_client = gcs_client or _get_gcs_client()
+        self._dags_folder = os.environ.get("DAGS_FOLDER") or os.environ.get(
+            "AIRFLOW__CORE__DAGS_FOLDER", "."
+        )
 
     def _get_gcs_client(self):
         """Lazily initializes the GCS client."""
@@ -85,7 +88,7 @@ class FileManager:
             self._gcs_client = storage.Client()
         return self._gcs_client
 
-    def resolve_path(self, file_path: str) -> str:
+    def resolve_path(self, file_path: str) -> Optional[str]:
         """Resolves a file path.
 
         Args:
@@ -94,7 +97,14 @@ class FileManager:
         Returns:
             The resolved file path.
         """
-        return file_path
+        if file_path is None:
+            return None
+        if os.path.isabs(file_path):
+            return file_path
+        if self._is_gcs_blob(file_path):
+            return file_path
+
+        return os.path.join(self._dags_folder, file_path)
 
     def extract_relative_path(
         self, full_path: str, local_data_root: str = "/"
@@ -116,19 +126,6 @@ class FileManager:
         """
         return os.path.relpath(full_path, start=local_data_root)
 
-    def _construct_local_path(self, relative_path: str) -> str:
-        """Constructs a local path based on the DAGS_FOLDER environment
-        variable.
-
-        Args:
-            relative_path: The relative path to append to DAGS_FOLDER.
-
-        Returns:
-            The constructed local path.
-        """
-        dags_folder = os.environ.get("DAGS_FOLDER", ".")
-        return os.path.join(dags_folder, relative_path)
-
     def _read_local_file(self, path: str) -> Optional[str]:
         """Reads content from a local file if it exists and is a file.
 
@@ -144,7 +141,7 @@ class FileManager:
             OrchestrationPipelinesFileReadError: If an error occurs during
                 reading.
         """
-        full_path = self._construct_local_path(path)
+        full_path = self.resolve_path(path)
         try:
             with open(full_path, encoding="utf-8") as f:
                 return f.read()
@@ -305,7 +302,7 @@ class FileManager:
                 )
                 return any(bucket.list_blobs(prefix=prefix, max_results=1))
             else:
-                return os.path.exists(self._construct_local_path(file_path))
+                return os.path.exists(self.resolve_path(file_path))
         except (
             Exception  # pylint: disable=broad-exception-caught
         ):  # Includes GCS errors and invalid paths

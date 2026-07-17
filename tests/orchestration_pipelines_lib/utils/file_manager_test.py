@@ -14,6 +14,7 @@
 #
 """Unit tests for the FileManager class."""
 import unittest
+import os
 from unittest.mock import MagicMock, mock_open, patch
 
 from google.api_core import exceptions as gcp_exceptions
@@ -325,6 +326,32 @@ class TestFileManager(unittest.TestCase):
         result = self.file_manager.extract_relative_path(full_path)
         self.assertEqual(result, expected_relative_path)
 
+    @patch.dict("os.environ", {"DAGS_FOLDER": "/home/airflow/gcs/dags"})
+    def test_resolve_path_scenarios(self):
+        self.file_manager = FileManager(gcs_client=self.mock_gcs_client)
+        test_cases = [
+            (
+                "gs://my-bucket/dags/some/file.txt",
+                "gs://my-bucket/dags/some/file.txt"
+            ),
+            (
+                "/home/airflow/gcs/dags/some/file.txt",
+                "/home/airflow/gcs/dags/some/file.txt"
+            ),
+            (
+                "some/file.txt",
+                "/home/airflow/gcs/dags/some/file.txt"
+            ),
+        ]
+
+        actual_outputs = {}
+        for input_path, expected_output in test_cases:
+            with self.subTest(input_path=input_path):
+                actual_output = self.file_manager.resolve_path(input_path)
+                actual_outputs[input_path] = actual_output
+
+        for input_path, expected_output in test_cases:
+            self.assertEqual(actual_outputs[input_path], expected_output)
 
 if __name__ == "__main__":
     unittest.main()
