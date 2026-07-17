@@ -268,6 +268,7 @@ def create_dataproc_create_batch_operator_task(
             environment_config=environment_config,
             labels=action.labels,
         )
+        batch_dict = type(batch).to_dict(batch)
 
         ObservableDataprocCreateBatchOperator = wrap_observability_operator(
             dataproc_create_batch_operator,
@@ -280,7 +281,7 @@ def create_dataproc_create_batch_operator_task(
             task_id=action.name,
             region=action.region,
             project_id=pipeline.defaults.cloudDefault.project,
-            batch=batch,
+            batch=batch_dict,
             batch_id=(
                 f"{action.name.lower().lstrip('_-').replace('_', '-')[:50]}-"
                 f"{uuid.uuid4().hex[:6]}"
@@ -853,10 +854,12 @@ def create_bq_dts_task(
                 requested_run_time = iso_to_timestamp_dict(requested_run_time)
 
             if isinstance(requested_time_range, dict):
-                requested_time_range = {
-                    k: iso_to_timestamp_dict(v) if isinstance(v, str) else v
-                    for k, v in requested_time_range.items()
-                }
+                updated_time_range = {}
+                for k, v in requested_time_range.items():
+                    updated_time_range[k] = (
+                        iso_to_timestamp_dict(v) if isinstance(v, str) else v
+                    )
+                requested_time_range = updated_time_range
 
             if requested_run_time is None and requested_time_range is None:
                 requested_run_time = {
@@ -933,7 +936,7 @@ def create_vertex_upload_model_task(
     Returns:
         An instance of UploadModelOperator.
     """
-    from airflow.providers.google.cloud.operators.vertex_ai.model_service import (
+    from airflow.providers.google.cloud.operators.vertex_ai.model_service import (  # noqa: E501
         UploadModelOperator,
     )
 
@@ -982,7 +985,7 @@ def create_vertex_upload_model_task(
 def create_vertex_batch_inference_task(
     action: dict[str, Any], pipeline: dict[str, Any], dag
 ):
-    """Converts an AI action into a CreateBatchPredictionJobOperator for Vertex AI.
+    """Creates CreateBatchPredictionJobOperator for Vertex AI.
 
     Args:
         action: The action configuration object.
@@ -992,7 +995,7 @@ def create_vertex_batch_inference_task(
     Returns:
         An instance of CreateBatchPredictionJobOperator.
     """
-    from airflow.providers.google.cloud.operators.vertex_ai.batch_prediction_job import (
+    from airflow.providers.google.cloud.operators.vertex_ai.batch_prediction_job import (  # noqa: E501
         CreateBatchPredictionJobOperator,
     )
 
