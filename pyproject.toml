@@ -42,6 +42,14 @@ include = ["orchestration_pipelines_lib*", "orchestration_pipelines_models*"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 
+[tool.coverage.run]
+omit = [
+    "**/*_pb2.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+
 [tool.black]
 line-length = 80
 skip-string-normalization = true
