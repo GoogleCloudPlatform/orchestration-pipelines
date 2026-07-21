@@ -15,6 +15,7 @@
 from collections.abc import MutableMapping
 import re
 import warnings
+from graphlib import TopologicalSorter, CycleError
 from datetime import datetime
 
 from google.protobuf.descriptor import Descriptor, FieldDescriptor
@@ -407,18 +408,28 @@ class PipelineValidator:
                     all_dependencies.append((dep, i, action_type, action_name))
 
         # 2. Check for undefined dependencies
-        action_names_set = set(action_name_map.keys())
+        action_names = action_name_map.keys()
+        action_to_dependencies = {action:[] for action in action_names}
         for (
             dep_name,
             action_index,
             action_type,
             action_name,
         ) in all_dependencies:
-            if dep_name not in action_names_set:
+            action_to_dependencies[action_name].append(dep_name)
+            if dep_name not in action_names:
                 raise ValueError(
                     f"Error for field 'actions[{action_index}].{action_type}.depends_on': "
                     f"Action '{action_name}' depends on undefined action '{dep_name}'."
                 )
+
+        # 3. Check for cycle
+        try:
+            ts = TopologicalSorter(action_to_dependencies)
+            ts.prepare()
+        except CycleError as e:
+            cycle_path = " -> ".join(e.args[1])
+            raise ValueError(f"Circular dependency detected: {cycle_path}")
 
     @staticmethod
     def _is_map_field(field: FieldDescriptor) -> bool:

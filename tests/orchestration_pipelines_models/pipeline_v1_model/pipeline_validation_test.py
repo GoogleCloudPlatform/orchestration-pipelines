@@ -371,6 +371,60 @@ class TestPipelineValidator(unittest.TestCase):
         ):
             PipelineValidator.validate(self.pipeline)
 
+    def test_validation_success_when_no_cycle(self):
+        """Tests success when pipeline has no circular flow."""
+        action_2 = Action(python=PythonAction(
+                    name="valid-action-name-2",
+                    main_file_path="/path/to/script.py",
+                    python_callable="main",
+                    engine=PythonEngine(local=LocalEngine()),
+                    depends_on=[self.pipeline.actions[0].python.name]
+                ))
+        action_3 = Action(python=PythonAction(
+                    name="valid-action-name-3",
+                    main_file_path="/path/to/script.py",
+                    python_callable="main",
+                    engine=PythonEngine(local=LocalEngine()),
+                    depends_on=[action_2.python.name]
+                ))
+        self.pipeline.actions.append(action_2)
+        self.pipeline.actions.append(action_3)
+
+        caught_exception = None
+        try:
+            PipelineValidator.validate(self.pipeline)
+        except ValueError as e:
+            caught_exception = e
+
+        self.assertIsNone(caught_exception, f"Validation raised {caught_exception}")
+
+    def test_validation_fails_when_cycle_exists(self):
+        """Tests failure when actions have circular dependencies."""
+        action_2 = Action(python=PythonAction(
+                    name="valid-action-name-2",
+                    main_file_path="/path/to/script.py",
+                    python_callable="main",
+                    engine=PythonEngine(local=LocalEngine()),
+                    depends_on=[self.pipeline.actions[0].python.name]
+                ))
+        action_3 = Action(python=PythonAction(
+                    name="valid-action-name-3",
+                    main_file_path="/path/to/script.py",
+                    python_callable="main",
+                    engine=PythonEngine(local=LocalEngine()),
+                    depends_on=[action_2.python.name]
+                ))
+        # add other actions and incorrect dependency
+        self.pipeline.actions[0].python.depends_on.append(action_3.python.name)
+        self.pipeline.actions.append(action_2)
+        self.pipeline.actions.append(action_3)
+
+        with self.assertRaisesRegex(
+                ValueError,
+            (r"Circular dependency detected: "),
+        ):
+            PipelineValidator.validate(self.pipeline)
+
 
 if __name__ == "__main__":
     unittest.main()
