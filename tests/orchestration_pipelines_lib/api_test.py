@@ -46,6 +46,18 @@ _API_MODULE = sys.modules["orchestration_pipelines_lib.api"]
 class TestApi(unittest.TestCase):
     """Test suite for the DAG generator."""
 
+    def setUp(self):
+        self.blob_ref_patcher = patch(
+            "orchestration_pipelines_lib.utils.file_manager.FileManager.get_blob_reference"
+        )
+        self.mock_get_blob_ref = self.blob_ref_patcher.start()
+        self.mock_get_blob_ref.side_effect = lambda path: (
+            f"gs://example-bucket/{os.path.basename(path)}" if path else None
+        )
+
+    def tearDown(self):
+        self.blob_ref_patcher.stop()
+
     def _setup_and_generate_dags_with_error(self, pipeline_id,
                                             mock_get_versions,
                                             mock_to_raise_exception,
@@ -182,19 +194,14 @@ class TestApi(unittest.TestCase):
         self._assert_dummy_dag_was_created(pipeline_id)
 
     @patch("airflow.models.variable.Variable.get")
-    @patch(
-        "orchestration_pipelines_lib.utils.file_manager.FileManager.get_blob_reference"
-    )
     @patch("airflow.utils.db.create_session")
     @patch(
         "orchestration_pipelines_lib.utils.versions_utils.get_versions_to_parse"
     )
     def test_generate_dag_for_dataform_pipeline_local_success(
-            self, mock_get_versions, mock_session, mock_get_blob_reference,
-            mock_variable_get):
+            self, mock_get_versions, mock_session, mock_variable_get):
         """Tests successful DAG generation for dataform-pipeline-local.yml."""
         # Mock dependencies for local dataform task
-        mock_get_blob_reference.return_value = "gs://example-bucket/dataform/project/file.sql"
         mock_variable_get.return_value = "gs://example-bucket/dataform/project"
 
         self._run_and_assert_successful_generation(
@@ -252,9 +259,6 @@ class TestApi(unittest.TestCase):
         "orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils.gcs_utils.upload_run_notebook_if_needed"
     )
     @patch.dict(os.environ, {"GCS_BUCKET": "example-bucket"})
-    @patch(
-        "orchestration_pipelines_lib.utils.file_manager.FileManager.get_blob_reference"
-    )
     @patch("orchestration_pipelines_lib.utils.file_manager.FileManager.exists")
     @patch("airflow.utils.db.create_session")
     @patch(
@@ -262,13 +266,12 @@ class TestApi(unittest.TestCase):
     )
     def test_generate_dag_for_dataproc_ephemeral_inline_pyspark_pipeline_success(
             self, mock_get_versions, mock_session, mock_fm_exists,
-            mock_get_blob_reference, mock_upload_notebook):
+            mock_upload_notebook):
         """Tests successful DAG generation for a pyspark job on an ephemeral Dataproc cluster with inline config."""
         from airflow.utils.trigger_rule import TriggerRule
         from airflow.providers.google.cloud.operators.dataproc import DataprocDeleteClusterOperator
 
         mock_fm_exists.return_value = True
-        mock_get_blob_reference.return_value = "gs://fake/path/to/script.py"
 
         self._run_and_assert_successful_generation(
             pipeline_id="dataproc-ephemeral-inline-pyspark",
@@ -288,9 +291,6 @@ class TestApi(unittest.TestCase):
     )
     @patch.dict(os.environ, {"GCS_BUCKET": "example-bucket"})
     @patch(
-        "orchestration_pipelines_lib.utils.file_manager.FileManager.get_blob_reference"
-    )
-    @patch(
         "orchestration_pipelines_lib.utils.file_manager.FileManager._read_gcs_file"
     )
     @patch("orchestration_pipelines_lib.utils.file_manager.FileManager.exists")
@@ -300,11 +300,10 @@ class TestApi(unittest.TestCase):
     )
     def test_generate_dag_for_dataproc_ephemeral_gcs_resource_profile_pyspark_pipeline_success(
             self, mock_get_versions, mock_session, mock_fm_exists,
-            mock_read_gcs_file, mock_get_blob_reference, mock_upload_notebook):
+            mock_read_gcs_file, mock_upload_notebook):
         """Tests successful DAG generation for a pyspark job on an ephemeral Dataproc cluster with GCS config."""
         mock_fm_exists.return_value = True
         mock_read_gcs_file.return_value = "definition:\n config:\n    gceClusterConfig:\n      zoneUri: some-zone"
-        mock_get_blob_reference.return_value = "gs://fake/path/to/script.py"
 
         self._run_and_assert_successful_generation(
             pipeline_id="dataproc-ephemeral-gcs-resource-profile-pyspark",
@@ -316,9 +315,6 @@ class TestApi(unittest.TestCase):
     )
     @patch.dict(os.environ, {"GCS_BUCKET": "example-bucket"})
     @patch(
-        "orchestration_pipelines_lib.utils.file_manager.FileManager.get_blob_reference"
-    )
-    @patch(
         "orchestration_pipelines_lib.utils.file_manager.FileManager._read_gcs_file"
     )
     @patch("orchestration_pipelines_lib.utils.file_manager.FileManager.exists")
@@ -328,11 +324,10 @@ class TestApi(unittest.TestCase):
     )
     def test_generate_dag_for_dataproc_ephemeral_gcs_resource_profile_pyspark_overrides_success(
             self, mock_get_versions, mock_session, mock_fm_exists,
-            mock_read_gcs_file, mock_get_blob_reference, mock_upload_notebook):
+            mock_read_gcs_file, mock_upload_notebook):
         """Tests successful DAG generation for a pyspark job on an ephemeral Dataproc cluster with GCS config and overrides."""
         mock_fm_exists.return_value = True
         mock_read_gcs_file.return_value = "definition:\n config:\n    gceClusterConfig:\n      zoneUri: some-zone"
-        mock_get_blob_reference.return_value = "gs://fake/path/to/script.py"
 
         self._run_and_assert_successful_generation(
             pipeline_id=
@@ -345,9 +340,6 @@ class TestApi(unittest.TestCase):
     )
     @patch.dict(os.environ, {"GCS_BUCKET": "example-bucket"})
     @patch(
-        "orchestration_pipelines_lib.utils.file_manager.FileManager.get_blob_reference"
-    )
-    @patch(
         "orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.gcs_utils.read_local_file_content_from_path"
     )
     @patch("orchestration_pipelines_lib.utils.file_manager.FileManager.exists")
@@ -357,10 +349,9 @@ class TestApi(unittest.TestCase):
     )
     def test_generate_dag_for_dataproc_ephemeral_relative_resource_profile_pyspark_pipeline_success(
             self, mock_get_versions, mock_session, mock_fm_exists,
-            mock_read_local, mock_get_blob_reference, mock_upload_notebook):
+            mock_read_local, mock_upload_notebook):
         """Tests successful DAG generation for a pyspark job on an ephemeral Dataproc cluster with relative path config."""
         mock_fm_exists.return_value = True
-        mock_get_blob_reference.return_value = "gs://fake/path/to/script.py"
         mock_read_local.return_value = "gceClusterConfig:\n  zoneUri: some-zone"
 
         self._run_and_assert_successful_generation(
@@ -388,21 +379,14 @@ class TestApi(unittest.TestCase):
     @patch(
         "orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils.FileManager"
     )
-    @patch(
-        "orchestration_pipelines_lib.utils.file_manager.FileManager.get_blob_reference"
-    )
     @patch("airflow.utils.db.create_session")
     @patch(
         "orchestration_pipelines_lib.utils.versions_utils.get_versions_to_parse"
     )
     def test_generate_dag_for_sql_on_bigquery_success(self, mock_get_versions,
                                                       mock_session,
-                                                      mock_get_blob_reference,
                                                       mock_task_factory_fm):
         """Tests successful DAG generation for sql-on-bigquery.yml."""
-        # Mock get_blob_reference to prevent local path resolution errors.
-        mock_get_blob_reference.return_value = "gs://fake/path/to/query.sql"
-
         # Mock the FileManager used inside the task factory to prevent GCS calls.
         mock_task_factory_fm.return_value.read.return_value = "SELECT 1;"
 
@@ -415,47 +399,32 @@ class TestApi(unittest.TestCase):
         "orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils.gcs_utils.upload_run_notebook_if_needed"
     )
     @patch.dict(os.environ, {"GCS_BUCKET": "example-bucket"})
-    @patch(
-        "orchestration_pipelines_lib.utils.file_manager.FileManager.get_blob_reference"
-    )
     @patch("airflow.utils.db.create_session")
     @patch(
         "orchestration_pipelines_lib.utils.versions_utils.get_versions_to_parse"
     )
     def test_generate_dag_for_dataproc_existing_cluster_script_pipeline_success(
-            self, mock_get_versions, mock_session, mock_get_blob_reference,
+            self, mock_get_versions, mock_session,
             mock_upload_notebook):
         """Tests successful DAG generation for dataproc-existing-cluster-script-pipeline.yml."""
-        # Mock GCS interactions.
-        mock_get_blob_reference.return_value = "gs://fake/path/to/script.py"
-
         self._run_and_assert_successful_generation(
             pipeline_id="dataproc-existing-cluster-script-pipeline",
             expected_operator_type=DataprocSubmitJobOperator,
             mock_get_versions=mock_get_versions)
 
-    @patch(
-        "orchestration_pipelines_lib.utils.file_manager.FileManager.get_blob_reference"
-    )
     @patch("airflow.utils.db.create_session")
     @patch(
         "orchestration_pipelines_lib.utils.versions_utils.get_versions_to_parse"
     )
     def test_generate_dag_for_sql_on_dataproc_serverless_success(
-            self, mock_get_versions, mock_session, mock_get_blob_reference):
+            self, mock_get_versions, mock_session):
         """Tests successful DAG generation for sql-on-dataproc-serverless.yml."""
-        # Mock GCS interactions to prevent errors on file path resolution.
-        mock_get_blob_reference.return_value = "gs://fake/path/to/query.sql"
-
         self._run_and_assert_successful_generation(
             pipeline_id="sql-on-dataproc-serverless",
             expected_operator_type=DataprocCreateBatchOperator,
             mock_get_versions=mock_get_versions)
 
     @patch.dict(os.environ, {"GCS_BUCKET": "example-bucket"})
-    @patch(
-        "orchestration_pipelines_lib.utils.file_manager.FileManager.get_blob_reference"
-    )
     @patch("airflow.utils.db.create_session")
     @patch(
         "orchestration_pipelines_lib.utils.versions_utils.get_versions_to_parse"
@@ -464,11 +433,8 @@ class TestApi(unittest.TestCase):
         self,
         mock_get_versions,
         mock_session,
-        mock_get_blob_reference,
     ):
         """Tests successful DAG generation for sql-on-dataproc-serverless-inline.yml."""
-        mock_get_blob_reference.return_value = "gs://example-bucket/data/example-bundle/versions/a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p/sql_queries/run-sql-on-dataproc.sql"
-
         self._run_and_assert_successful_generation(
             pipeline_id="sql-on-dataproc-serverless-inline",
             expected_operator_type=DataprocCreateBatchOperator,
@@ -476,18 +442,13 @@ class TestApi(unittest.TestCase):
         )
 
     @patch.dict(os.environ, {"GCS_BUCKET": "example-bucket"})
-    @patch(
-        "orchestration_pipelines_lib.utils.file_manager.FileManager.get_blob_reference"
-    )
     @patch("airflow.utils.db.create_session")
     @patch(
         "orchestration_pipelines_lib.utils.versions_utils.get_versions_to_parse"
     )
     def test_generate_dag_for_sql_on_dataproc_gce_existing_inline_success(
-            self, mock_get_versions, mock_session, mock_get_blob_reference):
+            self, mock_get_versions, mock_session):
         """Tests successful DAG generation for sql-on-dataproc-gce-existing-inline.yml."""
-        mock_get_blob_reference.return_value = "gs://example-bucket/data/example-bundle/versions/a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p/sql_queries/run-sql-on-existing-cluster.sql"
-
         self._run_and_assert_successful_generation(
             pipeline_id="sql-on-dataproc-gce-existing-inline",
             expected_operator_type=DataprocSubmitJobOperator,
@@ -495,18 +456,13 @@ class TestApi(unittest.TestCase):
         )
 
     @patch.dict(os.environ, {"GCS_BUCKET": "example-bucket"})
-    @patch(
-        "orchestration_pipelines_lib.utils.file_manager.FileManager.get_blob_reference"
-    )
     @patch("airflow.utils.db.create_session")
     @patch(
         "orchestration_pipelines_lib.utils.versions_utils.get_versions_to_parse"
     )
     def test_generate_dag_for_sql_on_dataproc_gce_ephemeral_inline_success(
-            self, mock_get_versions, mock_session, mock_get_blob_reference):
+            self, mock_get_versions, mock_session):
         """Tests successful DAG generation for sql-on-dataproc-gce-ephemeral-inline.yml."""
-        mock_get_blob_reference.return_value = "gs://example-bucket/data/example-bundle/versions/a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p/sql_queries/run-sql-on-ephemeral-cluster.sql"
-
         self._run_and_assert_successful_generation(
             pipeline_id="sql-on-dataproc-gce-ephemeral-inline",
             expected_operator_type=DataprocSubmitJobOperator,
@@ -581,6 +537,36 @@ class TestApi(unittest.TestCase):
         # Assert that "failed_python_code" task has the default trigger_rule "all_success"
         self.assertIn("failed_python_code", tasks_map)
         self.assertEqual(tasks_map["failed_python_code"].trigger_rule, "all_success")
+
+    @patch("airflow.utils.db.create_session")
+    def test_generate_non_versioned_success(self, mock_session):
+        """Tests successful DAG generation using api.generate (non-versioned path)."""
+        pipeline_definition_file = os.path.join(
+            _get_data_root_path(),
+            "example-bundle/versions/a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p/sql-on-dataproc-serverless.yml"
+        )
+        globals_dict = {}
+        api.generate(pipeline_definition_file, globals_dict=globals_dict)
+
+        expected_dag_id = "sql-on-dataproc-serverless"
+        self.assertIn(expected_dag_id, globals_dict)
+        dag = globals_dict[expected_dag_id]
+        self.assertIsInstance(dag, DAG)
+        self.assertEqual(dag.dag_id, expected_dag_id)
+
+        # Assert basic properties (tags)
+        self.assertIn("op:orchestration_pipeline", dag.tags)
+        self.assertIn(f"op:pipeline:{expected_dag_id}", dag.tags)
+        self.assertIn("op:owner:example-owner", dag.tags)
+        self.assertIn("op:unversioned", dag.tags)
+        self.assertIn("dataproc-serverless", dag.tags)
+        self.assertIn("example", dag.tags)
+
+        # Should not have bundle, version, or origination tags
+        self.assertNotIn(f"op:bundle:{_TEST_BUNDLE_ID}", dag.tags)
+        self.assertNotIn(f"op:version:{_TEST_DEFAULT_VERSION_ID}", dag.tags)
+        self.assertNotIn("op:origination:GIT_CI_CD", dag.tags)
+
 
 
 

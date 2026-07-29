@@ -78,11 +78,13 @@ class TestPipelineMetadata(unittest.TestCase):
         """Test that basic properties are correctly initialized."""
         metadata = PipelineMetadata(pipeline_id=self.pipeline_id,
                                     manifest=self.mock_manifest,
-                                    version_id=self.version_id)
+                                    version_id=self.version_id,
+                                    source_filepath="gs://my-bucket/test-pipeline.yml")
         # Check internal attributes are set as expected
         self.assertEqual(metadata._pipeline_id, self.pipeline_id)
         self.assertEqual(metadata._bundle_id, "test-bundle")
         self.assertEqual(metadata._version_id, self.version_id)
+        self.assertEqual(metadata._source_filepath, "gs://my-bucket/test-pipeline.yml")
         self.assertFalse(metadata._is_paused)
         self.assertTrue(metadata._is_current)
         self.assertEqual(metadata._origination, "GIT_CI_CD")
@@ -96,21 +98,24 @@ class TestPipelineMetadata(unittest.TestCase):
         self.mock_manifest.is_paused.return_value = False
         metadata_not_paused = PipelineMetadata(pipeline_id=self.pipeline_id,
                                                manifest=self.mock_manifest,
-                                               version_id=self.version_id)
+                                               version_id=self.version_id,
+                                               source_filepath="gs://dummy")
         self.assertFalse(metadata_not_paused.is_paused())
 
         # Case 2: Pipeline is paused
         self.mock_manifest.is_paused.return_value = True
         metadata_paused = PipelineMetadata(pipeline_id=self.pipeline_id,
                                            manifest=self.mock_manifest,
-                                           version_id=self.version_id)
+                                           version_id=self.version_id,
+                                           source_filepath="gs://dummy")
         self.assertTrue(metadata_paused.is_paused())
 
     def test_tags_generation(self):
         """Test the generation of DAG tags."""
         metadata = PipelineMetadata(pipeline_id=self.pipeline_id,
                                     manifest=self.mock_manifest,
-                                    version_id=self.version_id)
+                                    version_id=self.version_id,
+                                    source_filepath="gs://dummy")
         tags = metadata.generate_tags(
             owner=self.pipeline_model.metadata.owner,
             customer_tags=self.pipeline_model.metadata.tags)
@@ -137,7 +142,8 @@ class TestPipelineMetadata(unittest.TestCase):
 
         metadata = PipelineMetadata(pipeline_id=self.pipeline_id,
                                     manifest=self.mock_manifest,
-                                    version_id=self.version_id)
+                                    version_id=self.version_id,
+                                    source_filepath="gs://dummy")
         tags = metadata.generate_tags(
             owner=self.pipeline_model.metadata.owner,
             customer_tags=self.pipeline_model.metadata.tags)
@@ -149,11 +155,13 @@ class TestPipelineMetadata(unittest.TestCase):
         """Test the generation of the doc_md JSON string with all fields."""
         metadata = PipelineMetadata(pipeline_id=self.pipeline_id,
                                     manifest=self.mock_manifest,
-                                    version_id=self.version_id)
+                                    version_id=self.version_id,
+                                    source_filepath="gs://example-bucket/data/test-bundle/versions/v1.0.0/test-pipeline.yml")
         schedule_trigger = self.pipeline_model.triggers[0]
         doc_md_str = metadata.generate_doc_md(
             owner=self.pipeline_model.metadata.owner,
-            schedule_trigger=schedule_trigger)
+            schedule_trigger=schedule_trigger,
+        )
         doc_md = json.loads(doc_md_str)
 
         expected_doc = {
@@ -175,7 +183,8 @@ class TestPipelineMetadata(unittest.TestCase):
                 "endTime": "2024-01-01T00:00:00",
                 "catchup": False,
                 "timezone": "America/New_York"
-            }
+            },
+            "op_source_filepath": "gs://example-bucket/data/test-bundle/versions/v1.0.0/test-pipeline.yml"
         }
         self.assertDictEqual(doc_md, expected_doc)
 
@@ -187,9 +196,12 @@ class TestPipelineMetadata(unittest.TestCase):
         self.mock_manifest.get_deployment_details.return_value = None
         metadata = PipelineMetadata(pipeline_id=self.pipeline_id,
                                     manifest=self.mock_manifest,
-                                    version_id=self.version_id)
+                                    version_id=self.version_id,
+                                    source_filepath="gs://dummy/path.yml")
         doc_md_str = metadata.generate_doc_md(
-            owner=self.pipeline_model.metadata.owner, schedule_trigger=None)
+            owner=self.pipeline_model.metadata.owner,
+            schedule_trigger=None,
+        )
         doc_md = json.loads(doc_md_str)
 
         self.assertNotIn("op_deployment_details", doc_md)
@@ -199,6 +211,7 @@ class TestPipelineMetadata(unittest.TestCase):
         self.assertEqual(doc_md["op_bundle"], "test-bundle")
         self.assertEqual(doc_md["op_pipeline"], self.pipeline_id)
         self.assertEqual(doc_md["op_origination"], "")
+        self.assertEqual(doc_md["op_source_filepath"], "gs://dummy/path.yml")
 
     def test_empty_and_none_values(self):
         """Test behavior with empty or None values for optional fields."""
@@ -208,18 +221,99 @@ class TestPipelineMetadata(unittest.TestCase):
 
         metadata = PipelineMetadata(pipeline_id=self.pipeline_id,
                                     manifest=self.mock_manifest,
-                                    version_id=self.version_id)
+                                    version_id=self.version_id,
+                                    source_filepath="gs://dummy/path.yml")
 
         # Test tags
         tags = metadata.generate_tags(
             owner=self.pipeline_model.metadata.owner,
             customer_tags=self.pipeline_model.metadata.tags)
-        self.assertIn("op:owner:", tags)  # Should be present with empty value
+        self.assertNotIn("op:owner:", tags)  # Should not be present if empty
         self.assertNotIn("customer-tag-1", tags)  # Should not be present
 
         # Test doc_md
         doc_md = json.loads(
-            metadata.generate_doc_md(owner=self.pipeline_model.metadata.owner,
-                                     schedule_trigger=None))
+            metadata.generate_doc_md(
+                owner=self.pipeline_model.metadata.owner,
+                schedule_trigger=None,
+            )
+        )
         self.assertEqual(doc_md["op_owner"], "")
         self.assertEqual(doc_md["op_origination"], "")
+        self.assertEqual(doc_md["op_source_filepath"], "gs://dummy/path.yml")
+
+    def test_no_manifest(self):
+        """Test behavior when manifest and version_id are not provided (non-versioned path)."""
+        metadata = PipelineMetadata(pipeline_id=self.pipeline_id,
+                                    source_filepath="gs://dummy/path.yml")
+
+        # Check properties
+        self.assertEqual(metadata._pipeline_id, self.pipeline_id)
+        self.assertEqual(metadata._bundle_id, "")
+        self.assertIsNone(metadata._version_id)
+        self.assertEqual(metadata._source_filepath, "gs://dummy/path.yml")
+        self.assertFalse(metadata.is_paused())
+        self.assertFalse(metadata.is_current())
+        self.assertEqual(metadata._origination, "")
+        self.assertEqual(metadata._repo, "")
+        self.assertEqual(metadata._branch, "")
+        self.assertEqual(metadata._commit, "")
+
+        # Check tags
+        tags = metadata.generate_tags(
+            owner="my-owner",
+            customer_tags=["tag-a", "tag-b"]
+        )
+        self.assertIn("op:orchestration_pipeline", tags)
+        self.assertIn("op:pipeline:test-pipeline", tags)
+        self.assertIn("op:owner:my-owner", tags)
+        self.assertNotIn("op:is_current", tags)
+        self.assertIn("op:unversioned", tags)
+        self.assertNotIn("op:is_paused", tags)
+        self.assertNotIn("op:bundle:test-bundle", tags)
+        self.assertNotIn("op:version:v1.0.0", tags)
+        self.assertNotIn("op:origination:GIT_CI_CD", tags)
+        self.assertIn("tag-a", tags)
+        self.assertIn("tag-b", tags)
+
+        # Check doc_md
+        doc_md_str = metadata.generate_doc_md(
+            owner="my-owner",
+            schedule_trigger=None,
+        )
+        doc_md = json.loads(doc_md_str)
+        self.assertNotIn("op_bundle", doc_md)
+        self.assertNotIn("op_version", doc_md)
+        self.assertEqual(doc_md["op_pipeline"], self.pipeline_id)
+        self.assertEqual(doc_md["op_owner"], "my-owner")
+        self.assertNotIn("op_is_current", doc_md)
+        self.assertTrue(doc_md["op_unversioned"])
+        self.assertNotIn("op_origination", doc_md)
+        self.assertNotIn("op_is_paused", doc_md)
+        self.assertEqual(doc_md["op_source_filepath"], "gs://dummy/path.yml")
+
+    def test_empty_source_filepath(self):
+        """Test that initializing with empty source_filepath raises ValueError."""
+        expected_msg = "Internal error: Pipeline definition file path is missing or empty."
+        exception_raised = None
+
+        try:
+            PipelineMetadata(pipeline_id=self.pipeline_id, source_filepath="")
+        except ValueError as e:
+            exception_raised = e
+
+        self.assertIsNotNone(exception_raised)
+        self.assertEqual(str(exception_raised), expected_msg)
+
+    def test_none_source_filepath(self):
+        """Test that initializing with None source_filepath raises ValueError."""
+        expected_msg = "Internal error: Pipeline definition file path is missing or empty."
+        exception_raised = None
+
+        try:
+            PipelineMetadata(pipeline_id=self.pipeline_id, source_filepath=None)
+        except ValueError as e:
+            exception_raised = e
+
+        self.assertIsNotNone(exception_raised)
+        self.assertEqual(str(exception_raised), expected_msg)

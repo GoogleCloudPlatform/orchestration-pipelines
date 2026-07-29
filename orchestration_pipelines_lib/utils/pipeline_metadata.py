@@ -31,21 +31,41 @@ class PipelineMetadata:
     documentation.
     """
 
-    def __init__(self, pipeline_id: str, manifest: Manifest, version_id: str):
+    def __init__(
+        self,
+        pipeline_id: str,
+        source_filepath: str,
+        manifest: Optional[Manifest] = None,
+        version_id: Optional[str] = None,
+    ):
         """Initializes the PipelineMetadata object.
 
         Args:
             pipeline_id: The ID of the pipeline.
+            source_filepath: The source file path of the pipeline definition.
             manifest: The bundle manifest.
             version_id: The version ID of the pipeline.
         """
         self._manifest = manifest
         self._version_id = version_id
-        self._bundle_id = manifest.get_bundle_id()
         self._pipeline_id = pipeline_id
+        if not source_filepath:
+            raise ValueError(
+                "Internal error: Pipeline definition file path is missing or"
+                " empty."
+            )
+        self._source_filepath = source_filepath
 
-        self._is_paused = self._manifest.is_paused(self._pipeline_id)
-        self._is_current = self._manifest.is_current(self._version_id)
+        if self._manifest is None:
+            self._bundle_id = ""
+            self._is_paused = False
+            self._is_current = False
+            self._unversioned = True
+        else:
+            self._bundle_id = self._manifest.get_bundle_id()
+            self._is_paused = self._manifest.is_paused(self._pipeline_id)
+            self._is_current = self._manifest.is_current(self._version_id)
+            self._unversioned = False
 
         self._extract_deployment_details()
 
@@ -53,25 +73,26 @@ class PipelineMetadata:
         """Extracts deployment details from the manifest and sets instance
         attributes.
         """
-        deployment_details = self._manifest.get_deployment_details(
-            self._version_id
-        )
-
         self._origination = ""
         self._repo = ""
         self._branch = ""
         self._commit = ""
 
-        if deployment_details:
-            if deployment_details.origination is not None:
-                self._origination = DeploymentOrigination.Name(
-                    deployment_details.origination
-                )
-            else:
-                self._origination = ""
-            self._repo = deployment_details.git_repo or ""
-            self._branch = deployment_details.git_branch or ""
-            self._commit = deployment_details.commit_sha or ""
+        if self._manifest and self._version_id:
+            deployment_details = self._manifest.get_deployment_details(
+                self._version_id
+            )
+
+            if deployment_details:
+                if deployment_details.origination is not None:
+                    self._origination = DeploymentOrigination.Name(
+                        deployment_details.origination
+                    )
+                else:
+                    self._origination = ""
+                self._repo = deployment_details.git_repo or ""
+                self._branch = deployment_details.git_branch or ""
+                self._commit = deployment_details.commit_sha or ""
 
     def is_paused(self):
         """Checks if the pipeline is currently paused.
@@ -112,6 +133,7 @@ class PipelineMetadata:
             "op:is_paused",
             "op:is_current",
             "op:orchestration_pipeline",
+            "op:unversioned",
         )
 
         # Filter out registered tags from customer tags
@@ -123,17 +145,23 @@ class PipelineMetadata:
 
         orchestration_tags = [
             "op:orchestration_pipeline",
-            f"op:bundle:{self._bundle_id}",
-            f"op:version:{self._version_id}",
             f"op:pipeline:{self._pipeline_id}",
-            f"op:owner:{owner}",
-            f"op:origination:{self._origination}",
         ]
+        if owner:
+            orchestration_tags.append(f"op:owner:{owner}")
+        if self._bundle_id:
+            orchestration_tags.append(f"op:bundle:{self._bundle_id}")
+        if self._version_id:
+            orchestration_tags.append(f"op:version:{self._version_id}")
+        if self._origination:
+            orchestration_tags.append(f"op:origination:{self._origination}")
 
         if self._is_current:
             orchestration_tags.append("op:is_current")
         if self._is_paused:
             orchestration_tags.append("op:is_paused")
+        if self._unversioned:
+            orchestration_tags.append("op:unversioned")
 
         return filtered_customer_tags + orchestration_tags
 
@@ -154,34 +182,42 @@ class PipelineMetadata:
         """
         owner = owner or ""
         doc_data = {
-            "op_bundle": self._bundle_id,
-            "op_version": self._version_id,
             "op_pipeline": self._pipeline_id,
             "op_owner": owner,
-            "op_origination": self._origination,
-            "op_is_paused": self._is_paused,
-            "op_is_current": self._is_current,
+            "op_source_filepath": self._source_filepath,
         }
 
-        # Create and filter deployment_details dict concisely.
-        deployment_details = {
-            "op_repository": self._repo,
-            "op_branch": self._branch,
-            "op_commit_sha": self._commit,
-        }
-        filtered_details = {k: v for k, v in deployment_details.items() if v}
+        if self._unversioned:
+            doc_data.update({
+                "op_unversioned": self._unversioned
+            })
+        else:
+            doc_data.update({
+                "op_bundle": self._bundle_id,
+                "op_version": self._version_id,
+                "op_origination": self._origination,
+                "op_is_paused": self._is_paused,
+                "op_is_current": self._is_current,
+            })
 
-        if filtered_details:
-            doc_data["op_deployment_details"] = filtered_details
+            # Create and filter deployment_details dict concisely.
+            deployment_details = {
+                "op_repository": self._repo,
+                "op_branch": self._branch,
+                "op_commit_sha": self._commit,
+            }
+            filtered_details = {k: v for k, v in deployment_details.items() if v}
+
+            if filtered_details:
+                doc_data["op_deployment_details"] = filtered_details
 
         if schedule_trigger:
-            schedule_info = {
+            doc_data["op_schedule"] = {
                 "scheduleInterval": schedule_trigger.scheduleInterval,
                 "startTime": schedule_trigger.startTime,
                 "endTime": schedule_trigger.endTime,
                 "catchup": schedule_trigger.catchup,
                 "timezone": schedule_trigger.timezone,
             }
-            doc_data["op_schedule"] = schedule_info
 
         return json.dumps(doc_data)

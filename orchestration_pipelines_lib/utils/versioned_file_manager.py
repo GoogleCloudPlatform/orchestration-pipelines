@@ -37,7 +37,7 @@ class VersionedFileManager(FileManager):
         pipeline_id: str,
         current_version: str,
         bundle_id: str,
-        local_data_root: str = "/orchestration_pipelines",
+        local_data_root: str = "/data",
         gcs_client: Optional[Any] = None,
     ):
         """Initializes the VersionedFileManager.
@@ -135,7 +135,7 @@ class VersionedFileManager(FileManager):
         """Resolves to a relative path from full path based on the version.
 
         - Relative paths are resolved from:
-          /orchestration_pipelines/<bundle_id>/versions/<version_id>/<file_path>
+          /<local_data_root>/<bundle_id>/versions/<version_id>/<file_path>
           to:
           /<bundle_id>/versions/<version_id>/<file_path>
 

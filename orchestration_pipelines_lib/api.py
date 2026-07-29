@@ -56,12 +56,19 @@ def generate(
     """
     dag_id = os.path.splitext(os.path.basename(pipeline_definition_file))[0]
     from orchestration_pipelines_lib.utils.file_manager import FileManager
+    from orchestration_pipelines_lib.utils.pipeline_metadata import (
+        PipelineMetadata,
+    )
 
+    file_manager = FileManager()
+    source_filepath = file_manager.get_blob_reference(
+        file_manager.resolve_path(pipeline_definition_file)
+    )
     _generate_dag(
-        FileManager(),
+        file_manager,
         pipeline_definition_file,
         dag_id=dag_id,
-        metadata=None,
+        metadata=PipelineMetadata(pipeline_id=dag_id, source_filepath=source_filepath),
         data_root=None,
         globals_dict=globals_dict,
     )
@@ -157,7 +164,7 @@ def _generate_dag(
     file_manager: FileManager,
     pipeline_definition_path: str,
     dag_id: str,
-    metadata: Optional[PipelineMetadata],
+    metadata: PipelineMetadata,
     data_root: str,
     globals_dict: Dict[str, Any],
 ):
@@ -168,7 +175,7 @@ def _generate_dag(
         pipeline_definition_path (str): The path to the pipeline
             definition file.
         dag_id (str): The ID to assign to the generated DAG.
-        metadata (Optional[PipelineMetadata]): The pipeline metadata, if any.
+        metadata (PipelineMetadata): The pipeline metadata.
         data_root (str): The root directory containing the data.
         globals_dict (Dict[str, Any]): The global dictionary to register the
             DAG in.
@@ -205,20 +212,17 @@ def _generate_dag(
             None,
         )
 
-        if metadata:
-            if metadata.is_paused() or not metadata.is_current():
-                internal_pipeline.triggers = []
-            tags = metadata.generate_tags(
-                owner=internal_pipeline.metadata.owner,
-                customer_tags=internal_pipeline.metadata.tags,
-            )
-            doc_md = metadata.generate_doc_md(
-                owner=internal_pipeline.metadata.owner,
-                schedule_trigger=schedule_trigger,
-            )
-        else:
-            if internal_pipeline.metadata.tags:
-                tags.extend(internal_pipeline.metadata.tags)
+        if metadata.is_paused() or not metadata.is_current():
+            internal_pipeline.triggers = []
+
+        tags = metadata.generate_tags(
+            owner=internal_pipeline.metadata.owner,
+            customer_tags=internal_pipeline.metadata.tags,
+        )
+        doc_md = metadata.generate_doc_md(
+            owner=internal_pipeline.metadata.owner,
+            schedule_trigger=schedule_trigger,
+        )
 
         # Step 3: Generate DAG
         dag = core.generate(internal_pipeline, tags, doc_md, data_root)
@@ -234,7 +238,7 @@ def _generate_dag(
         SerializedDAG.to_dict(dag)
 
         # Step 5: Register DAG
-        if globals_dict:
+        if globals_dict is not None:
             globals_dict[dag_id] = dag
         else:
             with dag:
@@ -250,20 +254,18 @@ def _generate_dag(
 
         # Re-initialize tags and doc_md for the error DAG to avoid using
         # partially modified state from the try block.
-        error_tags = ["op:orchestration_pipeline"]
-        error_doc_md = ""
-        if metadata:
-            error_tags = metadata.generate_tags(owner, customer_tags=None)
-            error_doc_md = metadata.generate_doc_md(
-                owner, schedule_trigger=None
-            )
-        elif internal_pipeline and internal_pipeline.metadata.tags:
+        error_tags = metadata.generate_tags(owner, customer_tags=None)
+        error_doc_md = metadata.generate_doc_md(
+            owner=owner,
+            schedule_trigger=None,
+        )
+        if internal_pipeline and internal_pipeline.metadata.tags:
             error_tags.extend(internal_pipeline.metadata.tags)
 
         dummy_dag = create_dummy_dag(
             dag_id, error_message, error_tags, error_doc_md
         )
-        if globals_dict:
+        if globals_dict is not None:
             globals_dict[dummy_dag.dag_id] = dummy_dag
         else:
             with dummy_dag:
@@ -295,13 +297,19 @@ def _generate_dag_for_version(
     from orchestration_pipelines_lib.utils.pipeline_metadata import (
         PipelineMetadata,
     )
+    pipeline_definition_path = f"{pipeline_id}.yml"
 
     metadata = PipelineMetadata(
-        pipeline_id=pipeline_id, manifest=manifest, version_id=version_id
+        pipeline_id=pipeline_id,
+        manifest=manifest,
+        version_id=version_id,
+        source_filepath=file_manager.get_blob_reference(
+            file_manager.resolve_path(pipeline_definition_path)
+        ),
     )
     _generate_dag(
         file_manager,
-        f"{pipeline_id}.yml",
+        pipeline_definition_path,
         dag_id=f"{bundle_id}__v__{version_id}__{pipeline_id}",
         metadata=metadata,
         data_root=data_root,
