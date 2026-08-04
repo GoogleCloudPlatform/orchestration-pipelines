@@ -242,7 +242,7 @@ def _generate_dag(
     except Exception:  # pylint: disable=broad-exception-caught
         # If a DAG with this ID was already put in globals by core.generate,
         # remove it first to avoid duplicates/ghosts.
-        if dag_id in globals():
+        if globals_dict and dag_id in globals_dict:
             del globals_dict[dag_id]
         error_message = traceback.format_exc()
         logging.warning(error_message)
