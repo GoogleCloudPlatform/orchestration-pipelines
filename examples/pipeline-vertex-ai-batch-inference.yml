@@ -1,0 +1,45 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+modelVersion: "1.0"
+pipelineId: "pipeline-vertex-ai-batch-inference"
+description: "Example pipeline running batch prediction on Vertex AI."
+runner: "airflow"
+owner: "ml_eng"
+tags: ["ai", "vertex", "batch-inference"]
+
+defaults:
+  projectId: "your-gcp-project-id"
+  location: "us-central1"
+  executionConfig:
+    retries: 1
+
+triggers:
+  - schedule:
+      interval: "0 0 * * *"
+      startTime: "2026-01-01T00:00:00"
+      catchup: false
+      timezone: "UTC"
+
+actions:
+  - ai:
+      name: "run_vertex_batch_prediction"
+      agentPlatform:
+        batchInference:
+          jobDisplayName: "days_batch_prediction"
+          modelName: "projects/your-gcp-project-id/locations/us-central1/models/123456789"
+          instancesFormat: "bigquery"
+          predictionsFormat: "bigquery"
+          bigquerySource: "bq://your-gcp-project-id.mlops.inference_dataset"
+          bigqueryDestinationPrefix: "bq://your-gcp-project-id.mlops"

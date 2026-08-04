@@ -208,11 +208,34 @@ class AgentPlatformModelUploadSpecModel:
 
 
 @dataclass
+class AgentPlatformBatchInferenceSpecModel:
+    """Agent Platform (Vertex AI) Batch Inference spec model."""
+
+    job_display_name: str
+    model_name: str
+    instances_format: Optional[str] = None
+    predictions_format: Optional[str] = None
+    bigquery_source: Optional[str] = None
+    gcs_source: Optional[Union[str, List[str]]] = None
+    bigquery_destination_prefix: Optional[str] = None
+    gcs_destination_prefix: Optional[str] = None
+    project_id: Optional[str] = None
+    location: Optional[str] = None
+    impersonation_chain: Optional[Union[str, List[str]]] = None
+
+
+@dataclass
 class AIActionModel(ActionBaseModel):
     """Internal model representing an AI action."""
 
     type: Literal["ai"]
     provider: Literal["agent_platform"]
-    ai_action_type: Literal["model_upload",]
-    config: Union[AgentPlatformModelUploadSpecModel]
+    ai_action_type: Literal[
+        "model_upload",
+        "batch_inference",
+    ]
+    config: Union[
+        AgentPlatformModelUploadSpecModel,
+        AgentPlatformBatchInferenceSpecModel
+    ]
     labels: Optional[Dict[str, str]] = None

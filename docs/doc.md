@@ -254,8 +254,9 @@ Triggers another Orchestration Pipeline.
 
 ### 4.8. AIAction
 
-Handles machine learning and AI tasks. Currently supports model uploading to Vertex AI via `AgentPlatform`.
+Handles machine learning and AI tasks. Supports model uploading and batch inference on Vertex AI via `AgentPlatform`.
 
+*   `labels` (`map<string, string>`, optional): Custom labels for the AI action. For model upload, passed to the Airflow operator via the model definition; for batch inference, passed to the batch prediction job.
 *   **Provider**: `agent_platform` (`oneof provider`):
     *   `project_id` / `location` (string, optional): GCP project ID and region override (defaults to pipeline defaults).
     *   `model_upload` (`AgentPlatformModelUpload`, `oneof type`):
@@ -263,8 +264,19 @@ Handles machine learning and AI tasks. Currently supports model uploading to Ver
         *   `model_artifact_uri` (string, **Required**): Cloud Storage URI where the model artifacts are stored (e.g. `gs://bucket/models/spark_rf_model`).
         *   `serving_container_image_uri` (string, **Required**): Container image URI used for model serving/prediction.
         *   `description` (string, optional): Description of the model.
+    *   `batch_inference` (`AgentPlatformBatchInference`, `oneof type`):
+        *   `job_display_name` (string, **Required**): Display name for the batch prediction job in Vertex AI.
+        *   `model_name` (string, **Required**): Fully-qualified Vertex AI model resource name or ID.
+        *   `instances_format` (string, optional): Format of the input instances (e.g. `bigquery`, `jsonl`, `csv`). Defaults to `jsonl`.
+        *   `predictions_format` (string, optional): Format of the prediction output (e.g. `bigquery`, `jsonl`, `csv`). Defaults to `jsonl`.
+        *   `bigquery_source` (string, optional): BigQuery table URI for input data (e.g. `bq://project.dataset.table`).
+        *   `gcs_source` (`repeated string`, optional): Cloud Storage URIs for input data.
+        *   `bigquery_destination_prefix` (string, optional): BigQuery dataset URI prefix for output (e.g. `bq://project.dataset`).
+        *   `gcs_destination_prefix` (string, optional): Cloud Storage URI prefix for output.
+        *   `impersonation_chain` (`repeated string`, optional): Service account impersonation chain for the batch prediction job.
 *   **Examples**:
     *   [pipeline-vertex-ai-upload-model.yml](../examples/pipeline-vertex-ai-upload-model.yml)
+    *   [pipeline-vertex-ai-batch-inference.yml](../examples/pipeline-vertex-ai-batch-inference.yml)
 
 ---
 

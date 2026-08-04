@@ -622,6 +622,7 @@ class TestApi(unittest.TestCase):
                     "image_uri": "us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-4:latest"
                 },
                 "description": "Prediction model",
+                "labels": {"orchestration_pipeline": "true"},
             },
         )
     @patch("airflow.utils.db.create_session")
@@ -654,6 +655,49 @@ class TestApi(unittest.TestCase):
         self.assertNotIn("op:origination:GIT_CI_CD", dag.tags)
 
 
+
+    def test_generate_vertex_ai_batch_inference_pipeline(self):
+        """Tests that api.generate correctly creates a DAG with CreateBatchPredictionJobOperator."""
+        from airflow.providers.google.cloud.operators.vertex_ai.batch_prediction_job import (
+            CreateBatchPredictionJobOperator,
+        )
+        example_path = os.path.join(
+            _PROJECT_ROOT, "examples/pipeline-vertex-ai-batch-inference.yml"
+        )
+        api.validate(example_path)
+
+        globals_dict = {}
+        api.generate(example_path, globals_dict)
+
+        self.assertIn("pipeline-vertex-ai-batch-inference", globals_dict)
+        dag = globals_dict["pipeline-vertex-ai-batch-inference"]
+        self.assertIsInstance(dag, DAG)
+
+        tasks_map = {t.task_id: t for t in dag.tasks}
+        self.assertIn("run_vertex_batch_prediction", tasks_map)
+        batch_task = tasks_map["run_vertex_batch_prediction"]
+        self.assertIsInstance(batch_task, CreateBatchPredictionJobOperator)
+        self.assertEqual(batch_task.project_id, "your-gcp-project-id")
+        self.assertEqual(batch_task.region, "us-central1")
+        self.assertEqual(
+            batch_task.job_display_name, "days_batch_prediction"
+        )
+        self.assertEqual(
+            batch_task.model_name,
+            "projects/your-gcp-project-id/locations/us-central1/models/123456789",
+        )
+        self.assertEqual(batch_task.instances_format, "bigquery")
+        self.assertEqual(batch_task.predictions_format, "bigquery")
+        self.assertEqual(
+            batch_task.bigquery_source,
+            "bq://your-gcp-project-id.mlops.inference_dataset",
+        )
+        self.assertEqual(
+            batch_task.bigquery_destination_prefix,
+            "bq://your-gcp-project-id.mlops",
+        )
+        self.assertEqual(batch_task.machine_type, "n1-standard-4")
+        self.assertEqual(batch_task.labels, {"orchestration_pipeline": "true"})
 
 
 def _get_data_root_path():

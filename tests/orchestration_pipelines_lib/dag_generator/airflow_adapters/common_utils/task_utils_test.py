@@ -551,6 +551,7 @@ class TaskUtilsTest(unittest.TestCase):
         action.config.serving_container_image_uri = "us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-4:latest"
         action.config.project_id = "custom-project"
         action.config.location = "us-central1"
+        action.labels = {"model_type": "rf", "env": "prod"}
         pipeline = MagicMock()
         pipeline.defaults.cloudDefault.project = "default-project"
         pipeline.defaults.cloudDefault.region = "default-region"
@@ -574,56 +575,74 @@ class TaskUtilsTest(unittest.TestCase):
                     "image_uri": "us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-4:latest"
                 },
                 "description": "Model",
+                "labels": {"model_type": "rf", "env": "prod"},
             },
         )
         self.assertEqual(task.trigger_rule, "all_success")
 
-    def test_create_ai_task_vertex_upload_model_defaults(self):
-        """Tests creating Vertex AI UploadModelOperator with default project and region."""
+
+    def test_create_ai_task_vertex_batch_inference(self):
+        """Tests creating Vertex AI CreateBatchPredictionJobOperator from AIAction."""
         import pendulum
         from airflow.models import DAG
-        from airflow.providers.google.cloud.operators.vertex_ai.model_service import (
-            UploadModelOperator,
+        from airflow.providers.google.cloud.operators.vertex_ai.batch_prediction_job import (
+            CreateBatchPredictionJobOperator,
         )
+
         from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
             create_ai_task,
         )
+
         action = MagicMock()
-        action.name = "upload_model_defaults"
+        action.name = "run_vertex_batch_prediction"
         action.provider = "agent_platform"
-        action.ai_action_type = "model_upload"
-        action.executionTimeout = None
+        action.ai_action_type = "batch_inference"
+        action.executionTimeout = "1200s"
         action.triggerRule = "all_success"
-        action.config.model_name = "test_model"
-        action.config.description = None
-        action.config.model_artifact_uri = "gs://my-bucket/model"
-        action.config.serving_container_image_uri = "gcr.io/test/img"
-        action.config.project_id = None
-        action.config.location = None
+        action.config.job_display_name = "days_batch_pred"
+        action.config.model_name = "projects/123/locations/us-central1/models/456"
+        action.config.instances_format = "bigquery"
+        action.config.predictions_format = "bigquery"
+        action.config.bigquery_source = "bq://my-proj.mlops.test_data"
+        action.config.gcs_source = None
+        action.config.bigquery_destination_prefix = "bq://my-proj.mlops"
+        action.config.gcs_destination_prefix = None
+        action.config.project_id = "custom-project"
+        action.config.location = "us-central1"
+        action.config.impersonation_chain = ["sa@custom-project.iam.gserviceaccount.com"]
+        action.labels = {"env": "staging"}
+
         pipeline = MagicMock()
         pipeline.defaults.cloudDefault.project = "default-project"
-        pipeline.defaults.cloudDefault.region = "us-east1"
+        pipeline.defaults.cloudDefault.region = "default-region"
+
         dag = DAG(
-            dag_id="test_ai_dag_defaults",
+            dag_id="test_batch_pred_dag",
             start_date=pendulum.today("UTC"),
         )
 
         task = create_ai_task(action, pipeline, dag)
 
-        self.assertIsInstance(task, UploadModelOperator)
-        self.assertEqual(task.task_id, "upload_model_defaults")
-        self.assertIsNone(task.project_id)
-        self.assertIsNone(task.region)
+        self.assertIsInstance(task, CreateBatchPredictionJobOperator)
+        self.assertEqual(task.task_id, "run_vertex_batch_prediction")
+        self.assertEqual(task.project_id, "custom-project")
+        self.assertEqual(task.region, "us-central1")
+        self.assertEqual(task.job_display_name, "days_batch_pred")
         self.assertEqual(
-            task.model,
-            {
-                "display_name": "test_model",
-                "artifact_uri": "gs://my-bucket/model",
-                "container_spec": {
-                    "image_uri": "gcr.io/test/img"
-                },
-            },
+            task.model_name, "projects/123/locations/us-central1/models/456"
         )
+        self.assertEqual(task.instances_format, "bigquery")
+        self.assertEqual(task.predictions_format, "bigquery")
+        self.assertEqual(task.bigquery_source, "bq://my-proj.mlops.test_data")
+        self.assertEqual(
+            task.bigquery_destination_prefix, "bq://my-proj.mlops"
+        )
+        self.assertEqual(task.machine_type, "n1-standard-4")
+        self.assertEqual(
+            task.impersonation_chain,
+            ["sa@custom-project.iam.gserviceaccount.com"],
+        )
+        self.assertEqual(task.labels, {"env": "staging"})
 
     def test_create_ai_task_unsupported_provider(self):
         """Tests that unsupported AI provider raises ValueError."""

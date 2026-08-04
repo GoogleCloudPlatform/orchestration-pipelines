@@ -1239,6 +1239,68 @@ actions:
             "us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-4:latest",
         )
 
+    def test_build_ai_action_vertex_batch_inference_success(self):
+        """Tests building a pipeline with an AI Vertex AI batch inference action."""
+        pipeline_def = self._get_valid_pipeline_def(
+            actions=[
+                {
+                    "ai": {
+                        "name": "batch_pred_vertex",
+                        "agent_platform": {
+                            "batch_inference": {
+                                "job_display_name": "days_batch_pred",
+                                "model_name": "projects/123/locations/us-central1/models/456",
+                                "instances_format": "bigquery",
+                                "predictions_format": "bigquery",
+                                "bigquery_source": "bq://my-proj.mlops.test_data",
+                                "bigquery_destination_prefix": "bq://my-proj.mlops",
+                                "impersonation_chain": [
+                                    "sa@custom-project.iam.gserviceaccount.com"
+                                ],
+                            },
+                            "project_id": "custom-project",
+                            "location": "us-central1",
+                        },
+                        "execution_timeout": "1200s",
+                    }
+                }
+            ]
+        )
+
+        pipeline = OrchestrationPipelineBuilder.build(pipeline_def)
+
+        self.assertEqual(len(pipeline.actions), 1)
+        action = pipeline.actions[0]
+        self.assertTrue(action.HasField("ai"))
+        ai_action = action.ai
+        self.assertEqual(ai_action.name, "batch_pred_vertex")
+        self.assertEqual(ai_action.execution_timeout, "1200s")
+        self.assertTrue(ai_action.HasField("agent_platform"))
+        self.assertTrue(ai_action.agent_platform.HasField("batch_inference"))
+
+        agent_platform = ai_action.agent_platform
+        self.assertEqual(agent_platform.project_id, "custom-project")
+        self.assertEqual(agent_platform.location, "us-central1")
+
+        batch_inf = ai_action.agent_platform.batch_inference
+        self.assertEqual(batch_inf.job_display_name, "days_batch_pred")
+        self.assertEqual(
+            batch_inf.model_name,
+            "projects/123/locations/us-central1/models/456",
+        )
+        self.assertEqual(batch_inf.instances_format, "bigquery")
+        self.assertEqual(batch_inf.predictions_format, "bigquery")
+        self.assertEqual(
+            batch_inf.bigquery_source, "bq://my-proj.mlops.test_data"
+        )
+        self.assertEqual(
+            batch_inf.bigquery_destination_prefix, "bq://my-proj.mlops"
+        )
+        self.assertEqual(
+            list(batch_inf.impersonation_chain),
+            ["sa@custom-project.iam.gserviceaccount.com"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

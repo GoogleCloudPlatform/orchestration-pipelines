@@ -851,7 +851,7 @@ def create_bq_dts_task(
 
 
 def create_vertex_upload_model_task(
-    action: Dict[str, Any], pipeline: Dict[str, Any], dag
+    action: dict[str, Any], pipeline: dict[str, Any], dag
 ):
     """Converts an AI action into an UploadModelOperator for Vertex AI.
 
@@ -880,6 +880,8 @@ def create_vertex_upload_model_task(
         }
         if action.config.description:
             model["description"] = action.config.description
+        if action.labels:
+            model["labels"] = action.labels
 
         return UploadModelOperator(
             task_id=action.name,
@@ -900,7 +902,74 @@ def create_vertex_upload_model_task(
         raise
 
 
-def create_ai_task(action: Dict[str, Any], pipeline: Dict[str, Any], dag):
+def create_vertex_batch_inference_task(
+    action: dict[str, Any], pipeline: dict[str, Any], dag
+):
+    """Converts an AI action into a CreateBatchPredictionJobOperator for Vertex AI.
+
+    Args:
+        action: The action configuration object.
+        pipeline: The pipeline configuration object.
+        dag: The Airflow DAG object.
+
+    Returns:
+        An instance of CreateBatchPredictionJobOperator.
+    """
+    from airflow.providers.google.cloud.operators.vertex_ai.batch_prediction_job import (
+        CreateBatchPredictionJobOperator,
+    )
+
+    try:
+        project_id = action.config.project_id
+        region = action.config.location
+
+        extra_kwargs = {}
+        if action.config.instances_format:
+            extra_kwargs["instances_format"] = action.config.instances_format
+        if action.config.predictions_format:
+            extra_kwargs["predictions_format"] = action.config.predictions_format
+        if action.config.bigquery_source:
+            extra_kwargs["bigquery_source"] = action.config.bigquery_source
+        if action.config.gcs_source:
+            extra_kwargs["gcs_source"] = action.config.gcs_source
+        if action.config.bigquery_destination_prefix:
+            extra_kwargs["bigquery_destination_prefix"] = (
+                action.config.bigquery_destination_prefix
+            )
+        if action.config.gcs_destination_prefix:
+            extra_kwargs["gcs_destination_prefix"] = (
+                action.config.gcs_destination_prefix
+            )
+        if action.labels:
+            extra_kwargs["labels"] = action.labels
+        if action.config.impersonation_chain:
+            extra_kwargs["impersonation_chain"] = (
+                action.config.impersonation_chain
+            )
+
+        return CreateBatchPredictionJobOperator(
+            task_id=action.name,
+            project_id=project_id,
+            region=region,
+            job_display_name=action.config.job_display_name,
+            model_name=action.config.model_name,
+            machine_type="n1-standard-4",
+            execution_timeout=(
+                duration_to_timedelta(action.executionTimeout)
+                if action.executionTimeout
+                else None
+            ),
+            trigger_rule=action.triggerRule,
+            doc_md=json.dumps({"op_action_name": action.name}),
+            dag=dag,
+            **extra_kwargs,
+        )
+    except Exception:
+        logging.exception("Error creating task for action '%s'", action.name)
+        raise
+
+
+def create_ai_task(action: dict[str, Any], pipeline: dict[str, Any], dag):
     """Converts an AI action into the appropriate Airflow operator.
 
     Args:
@@ -914,6 +983,10 @@ def create_ai_task(action: Dict[str, Any], pipeline: Dict[str, Any], dag):
     if action.provider == "agent_platform":
         if action.ai_action_type == "model_upload":
             return create_vertex_upload_model_task(action, pipeline, dag=dag)
+        elif action.ai_action_type == "batch_inference":
+            return create_vertex_batch_inference_task(
+                action, pipeline, dag=dag
+            )
         raise ValueError(
             f"Unsupported agent_platform action type: {action.ai_action_type}"
         )

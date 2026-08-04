@@ -1217,6 +1217,7 @@ class TestConverterV1ToInternal(unittest.TestCase):
         )
         ai_action.agent_platform.project_id = "custom-project"
         ai_action.agent_platform.location = "us-central1"
+        ai_action.labels["custom_key"] = "custom_value"
 
         internal_ai = self.converter._convert_ai_action(
             ai_action, self.defaults, self.labels
@@ -1229,7 +1230,9 @@ class TestConverterV1ToInternal(unittest.TestCase):
         self.assertEqual(internal_ai.executionTimeout, "300s")
         self.assertEqual(internal_ai.dependsOn, ["prev-task"])
         self.assertEqual(internal_ai.triggerRule, "all_success")
-        self.assertEqual(internal_ai.labels, self.labels)
+        expected_labels = dict(self.labels)
+        expected_labels["custom_key"] = "custom_value"
+        self.assertEqual(internal_ai.labels, expected_labels)
         config = internal_ai.config
         self.assertIsInstance(
             config, internal_actions.AgentPlatformModelUploadSpecModel
@@ -1264,6 +1267,94 @@ class TestConverterV1ToInternal(unittest.TestCase):
             internal_ai.config.serving_container_image_uri, "gcr.io/test/image"
         )
         self.assertIsNone(internal_ai.config.description)
+
+    def test_convert_ai_action_vertex_batch_inference(self):
+        """Tests converting AIAction with Vertex AI batch_inference config."""
+        ai_action = v1_protos.AIAction(
+            name="test-vertex-batch-pred",
+            execution_timeout="1200s",
+            depends_on=["model-upload-task"],
+            trigger_rule=v1_protos.TriggerRule.all_success,
+        )
+        spec = ai_action.agent_platform.batch_inference
+        spec.job_display_name = "days_batch_pred"
+        spec.model_name = "projects/123/locations/us-central1/models/456"
+        spec.instances_format = "bigquery"
+        spec.predictions_format = "bigquery"
+        spec.bigquery_source = "bq://my-proj.mlops.test_data"
+        spec.bigquery_destination_prefix = "bq://my-proj.mlops"
+        ai_action.agent_platform.project_id = "custom-project"
+        ai_action.agent_platform.location = "us-central1"
+        spec.impersonation_chain.append(
+            "sa@custom-project.iam.gserviceaccount.com"
+        )
+        ai_action.labels["env"] = "staging"
+
+        internal_ai = self.converter._convert_ai_action(
+            ai_action, self.defaults, self.labels
+        )
+
+        self.assertEqual(internal_ai.name, "test-vertex-batch-pred")
+        self.assertEqual(internal_ai.type, "ai")
+        self.assertEqual(internal_ai.provider, "agent_platform")
+        self.assertEqual(internal_ai.ai_action_type, "batch_inference")
+        self.assertEqual(internal_ai.executionTimeout, "1200s")
+        self.assertEqual(internal_ai.dependsOn, ["model-upload-task"])
+        self.assertEqual(internal_ai.triggerRule, "all_success")
+        expected_labels = dict(self.labels)
+        expected_labels["env"] = "staging"
+        self.assertEqual(internal_ai.labels, expected_labels)
+
+        config = internal_ai.config
+        self.assertIsInstance(
+            config, internal_actions.AgentPlatformBatchInferenceSpecModel
+        )
+        self.assertEqual(config.job_display_name, "days_batch_pred")
+        self.assertEqual(
+            config.model_name, "projects/123/locations/us-central1/models/456"
+        )
+        self.assertEqual(config.instances_format, "bigquery")
+        self.assertEqual(config.predictions_format, "bigquery")
+        self.assertEqual(
+            config.bigquery_source, "bq://my-proj.mlops.test_data"
+        )
+        self.assertIsNone(config.gcs_source)
+        self.assertEqual(
+            config.bigquery_destination_prefix, "bq://my-proj.mlops"
+        )
+        self.assertIsNone(config.gcs_destination_prefix)
+        self.assertEqual(config.project_id, "custom-project")
+        self.assertEqual(config.location, "us-central1")
+        self.assertEqual(
+            config.impersonation_chain,
+            ["sa@custom-project.iam.gserviceaccount.com"],
+        )
+
+    def test_convert_ai_action_vertex_batch_inference_defaults(self):
+        """Tests converting batch_inference with fallback to defaults."""
+        ai_action = v1_protos.AIAction(
+            name="test-vertex-batch-defaults",
+        )
+        spec = ai_action.agent_platform.batch_inference
+        spec.job_display_name = "test-job"
+        spec.model_name = "models/123"
+
+        internal_ai = self.converter._convert_ai_action(
+            ai_action, self.defaults, self.labels
+        )
+
+        self.assertEqual(internal_ai.config.project_id, "default-project")
+        self.assertEqual(internal_ai.config.location, "default-location")
+        self.assertEqual(internal_ai.config.job_display_name, "test-job")
+        self.assertEqual(internal_ai.config.model_name, "models/123")
+        self.assertIsNone(internal_ai.config.instances_format)
+        self.assertIsNone(internal_ai.config.predictions_format)
+        self.assertIsNone(internal_ai.config.bigquery_source)
+        self.assertIsNone(internal_ai.config.gcs_source)
+        self.assertIsNone(internal_ai.config.bigquery_destination_prefix)
+        self.assertIsNone(internal_ai.config.gcs_destination_prefix)
+        self.assertIsNone(internal_ai.config.impersonation_chain)
+        self.assertEqual(internal_ai.labels, self.labels)
 
     def test_convert_ai_action_unknown_provider(self):
         """Tests that an unknown provider type raises TypeError."""

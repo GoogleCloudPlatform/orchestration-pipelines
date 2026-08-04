@@ -858,6 +858,11 @@ class ConverterV1ToInternal:
         if provider_type == "agent_platform":
             agent_platform = action.agent_platform
             platform_type = agent_platform.WhichOneof("type")
+
+            merged_labels = dict(shared_labels)
+            if action.labels:
+                merged_labels.update(dict(action.labels))
+
             if platform_type == "model_upload":
                 upload_spec = agent_platform.model_upload
 
@@ -878,7 +883,50 @@ class ConverterV1ToInternal:
                     executionTimeout=action.execution_timeout or None,
                     dependsOn=list(action.depends_on),
                     triggerRule=self._convert_trigger_rule(action.trigger_rule),
-                    labels=shared_labels,
+                    labels=merged_labels,
+                    config=spec_model,
+                )
+            elif platform_type == "batch_inference":
+                inference_spec = agent_platform.batch_inference
+                impersonation_chain = None
+                if inference_spec.impersonation_chain:
+                    impersonation_chain = list(inference_spec.impersonation_chain)
+
+                gcs_source = None
+                if inference_spec.gcs_source:
+                    gcs_source = list(inference_spec.gcs_source)
+
+                spec_model = (
+                    internal_actions.AgentPlatformBatchInferenceSpecModel(
+                        job_display_name=inference_spec.job_display_name,
+                        model_name=inference_spec.model_name,
+                        instances_format=inference_spec.instances_format or None,
+                        predictions_format=inference_spec.predictions_format
+                        or None,
+                        bigquery_source=inference_spec.bigquery_source or None,
+                        gcs_source=gcs_source,
+                        bigquery_destination_prefix=(
+                            inference_spec.bigquery_destination_prefix or None
+                        ),
+                        gcs_destination_prefix=(
+                            inference_spec.gcs_destination_prefix or None
+                        ),
+                        project_id=agent_platform.project_id
+                        or defaults.project_id,
+                        location=agent_platform.location or defaults.location,
+                        impersonation_chain=impersonation_chain,
+                    )
+                )
+
+                return internal_actions.AIActionModel(
+                    name=action.name,
+                    type="ai",
+                    provider="agent_platform",
+                    ai_action_type="batch_inference",
+                    executionTimeout=action.execution_timeout or None,
+                    dependsOn=list(action.depends_on),
+                    triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                    labels=merged_labels,
                     config=spec_model,
                 )
             raise TypeError(f"Unknown AgentPlatform type: {platform_type}")

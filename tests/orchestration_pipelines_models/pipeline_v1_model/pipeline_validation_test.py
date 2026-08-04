@@ -33,6 +33,7 @@ from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipel
     Action,
     AIAction,
     AgentPlatform,
+    AgentPlatformBatchInference,
     AgentPlatformModelUpload,
     Defaults,
     ExecutionConfig,
@@ -523,6 +524,71 @@ class TestPipelineValidator(unittest.TestCase):
             "field is required and cannot be an empty string.",
             str(cm.exception),
         )
+
+    def test_valid_ai_action_batch_inference_succeeds(self):
+        """Tests that a pipeline with a valid batch inference AI action passes validation."""
+        ai_action = Action(
+            ai=AIAction(
+                name="batch-prediction",
+                agent_platform=AgentPlatform(
+                    batch_inference=AgentPlatformBatchInference(
+                        job_display_name="my-batch-job",
+                        model_name="projects/p/locations/l/models/m",
+                        instances_format="bigquery",
+                        predictions_format="bigquery",
+                        bigquery_source="bq://p.d.t",
+                        bigquery_destination_prefix="bq://p.d",
+                    )
+                ),
+            )
+        )
+        self.pipeline.actions.append(ai_action)
+        try:
+            PipelineValidator.validate(self.pipeline)
+        except ValueError as e:
+            self.fail(f"Validation failed unexpectedly: {e}")
+
+    def test_ai_action_batch_inference_missing_job_display_name_fails(self):
+        """Tests that missing job_display_name in batch_inference fails validation."""
+        ai_action = Action(
+            ai=AIAction(
+                name="batch-prediction",
+                agent_platform=AgentPlatform(
+                    batch_inference=AgentPlatformBatchInference(
+                        job_display_name="",
+                        model_name="projects/p/locations/l/models/m",
+                    )
+                ),
+            )
+        )
+        self.pipeline.actions.append(ai_action)
+        with self.assertRaisesRegex(
+            ValueError,
+            "Error for field 'actions\\[1\\]\\.ai\\.agent_platform\\.batch_inference\\.job_display_name': "
+            "field is required and cannot be an empty string.",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_ai_action_batch_inference_missing_model_name_fails(self):
+        """Tests that missing model_name in batch_inference fails validation."""
+        ai_action = Action(
+            ai=AIAction(
+                name="batch-prediction",
+                agent_platform=AgentPlatform(
+                    batch_inference=AgentPlatformBatchInference(
+                        job_display_name="my-batch-job",
+                        model_name="",
+                    )
+                ),
+            )
+        )
+        self.pipeline.actions.append(ai_action)
+        with self.assertRaisesRegex(
+            ValueError,
+            "Error for field 'actions\\[1\\]\\.ai\\.agent_platform\\.batch_inference\\.model_name': "
+            "field is required and cannot be an empty string.",
+        ):
+            PipelineValidator.validate(self.pipeline)
 
     def test_ai_action_invalid_name_fails(self):
         """Tests that invalid name in AIAction fails validation."""

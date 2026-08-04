@@ -525,6 +525,8 @@ message AIAction {
   oneof provider {
     AgentPlatform agent_platform = 5;
   }
+
+  map<string, string> labels = 6;
 }
 
 
@@ -534,6 +536,7 @@ message AgentPlatform {
 
   oneof type {
     AgentPlatformModelUpload model_upload = 3;
+    AgentPlatformBatchInference batch_inference = 4;
   }
 }
 
@@ -542,5 +545,17 @@ message AgentPlatformModelUpload {
   string description = 2;
   string model_artifact_uri = 3 [(pipeline_models.validation.is_required) = true];
   string serving_container_image_uri = 4 [(pipeline_models.validation.is_required) = true];
+}
+
+message AgentPlatformBatchInference {
+  string job_display_name = 1 [(pipeline_models.validation.is_required) = true];
+  string model_name = 2 [(pipeline_models.validation.is_required) = true];
+  string instances_format = 3;
+  string predictions_format = 4;
+  string bigquery_source = 5;
+  repeated string gcs_source = 6;
+  string bigquery_destination_prefix = 7;
+  string gcs_destination_prefix = 8;
+  repeated string impersonation_chain = 12;
 }
 
