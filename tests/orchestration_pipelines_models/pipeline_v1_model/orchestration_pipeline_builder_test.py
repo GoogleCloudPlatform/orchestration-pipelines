@@ -1191,5 +1191,55 @@ actions:
             OrchestrationPipelineBuilder.build(pipeline_def)
 
 
+    def test_build_ai_action_vertex_upload_model(self):
+        """Tests building a pipeline with an AI Vertex AI upload model action."""
+        pipeline_def = self._get_valid_pipeline_def(
+            actions=[
+                {
+                    "ai": {
+                        "name": "upload_model_vertex",
+                        "agent_platform": {
+                            "model_upload": {
+                                "model_name": "Predictor",
+                                "description": "Model",
+                                "model_artifact_uri": "gs://test-bucket/models/spark_rf_model",
+                                "serving_container_image_uri": "us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-4:latest",
+                            },
+                            "project_id": "custom-project",
+                            "location": "us-central1",
+                        },
+                        "execution_timeout": "300s",
+                    }
+                }
+            ]
+        )
+
+        pipeline = OrchestrationPipelineBuilder.build(pipeline_def)
+
+        self.assertEqual(len(pipeline.actions), 1)
+        action = pipeline.actions[0]
+        self.assertTrue(action.HasField("ai"))
+        ai_action = action.ai
+        self.assertEqual(ai_action.name, "upload_model_vertex")
+        self.assertEqual(ai_action.execution_timeout, "300s")
+        self.assertTrue(ai_action.HasField("agent_platform"))
+        self.assertTrue(ai_action.agent_platform.HasField("model_upload"))
+        agent_platform = ai_action.agent_platform
+        self.assertEqual(agent_platform.project_id, "custom-project")
+        self.assertEqual(agent_platform.location, "us-central1")
+        upload_model = ai_action.agent_platform.model_upload
+        self.assertEqual(upload_model.model_name, "Predictor")
+        self.assertEqual(upload_model.description, "Model")
+        self.assertEqual(
+            upload_model.model_artifact_uri,
+            "gs://test-bucket/models/spark_rf_model",
+        )
+        self.assertEqual(
+            upload_model.serving_container_image_uri,
+            "us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-4:latest",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
+

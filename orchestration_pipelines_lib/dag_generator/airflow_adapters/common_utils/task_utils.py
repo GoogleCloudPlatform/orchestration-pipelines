@@ -848,3 +848,73 @@ def create_bq_dts_task(
     except Exception:
         logging.exception("Error creating task for action '%s'", action.name)
         raise
+
+
+def create_vertex_upload_model_task(
+    action: Dict[str, Any], pipeline: Dict[str, Any], dag
+):
+    """Converts an AI action into an UploadModelOperator for Vertex AI.
+
+    Args:
+        action: The action configuration object.
+        pipeline: The pipeline configuration object.
+        dag: The Airflow DAG object.
+
+    Returns:
+        An instance of UploadModelOperator.
+    """
+    from airflow.providers.google.cloud.operators.vertex_ai.model_service import (
+        UploadModelOperator,
+    )
+
+    try:
+        project_id = action.config.project_id
+        region = action.config.location
+
+        model = {
+            "display_name": action.config.model_name,
+            "artifact_uri": action.config.model_artifact_uri,
+            "container_spec": {
+                "image_uri": action.config.serving_container_image_uri,
+            },
+        }
+        if action.config.description:
+            model["description"] = action.config.description
+
+        return UploadModelOperator(
+            task_id=action.name,
+            project_id=project_id,
+            region=region,
+            model=model,
+            execution_timeout=(
+                duration_to_timedelta(action.executionTimeout)
+                if action.executionTimeout
+                else None
+            ),
+            trigger_rule=action.triggerRule,
+            doc_md=json.dumps({"op_action_name": action.name}),
+            dag=dag,
+        )
+    except Exception:
+        logging.exception("Error creating task for action '%s'", action.name)
+        raise
+
+
+def create_ai_task(action: Dict[str, Any], pipeline: Dict[str, Any], dag):
+    """Converts an AI action into the appropriate Airflow operator.
+
+    Args:
+        action: The action configuration object.
+        pipeline: The pipeline configuration object.
+        dag: The Airflow DAG object.
+
+    Returns:
+        An Airflow operator for the AI action.
+    """
+    if action.provider == "agent_platform":
+        if action.ai_action_type == "model_upload":
+            return create_vertex_upload_model_task(action, pipeline, dag=dag)
+        raise ValueError(
+            f"Unsupported agent_platform action type: {action.ai_action_type}"
+        )
+    raise ValueError(f"Unsupported AI provider: {action.provider}")

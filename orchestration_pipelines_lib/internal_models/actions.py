@@ -193,3 +193,26 @@ class OrchestrationPipelineActionModel(ActionBaseModel):
     pipeline_id: str
     bundle_id: Optional[str] = None
     wait_for_completion: Optional[bool] = None
+
+
+@dataclass
+class AgentPlatformModelUploadSpecModel:
+    """Agent Platform (Vertex AI) Model Upload spec model."""
+
+    model_name: str
+    model_artifact_uri: str
+    serving_container_image_uri: str
+    description: Optional[str] = None
+    project_id: Optional[str] = None
+    location: Optional[str] = None
+
+
+@dataclass
+class AIActionModel(ActionBaseModel):
+    """Internal model representing an AI action."""
+
+    type: Literal["ai"]
+    provider: Literal["agent_platform"]
+    ai_action_type: Literal["model_upload",]
+    config: Union[AgentPlatformModelUploadSpecModel]
+    labels: Optional[Dict[str, str]] = None

@@ -252,6 +252,20 @@ Triggers another Orchestration Pipeline.
 * **Examples**:
   * [pipeline-trigger-another-orchestration-pipeline.yml](../examples/pipeline-trigger-another-orchestration-pipeline.yml)
 
+### 4.8. AIAction
+
+Handles machine learning and AI tasks. Currently supports model uploading to Vertex AI via `AgentPlatform`.
+
+*   **Provider**: `agent_platform` (`oneof provider`):
+    *   `project_id` / `location` (string, optional): GCP project ID and region override (defaults to pipeline defaults).
+    *   `model_upload` (`AgentPlatformModelUpload`, `oneof type`):
+        *   `model_name` (string, **Required**): Display name for the model in Vertex AI.
+        *   `model_artifact_uri` (string, **Required**): Cloud Storage URI where the model artifacts are stored (e.g. `gs://bucket/models/spark_rf_model`).
+        *   `serving_container_image_uri` (string, **Required**): Container image URI used for model serving/prediction.
+        *   `description` (string, optional): Description of the model.
+*   **Examples**:
+    *   [pipeline-vertex-ai-upload-model.yml](../examples/pipeline-vertex-ai-upload-model.yml)
+
 ---
 
 ## 5. Engines Configuration Detail

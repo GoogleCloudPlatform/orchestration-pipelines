@@ -21,6 +21,7 @@ from enum import Enum
 from typing import List, Optional, Union
 
 from orchestration_pipelines_lib.internal_models.actions import (
+    AIActionModel,
     BqOperationActionModel,
     DataformActionModel,
     DataIngestionActionModel,
@@ -46,6 +47,7 @@ AnyAction = Union[
     DataformActionModel,
     DataIngestionActionModel,
     OrchestrationPipelineActionModel,
+    AIActionModel,
 ]
 AnyScheduleTrigger = Union[ScheduleTriggerModel]
 

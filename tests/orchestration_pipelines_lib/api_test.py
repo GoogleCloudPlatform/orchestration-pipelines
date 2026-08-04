@@ -592,6 +592,38 @@ class TestApi(unittest.TestCase):
         self.assertIn("failed_python_code", tasks_map)
         self.assertEqual(tasks_map["failed_python_code"].trigger_rule, "all_success")
 
+    def test_generate_vertex_ai_upload_model_pipeline(self):
+        """Tests that api.generate correctly creates a DAG with UploadModelOperator."""
+        from airflow.providers.google.cloud.operators.vertex_ai.model_service import (
+            UploadModelOperator,
+        )
+        example_path = os.path.join(
+            _PROJECT_ROOT, "examples/pipeline-vertex-ai-upload-model.yml"
+        )
+        globals_dict = {}
+
+        api.generate(example_path, globals_dict)
+
+        self.assertIn("pipeline-vertex-ai-upload-model", globals_dict)
+        dag = globals_dict["pipeline-vertex-ai-upload-model"]
+        self.assertIsInstance(dag, DAG)
+        tasks_map = {t.task_id: t for t in dag.tasks}
+        self.assertIn("upload_model_vertex", tasks_map)
+        upload_task = tasks_map["upload_model_vertex"]
+        self.assertIsInstance(upload_task, UploadModelOperator)
+        self.assertEqual(upload_task.project_id, "your-gcp-project-id")
+        self.assertEqual(upload_task.region, "us-central1")
+        self.assertEqual(
+            upload_task.model,
+            {
+                "display_name": "Predictor",
+                "artifact_uri": "gs://your-bucket-name/models/spark_rf_model",
+                "container_spec": {
+                    "image_uri": "us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-4:latest"
+                },
+                "description": "Prediction model",
+            },
+        )
     @patch("airflow.utils.db.create_session")
     def test_generate_non_versioned_success(self, mock_session):
         """Tests successful DAG generation using api.generate (non-versioned path)."""
@@ -639,3 +671,4 @@ def _get_expected_dag_id(pipeline_id, parsing_failed=False, is_current=True):
 
 if __name__ == "__main__":
     unittest.main()
+

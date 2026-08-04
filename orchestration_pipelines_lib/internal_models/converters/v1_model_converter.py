@@ -393,6 +393,8 @@ class ConverterV1ToInternal:
             return self._convert_orchestration_pipeline_action(
                 action.orchestration_pipeline, defaults
             )
+        if action_type == "ai":
+            return self._convert_ai_action(action.ai, defaults, shared_labels)
         raise TypeError(f"Unknown action type: {action_type}")
 
     def _convert_python_action(
@@ -845,6 +847,42 @@ class ConverterV1ToInternal:
             bundle_id=action.bundle_id,
             wait_for_completion=action.wait_for_completion,
         )
+
+    def _convert_ai_action(
+        self,
+        action: v1_pipeline_protos.AIAction,
+        defaults: v1_pipeline_protos.Defaults,
+        shared_labels: dict[str, str],
+    ) -> internal_pipeline.AnyAction:
+        provider_type = action.WhichOneof("provider")
+        if provider_type == "agent_platform":
+            agent_platform = action.agent_platform
+            platform_type = agent_platform.WhichOneof("type")
+            if platform_type == "model_upload":
+                upload_spec = agent_platform.model_upload
+
+                spec_model = internal_actions.AgentPlatformModelUploadSpecModel(
+                    model_name=upload_spec.model_name,
+                    description=upload_spec.description or None,
+                    model_artifact_uri=upload_spec.model_artifact_uri,
+                    serving_container_image_uri=upload_spec.serving_container_image_uri,
+                    project_id=agent_platform.project_id or defaults.project_id,
+                    location=agent_platform.location or defaults.location,
+                )
+
+                return internal_actions.AIActionModel(
+                    name=action.name,
+                    type="ai",
+                    provider="agent_platform",
+                    ai_action_type="model_upload",
+                    executionTimeout=action.execution_timeout or None,
+                    dependsOn=list(action.depends_on),
+                    triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                    labels=shared_labels,
+                    config=spec_model,
+                )
+            raise TypeError(f"Unknown AgentPlatform type: {platform_type}")
+        raise TypeError(f"Unknown AIAction provider type: {provider_type}")
 
     def _get_labels(self, tags: list[str]):
         labels = {"orchestration_pipeline": "true"}

@@ -529,6 +529,132 @@ class TaskUtilsTest(unittest.TestCase):
         )
         self.assertEqual(task.arguments, [expected_cmd])
 
+    def test_create_ai_task_vertex_upload_model(self):
+        """Tests creating Vertex AI UploadModelOperator from AIAction."""
+        import pendulum
+        from airflow.models import DAG
+        from airflow.providers.google.cloud.operators.vertex_ai.model_service import (
+            UploadModelOperator,
+        )
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            create_ai_task,
+        )
+        action = MagicMock()
+        action.name = "upload_model_vertex"
+        action.provider = "agent_platform"
+        action.ai_action_type = "model_upload"
+        action.executionTimeout = "600s"
+        action.triggerRule = "all_success"
+        action.config.model_name = "Predictor"
+        action.config.description = "Model"
+        action.config.model_artifact_uri = "gs://my-bucket/models/spark_rf_model"
+        action.config.serving_container_image_uri = "us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-4:latest"
+        action.config.project_id = "custom-project"
+        action.config.location = "us-central1"
+        pipeline = MagicMock()
+        pipeline.defaults.cloudDefault.project = "default-project"
+        pipeline.defaults.cloudDefault.region = "default-region"
+        dag = DAG(
+            dag_id="test_ai_dag",
+            start_date=pendulum.today("UTC"),
+        )
+
+        task = create_ai_task(action, pipeline, dag)
+
+        self.assertIsInstance(task, UploadModelOperator)
+        self.assertEqual(task.task_id, "upload_model_vertex")
+        self.assertEqual(task.project_id, "custom-project")
+        self.assertEqual(task.region, "us-central1")
+        self.assertEqual(
+            task.model,
+            {
+                "display_name": "Predictor",
+                "artifact_uri": "gs://my-bucket/models/spark_rf_model",
+                "container_spec": {
+                    "image_uri": "us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-4:latest"
+                },
+                "description": "Model",
+            },
+        )
+        self.assertEqual(task.trigger_rule, "all_success")
+
+    def test_create_ai_task_vertex_upload_model_defaults(self):
+        """Tests creating Vertex AI UploadModelOperator with default project and region."""
+        import pendulum
+        from airflow.models import DAG
+        from airflow.providers.google.cloud.operators.vertex_ai.model_service import (
+            UploadModelOperator,
+        )
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            create_ai_task,
+        )
+        action = MagicMock()
+        action.name = "upload_model_defaults"
+        action.provider = "agent_platform"
+        action.ai_action_type = "model_upload"
+        action.executionTimeout = None
+        action.triggerRule = "all_success"
+        action.config.model_name = "test_model"
+        action.config.description = None
+        action.config.model_artifact_uri = "gs://my-bucket/model"
+        action.config.serving_container_image_uri = "gcr.io/test/img"
+        action.config.project_id = None
+        action.config.location = None
+        pipeline = MagicMock()
+        pipeline.defaults.cloudDefault.project = "default-project"
+        pipeline.defaults.cloudDefault.region = "us-east1"
+        dag = DAG(
+            dag_id="test_ai_dag_defaults",
+            start_date=pendulum.today("UTC"),
+        )
+
+        task = create_ai_task(action, pipeline, dag)
+
+        self.assertIsInstance(task, UploadModelOperator)
+        self.assertEqual(task.task_id, "upload_model_defaults")
+        self.assertIsNone(task.project_id)
+        self.assertIsNone(task.region)
+        self.assertEqual(
+            task.model,
+            {
+                "display_name": "test_model",
+                "artifact_uri": "gs://my-bucket/model",
+                "container_spec": {
+                    "image_uri": "gcr.io/test/img"
+                },
+            },
+        )
+
+    def test_create_ai_task_unsupported_provider(self):
+        """Tests that unsupported AI provider raises ValueError."""
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            create_ai_task,
+        )
+        action = MagicMock()
+        action.provider = "unsupported_provider"
+        pipeline = MagicMock()
+        dag = MagicMock()
+
+        with self.assertRaisesRegex(ValueError, "Unsupported AI provider"):
+            create_ai_task(action, pipeline, dag)
+
+    def test_create_ai_task_unsupported_action_type(self):
+        """Tests that unsupported agent_platform action type raises ValueError."""
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            create_ai_task,
+        )
+        action = MagicMock()
+        action.provider = "agent_platform"
+        action.ai_action_type = "unsupported_type"
+        pipeline = MagicMock()
+        dag = MagicMock()
+
+        with self.assertRaisesRegex(
+            ValueError, "Unsupported agent_platform action type"
+        ):
+            create_ai_task(action, pipeline, dag)
+
 
 if __name__ == "__main__":
     unittest.main()
+

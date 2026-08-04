@@ -289,3 +289,9 @@ def create_orchestration_pipeline_trigger_task(
     except Exception as e:
         logging.error(f"Error creating task for action '{action.name}': {e}")
         raise
+
+
+def create_ai_task(action: Dict[str, Any], pipeline: Dict[str, Any], dag):
+    """Converts AI action to the appropriate Airflow AI operator."""
+    return task_utils.create_ai_task(action, pipeline, dag=dag)
+

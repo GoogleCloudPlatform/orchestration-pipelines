@@ -31,6 +31,9 @@ from orchestration_pipelines_models.pipeline_v1_model.pipeline_validation import
 )
 from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipeline_pb2 import (
     Action,
+    AIAction,
+    AgentPlatform,
+    AgentPlatformModelUpload,
     Defaults,
     ExecutionConfig,
     LocalEngine,
@@ -426,5 +429,126 @@ class TestPipelineValidator(unittest.TestCase):
             PipelineValidator.validate(self.pipeline)
 
 
+    def test_valid_ai_action_succeeds(self):
+        """Tests that a pipeline with a valid AI action passes validation."""
+        ai_action = Action(
+            ai=AIAction(
+                name="upload-model",
+                agent_platform=AgentPlatform(
+                    model_upload=AgentPlatformModelUpload(
+                        model_name="my-model",
+                        model_artifact_uri="gs://bucket/model",
+                        serving_container_image_uri="gcr.io/test/image:latest",
+                    )
+                ),
+            )
+        )
+        self.pipeline.actions.append(ai_action)
+
+        result = PipelineValidator.validate(self.pipeline)
+
+        self.assertIsNone(result)
+
+    def test_ai_action_missing_model_name_fails(self):
+        """Tests that missing model_name in model_upload fails validation."""
+        ai_action = Action(
+            ai=AIAction(
+                name="upload-model",
+                agent_platform=AgentPlatform(
+                    model_upload=AgentPlatformModelUpload(
+                        model_name="",
+                        model_artifact_uri="gs://bucket/model",
+                        serving_container_image_uri="gcr.io/test/image:latest",
+                    )
+                ),
+            )
+        )
+        self.pipeline.actions.append(ai_action)
+
+        with self.assertRaises(ValueError) as cm:
+            PipelineValidator.validate(self.pipeline)
+
+        self.assertIn(
+            "Error for field 'actions[1].ai.agent_platform.model_upload.model_name': "
+            "field is required and cannot be an empty string.",
+            str(cm.exception),
+        )
+
+    def test_ai_action_missing_artifact_uri_fails(self):
+        """Tests that missing model_artifact_uri in model_upload fails validation."""
+        ai_action = Action(
+            ai=AIAction(
+                name="upload-model",
+                agent_platform=AgentPlatform(
+                    model_upload=AgentPlatformModelUpload(
+                        model_name="my-model",
+                        model_artifact_uri="",
+                        serving_container_image_uri="gcr.io/test/image:latest",
+                    )
+                ),
+            )
+        )
+        self.pipeline.actions.append(ai_action)
+
+        with self.assertRaises(ValueError) as cm:
+            PipelineValidator.validate(self.pipeline)
+
+        self.assertIn(
+            "Error for field 'actions[1].ai.agent_platform.model_upload.model_artifact_uri': "
+            "field is required and cannot be an empty string.",
+            str(cm.exception),
+        )
+
+    def test_ai_action_missing_serving_image_fails(self):
+        """Tests that missing serving_container_image_uri in model_upload fails validation."""
+        ai_action = Action(
+            ai=AIAction(
+                name="upload-model",
+                agent_platform=AgentPlatform(
+                    model_upload=AgentPlatformModelUpload(
+                        model_name="my-model",
+                        model_artifact_uri="gs://bucket/model",
+                        serving_container_image_uri="",
+                    )
+                ),
+            )
+        )
+        self.pipeline.actions.append(ai_action)
+
+        with self.assertRaises(ValueError) as cm:
+            PipelineValidator.validate(self.pipeline)
+
+        self.assertIn(
+            "Error for field 'actions[1].ai.agent_platform.model_upload.serving_container_image_uri': "
+            "field is required and cannot be an empty string.",
+            str(cm.exception),
+        )
+
+    def test_ai_action_invalid_name_fails(self):
+        """Tests that invalid name in AIAction fails validation."""
+        ai_action = Action(
+            ai=AIAction(
+                name="invalid name with spaces",
+                agent_platform=AgentPlatform(
+                    model_upload=AgentPlatformModelUpload(
+                        model_name="my-model",
+                        model_artifact_uri="gs://bucket/model",
+                        serving_container_image_uri="gcr.io/test/image:latest",
+                    )
+                ),
+            )
+        )
+        self.pipeline.actions.append(ai_action)
+
+        with self.assertRaises(ValueError) as cm:
+            PipelineValidator.validate(self.pipeline)
+
+        self.assertIn(
+            "Error for field 'actions[1].ai.name': value 'invalid name with spaces' does not match regex pattern",
+            str(cm.exception),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
+

@@ -26,7 +26,6 @@ class ActionHandlerRegistryTest(unittest.TestCase):
 
     def test_get_action_handlers(self):
         """Tests that the static action handler mapping resolves correctly."""
-        # Create mock task factory
         mock_task_factory = MagicMock()
         mock_task_factory.create_python_script_task = "python_script_handler"
         mock_task_factory.create_python_virtualenv_task = (
@@ -42,6 +41,7 @@ class ActionHandlerRegistryTest(unittest.TestCase):
         mock_task_factory.create_orchestration_pipeline_trigger_task = (
             "orchestration_pipeline_handler"
         )
+        mock_task_factory.create_ai_task = "ai_handler"
 
         handlers = registry.get_action_handlers(mock_task_factory)
 
@@ -63,7 +63,11 @@ class ActionHandlerRegistryTest(unittest.TestCase):
             handlers[actions.OrchestrationPipelineActionModel],
             "orchestration_pipeline_handler",
         )
-        self.assertEqual(len(handlers), 8)
+        self.assertEqual(
+            handlers[actions.AIActionModel],
+            "ai_handler",
+        )
+        self.assertEqual(len(handlers), 9)
 
 
 if __name__ == "__main__":

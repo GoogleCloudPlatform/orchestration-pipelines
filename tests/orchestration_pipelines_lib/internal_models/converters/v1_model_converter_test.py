@@ -1200,5 +1200,108 @@ class TestConverterV1ToInternal(unittest.TestCase):
             )
 
 
+    def test_convert_ai_action_vertex_upload_model(self):
+        """Tests converting AIAction with Vertex AI model_upload config."""
+        ai_action = v1_protos.AIAction(
+            name="test-vertex-upload",
+            execution_timeout="300s",
+            depends_on=["prev-task"],
+            trigger_rule=v1_protos.TriggerRule.all_success,
+        )
+        spec = ai_action.agent_platform.model_upload
+        spec.model_name = "transit_days_predictor"
+        spec.description = "transit days model"
+        spec.model_artifact_uri = "gs://bucket/model"
+        spec.serving_container_image_uri = (
+            "us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-4:latest"
+        )
+        ai_action.agent_platform.project_id = "custom-project"
+        ai_action.agent_platform.location = "us-central1"
+
+        internal_ai = self.converter._convert_ai_action(
+            ai_action, self.defaults, self.labels
+        )
+
+        self.assertEqual(internal_ai.name, "test-vertex-upload")
+        self.assertEqual(internal_ai.type, "ai")
+        self.assertEqual(internal_ai.provider, "agent_platform")
+        self.assertEqual(internal_ai.ai_action_type, "model_upload")
+        self.assertEqual(internal_ai.executionTimeout, "300s")
+        self.assertEqual(internal_ai.dependsOn, ["prev-task"])
+        self.assertEqual(internal_ai.triggerRule, "all_success")
+        self.assertEqual(internal_ai.labels, self.labels)
+        config = internal_ai.config
+        self.assertIsInstance(
+            config, internal_actions.AgentPlatformModelUploadSpecModel
+        )
+        self.assertEqual(config.model_name, "transit_days_predictor")
+        self.assertEqual(config.description, "transit days model")
+        self.assertEqual(config.model_artifact_uri, "gs://bucket/model")
+        self.assertEqual(
+            config.serving_container_image_uri,
+            "us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-4:latest",
+        )
+        self.assertEqual(config.project_id, "custom-project")
+        self.assertEqual(config.location, "us-central1")
+
+    def test_convert_ai_action_vertex_upload_model_defaults(self):
+        """Tests converting AIAction with fallback to defaults for project and location."""
+        ai_action = v1_protos.AIAction(
+            name="test-vertex-defaults",
+        )
+        spec = ai_action.agent_platform.model_upload
+        spec.model_name = "test_model"
+        spec.model_artifact_uri = "gs://bucket/model"
+        spec.serving_container_image_uri = "gcr.io/test/image"
+
+        internal_ai = self.converter._convert_ai_action(
+            ai_action, self.defaults, self.labels
+        )
+
+        self.assertEqual(internal_ai.config.project_id, "default-project")
+        self.assertEqual(internal_ai.config.location, "default-location")
+        self.assertEqual(
+            internal_ai.config.serving_container_image_uri, "gcr.io/test/image"
+        )
+        self.assertIsNone(internal_ai.config.description)
+
+    def test_convert_ai_action_unknown_provider(self):
+        """Tests that an unknown provider type raises TypeError."""
+        ai_action = MagicMock()
+        ai_action.WhichOneof.return_value = "unknown_provider"
+
+        with self.assertRaises(TypeError):
+            self.converter._convert_ai_action(
+                ai_action, self.defaults, self.labels
+            )
+
+    def test_convert_ai_action_unknown_agent_platform_type(self):
+        """Tests that an unknown AgentPlatform type raises TypeError."""
+        ai_action = MagicMock()
+        ai_action.WhichOneof.return_value = "agent_platform"
+        ai_action.agent_platform.WhichOneof.return_value = "unknown_type"
+
+        with self.assertRaisesRegex(TypeError, "Unknown AgentPlatform type"):
+            self.converter._convert_ai_action(
+                ai_action, self.defaults, self.labels
+            )
+
+    def test_convert_action_dispatch_ai(self):
+        """Tests that convert_action properly dispatches an AIAction."""
+        v1_action = v1_protos.Action()
+        v1_action.ai.name = "test-ai-dispatch"
+        v1_action.ai.agent_platform.model_upload.model_name = "model1"
+        v1_action.ai.agent_platform.model_upload.model_artifact_uri = "gs://b/m"
+        v1_action.ai.agent_platform.model_upload.serving_container_image_uri = "gcr.io/img"
+
+        internal_action = self.converter.convert_action(
+            v1_action, self.defaults, self.labels
+        )
+
+        self.assertIsInstance(internal_action, internal_actions.AIActionModel)
+        self.assertEqual(internal_action.name, "test-ai-dispatch")
+
+
 if __name__ == "__main__":
     unittest.main()
+
