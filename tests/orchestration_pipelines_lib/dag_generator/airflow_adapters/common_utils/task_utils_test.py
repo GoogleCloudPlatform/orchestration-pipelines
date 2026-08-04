@@ -302,6 +302,7 @@ class TaskUtilsTest(unittest.TestCase):
         action.config.impersonationChain = ["dts-sa@dts-proj.iam.gserviceaccount.com"]
         action.executionTimeout = "1000s"
         action.triggerRule = "all_success"
+        action.type = "sql"
 
         pipeline = MagicMock()
         pipeline.defaults.cloudDefault.project = "default-proj"
@@ -361,6 +362,7 @@ class TaskUtilsTest(unittest.TestCase):
         action.config.impersonationChain = ["dts-sa@dts-proj.iam.gserviceaccount.com"]
         action.executionTimeout = "1000s"
         action.triggerRule = "all_success"
+        action.type = "pyspark"
 
         pipeline = MagicMock()
         pipeline.defaults.cloudDefault.project = "default-proj"
@@ -426,6 +428,7 @@ class TaskUtilsTest(unittest.TestCase):
         action.config.impersonationChain = None
         action.executionTimeout = None
         action.triggerRule = "all_success"
+        action.type = "notebook"
 
         pipeline = MagicMock()
         pipeline.defaults.cloudDefault.project = "default-proj"

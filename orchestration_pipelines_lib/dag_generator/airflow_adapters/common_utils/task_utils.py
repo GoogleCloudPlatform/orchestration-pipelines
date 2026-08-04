@@ -28,14 +28,23 @@ from orchestration_pipelines_lib.utils.duration_utils import (
     duration_to_timedelta,
 )
 from orchestration_pipelines_lib.utils.file_manager import FileManager
+from orchestration_pipelines_lib.utils.metrics import (
+    ActionExecutionEngine,
+    ActionExecutionType,
+    wrap_observability_operator,
+)
 
 from . import dataproc_utils, gcs_utils
 
 if TYPE_CHECKING:
+    try:
+        from airflow.sdk import DAG
+    except ImportError:
+        from airflow import DAG
     from airflow.utils.task_group import TaskGroup
 
 
-def get_pipeline_metadata(dag: Any) -> tuple[str, str, str]:
+def get_pipeline_metadata(dag: DAG) -> tuple[str, str, str]:
     """Extracts bundle_id, version_id, and pipeline_id from a DAG object's
     doc_md property.
 
@@ -88,9 +97,8 @@ def _upload_inline_query_to_gcs(
 
     hash_value = hashlib.sha256(query.encode("utf-8")).hexdigest()
 
-    blob_name = (  # pylint: disable=line-too-long
-        f"data/{bundle_id}/versions/{version_id}/managed-temp/"
-        f"{hash_value}.sql"
+    blob_name = (
+        f"data/{bundle_id}/versions/{version_id}/managed-temp/{hash_value}.sql"
     )
     gcs_uri = f"gs://{gcs_bucket}/{blob_name}"
 
@@ -221,7 +229,7 @@ def create_dataproc_create_batch_operator_task(
                 dataproc_utils.get_pyspark_batch_config(action, wrapper_uri)
             )
 
-        operator_class = DataprocCreateBatchOperator
+        dataproc_create_batch_operator = DataprocCreateBatchOperator
         extra_kwargs = {}
 
         if action.type == "sql":
@@ -231,7 +239,7 @@ def create_dataproc_create_batch_operator_task(
                 spark_sql_batch["query_variables"] = action.params
 
             if action.query:
-                operator_class = (
+                dataproc_create_batch_operator = (
                     get_dataproc_create_batch_inline_sql_operator_class()
                 )
                 extra_kwargs["query"] = action.query
@@ -260,14 +268,22 @@ def create_dataproc_create_batch_operator_task(
             environment_config=environment_config,
             labels=action.labels,
         )
-        return operator_class(
+
+        ObservableDataprocCreateBatchOperator = wrap_observability_operator(
+            dataproc_create_batch_operator,
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.DATAPROC,
+            get_pipeline_metadata,
+        )
+
+        return ObservableDataprocCreateBatchOperator(
             task_id=action.name,
             region=action.region,
             project_id=pipeline.defaults.cloudDefault.project,
             batch=batch,
-            batch_id=(  # pylint: disable=line-too-long
-                f"{action.name.lower().lstrip('_-').replace('_', '-')[:50]}"
-                f"-{uuid.uuid4().hex[:6]}"
+            batch_id=(
+                f"{action.name.lower().lstrip('_-').replace('_', '-')[:50]}-"
+                f"{uuid.uuid4().hex[:6]}"
             ),
             execution_timeout=(
                 duration_to_timedelta(action.executionTimeout)
@@ -300,6 +316,13 @@ def create_bq_operation_task(
     """
     from airflow.providers.google.cloud.operators.bigquery import (
         BigQueryInsertJobOperator,
+    )
+
+    ObservableBigQueryInsertJobOperator = wrap_observability_operator(
+        BigQueryInsertJobOperator,
+        ActionExecutionType.from_action_type(action.type),
+        ActionExecutionEngine.BIGQUERY,
+        get_pipeline_metadata,
     )
 
     try:
@@ -351,7 +374,7 @@ def create_bq_operation_task(
                 "tableId": parts[2],
             }
 
-        return BigQueryInsertJobOperator(
+        return ObservableBigQueryInsertJobOperator(
             task_id=action.name,
             location=action.config.location,
             project_id=pipeline.defaults.cloudDefault.project,
@@ -373,7 +396,8 @@ def create_bq_operation_task(
 
 
 def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
-    """Converts an action into a TaskGroup for an ephemeral Dataproc workflow.
+    """Converts an action into a TaskGroup for an ephemeral Dataproc
+    workflow.
 
     Args:
         action: The action configuration object.
@@ -418,7 +442,7 @@ def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
                 "labels": action.labels,
             }
 
-            operator_class = DataprocSubmitJobOperator
+            dataproc_submit_job_operator = DataprocSubmitJobOperator
             extra_kwargs = {}
 
             if action.type == "sql":
@@ -428,7 +452,7 @@ def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
                     spark_sql_job["script_variables"] = action.params
 
                 if action.query:
-                    operator_class = (
+                    dataproc_submit_job_operator = (
                         get_dataproc_submit_job_inline_sql_operator_class()
                     )
                     extra_kwargs["query"] = action.query
@@ -439,6 +463,10 @@ def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
                     spark_sql_job["properties"] = action.config.properties
                 job["spark_sql_job"] = spark_sql_job
             else:
+                # This block handles both pyspark and notebook actions for
+                # ephemeral clusters (since ephemeral Dataproc still relies on
+                # DataprocSubmitJobOperator, which uses pyspark_job for
+                # notebooks via the old wrapper method).
                 wrapper_uri = gcs_utils.get_run_notebook_gcs_path()
                 gcs_utils.upload_run_notebook_if_needed(wrapper_uri)
                 pyspark_job = dataproc_utils.get_pyspark_batch_config(
@@ -448,7 +476,15 @@ def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
                     pyspark_job["python_file_uris"] = action.pyFiles
                 pyspark_job["properties"] = action.config.properties
                 job["pyspark_job"] = pyspark_job
-            submit_job = operator_class(
+
+            ObservableDataprocSubmitJobOperator = wrap_observability_operator(
+                dataproc_submit_job_operator,
+                ActionExecutionType.from_action_type(action.type),
+                ActionExecutionEngine.DATAPROC,
+                get_pipeline_metadata,
+            )
+
+            submit_job = ObservableDataprocSubmitJobOperator(
                 task_id=f"{action.name}_submit_job",
                 job=job,
                 execution_timeout=(
@@ -510,7 +546,7 @@ def dataproc_existing_cluster(
             "labels": action.labels,
         }
 
-        operator_class = DataprocSubmitJobOperator
+        dataproc_submit_job_operator = DataprocSubmitJobOperator
         extra_kwargs = {}
 
         if action.type == "sql":
@@ -520,7 +556,7 @@ def dataproc_existing_cluster(
                 spark_sql_job["script_variables"] = action.params
 
             if action.query:
-                operator_class = (
+                dataproc_submit_job_operator = (
                     get_dataproc_submit_job_inline_sql_operator_class()
                 )
                 extra_kwargs["query"] = action.query
@@ -531,6 +567,8 @@ def dataproc_existing_cluster(
                 spark_sql_job["properties"] = action.config.properties
             job["spark_sql_job"] = spark_sql_job
         else:
+            # This block handles both pyspark and notebook actions for
+            # existing clusters
             wrapper_uri = gcs_utils.get_run_notebook_gcs_path()
             gcs_utils.upload_run_notebook_if_needed(wrapper_uri)
             job["pyspark_job"] = dataproc_utils.get_pyspark_batch_config(
@@ -540,7 +578,14 @@ def dataproc_existing_cluster(
                 job["pyspark_job"]["python_file_uris"] = action.pyFiles
             job["pyspark_job"]["properties"] = action.config.properties
 
-        return operator_class(
+        ObservableDataprocSubmitJobOperator = wrap_observability_operator(
+            dataproc_submit_job_operator,
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.DATAPROC,
+            get_pipeline_metadata,
+        )
+
+        return ObservableDataprocSubmitJobOperator(
             task_id=action.name,
             job=job,
             execution_timeout=(
@@ -562,7 +607,8 @@ def dataproc_existing_cluster(
 
 
 def create_schedule_trigger_task(dag_kwargs, schedule_trigger):
-    """Converts the input trigger config into schedule parameters for the DAG.
+    """Converts the input trigger config into schedule parameters for the
+    DAG.
 
     Args:
         dag_kwargs: A dictionary of DAG keyword arguments to update.
@@ -651,7 +697,16 @@ def create_service_dataform_task(
         DataformCreateWorkflowInvocationOperator,
     )
 
-    return DataformCreateWorkflowInvocationOperator(
+    ObservableDataformCreateWorkflowInvocationOperator = (
+        wrap_observability_operator(
+            DataformCreateWorkflowInvocationOperator,
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.DATAFORM,
+            get_pipeline_metadata,
+        )
+    )
+
+    return ObservableDataformCreateWorkflowInvocationOperator(
         task_id=action.name,
         project_id=_get_config_or_default(
             action.dataformServiceConfig, pipeline, "project_id", "project"
@@ -678,7 +733,8 @@ def create_local_dataform_task(
     gcs_bucket_path_template: str,
     dag,
 ):
-    """Converts an action into a KubernetesPodOperator for a Dataform workflow.
+    """Converts an action into a KubernetesPodOperator for a Dataform
+    workflow.
 
     Args:
         action: The action configuration object.
@@ -695,10 +751,17 @@ def create_local_dataform_task(
         KubernetesPodOperator,
     )
 
+    ObservableKubernetesPodOperator = wrap_observability_operator(
+        KubernetesPodOperator,
+        ActionExecutionType.from_action_type(action.type),
+        ActionExecutionEngine.LOCAL,
+        get_pipeline_metadata,
+    )
+
     labels = getattr(action, "labels", None) or {}
     params = getattr(action, "params", None) or {}
 
-    dataform_cmd = (  # pylint: disable=line-too-long
+    dataform_cmd = (
         "gcloud storage cp --recursive $GCS_BUCKET_PATH/* . && "
         "dataform run --timeout=60s"
     )
@@ -713,17 +776,15 @@ def create_local_dataform_task(
         )
         dataform_cmd += f" --vars={params_str}"
 
-    return KubernetesPodOperator(
+    return ObservableKubernetesPodOperator(
         task_id=action.name,
         name="dataform-runner",
         namespace="composer-user-workloads",
-        image=(  # pylint: disable=line-too-long
-            "us-docker.pkg.dev/cloud-airflow-releaser/"
-            "orchestration-pipelines-basic-dataform-executor/"
-            "orchestration-pipelines-basic-dataform-executor"
-            "@sha256:fd7cd9673fda5994f1f90bfb3170ff6aa5ae8ed862d"
-            "8ea518dddc5c48f9bd8f4"
-        ),
+        image="us-docker.pkg.dev/cloud-airflow-releaser/"
+        "orchestration-pipelines-basic-dataform-executor/"
+        "orchestration-pipelines-basic-dataform-executor"
+        "@sha256:fd7cd9673fda5994f1f90bfb3170ff6aa5ae8ed862d"
+        "8ea518dddc5c48f9bd8f4",
         env_vars={"GCS_BUCKET_PATH": gcs_bucket_path_template},
         cmds=["/bin/sh", "-c"],
         arguments=[dataform_cmd],
@@ -825,20 +886,31 @@ def create_bq_dts_task(
                 dag=dag,
             )
 
-            sensor_task = BigQueryDataTransferServiceTransferRunSensor(
-                task_id=f"{action.name}_sensor",
-                transfer_config_id=action.config.transferConfigId,
-                run_id=(
-                    "{{ task_instance.xcom_pull("
-                    f"task_ids='{action.name}."
-                    f"{action.name}_start', key='run_id')"
-                    " }}"
-                ),
-                project_id=project_id,
-                location=location,
-                impersonation_chain=action.config.impersonationChain,
-                doc_md=json.dumps({"op_action_name": action.name}),
-                dag=dag,
+            ObservableBigQueryDataTransferServiceTransferRunSensor = (
+                wrap_observability_operator(
+                    BigQueryDataTransferServiceTransferRunSensor,
+                    ActionExecutionType.from_action_type(action.type),
+                    ActionExecutionEngine.BIGQUERY,
+                    get_pipeline_metadata,
+                )
+            )
+
+            sensor_task = (
+                ObservableBigQueryDataTransferServiceTransferRunSensor(
+                    task_id=f"{action.name}_sensor",
+                    transfer_config_id=action.config.transferConfigId,
+                    run_id=(
+                        "{{ task_instance.xcom_pull("
+                        f"task_ids='{action.name}."
+                        f"{action.name}_start', key='run_id')"
+                        " }}"
+                    ),
+                    project_id=project_id,
+                    location=location,
+                    impersonation_chain=action.config.impersonationChain,
+                    doc_md=json.dumps({"op_action_name": action.name}),
+                    dag=dag,
+                )
             )
 
             # pylint: disable=pointless-statement
@@ -883,7 +955,14 @@ def create_vertex_upload_model_task(
         if action.labels:
             model["labels"] = action.labels
 
-        return UploadModelOperator(
+        ObservableUploadModelOperator = wrap_observability_operator(
+            UploadModelOperator,
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.AGENT_PLATFORM,
+            get_pipeline_metadata,
+        )
+
+        return ObservableUploadModelOperator(
             task_id=action.name,
             project_id=project_id,
             region=region,
@@ -927,7 +1006,9 @@ def create_vertex_batch_inference_task(
         if action.config.instances_format:
             extra_kwargs["instances_format"] = action.config.instances_format
         if action.config.predictions_format:
-            extra_kwargs["predictions_format"] = action.config.predictions_format
+            extra_kwargs["predictions_format"] = (
+                action.config.predictions_format
+            )
         if action.config.bigquery_source:
             extra_kwargs["bigquery_source"] = action.config.bigquery_source
         if action.config.gcs_source:
@@ -947,7 +1028,16 @@ def create_vertex_batch_inference_task(
                 action.config.impersonation_chain
             )
 
-        return CreateBatchPredictionJobOperator(
+        ObservableCreateBatchPredictionJobOperator = (
+            wrap_observability_operator(
+                CreateBatchPredictionJobOperator,
+                ActionExecutionType.from_action_type(action.type),
+                ActionExecutionEngine.AGENT_PLATFORM,
+                get_pipeline_metadata,
+            )
+        )
+
+        return ObservableCreateBatchPredictionJobOperator(
             task_id=action.name,
             project_id=project_id,
             region=region,
@@ -984,9 +1074,7 @@ def create_ai_task(action: dict[str, Any], pipeline: dict[str, Any], dag):
         if action.ai_action_type == "model_upload":
             return create_vertex_upload_model_task(action, pipeline, dag=dag)
         elif action.ai_action_type == "batch_inference":
-            return create_vertex_batch_inference_task(
-                action, pipeline, dag=dag
-            )
+            return create_vertex_batch_inference_task(action, pipeline, dag=dag)
         raise ValueError(
             f"Unsupported agent_platform action type: {action.ai_action_type}"
         )

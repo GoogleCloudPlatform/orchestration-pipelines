@@ -1,7 +1,7 @@
 """Tests for the metrics module."""
 
 import logging
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from airflow.utils.state import DagRunState
@@ -10,18 +10,64 @@ from airflow.utils.types import DagRunType
 from orchestration_pipelines_lib.utils.metrics import (
     MODULE_NAME,
     VERSION_LABEL,
+    ActionExecutionEngine,
+    ActionExecutionType,
     BasicStatus,
     ParsingStatus,
     PipelineRunTriggerType,
+    _action_observability_context,
     _emit_metric,
     _incr_callback,
+    _rename_observability_class,
     _timing_callback,
+    report_action_execution,
+    report_init_context,
     report_parsing,
     report_pipeline_run,
+    wrap_observability_operator,
 )
 
 TARGET_MODULE = "orchestration_pipelines_lib.utils.metrics"
 
+
+MOCK_REPORT_ACTION = f"{TARGET_MODULE}.report_action_execution"
+MOCK_BASIC_STATUS = f"{TARGET_MODULE}.BasicStatus"
+MOCK_BASE_OPERATOR = f"{TARGET_MODULE}.BaseOperator"
+MOCK_OBSERVABILITY_CONTEXT = f"{TARGET_MODULE}._action_observability_context"
+
+
+@pytest.fixture
+def action_type():
+    """Provides a mock action execution type."""
+    return MagicMock(name="action_type")
+
+
+@pytest.fixture
+def engine():
+    """Provides a mock action execution engine."""
+    return MagicMock(name="engine")
+
+
+@pytest.fixture
+def get_pipeline_metadata():
+    """Provides a mock callable returning tuple of (bundle_id, ignored, pipeline_id)."""  # noqa: E501
+    mock_callable = MagicMock()
+    mock_callable.return_value = ("test_bundle", "ignored", "test_pipeline")
+    return mock_callable
+
+
+@pytest.fixture
+def context_dict():
+    """Provides a mock Airflow context dictionary."""
+    return {"dag": MagicMock(name="context_dag")}
+
+
+@pytest.fixture
+def operator_instance():
+    """Provides an instance of the DummyOperator with a mock DAG attached."""
+    inst = DummyOperator()
+    inst.dag = MagicMock(name="instance_dag")  # type: ignore
+    return inst
 
 
 @patch(f"{TARGET_MODULE}._timing_callback")
@@ -96,6 +142,84 @@ def test_report_pipeline_run_default_bundle(mock_emit_metric):
     )
 
 
+@patch(f"{TARGET_MODULE}._emit_metric")
+def test_report_action_execution(mock_emit_metric):
+    """Tests report_action_execution correctly invokes _emit_metric."""
+    bundle_id = "test_bundle"
+    pipeline_id = "test_pipeline"
+    action_type = ActionExecutionType.NOTEBOOK
+    engine = ActionExecutionEngine.DATAFORM
+    status = BasicStatus.SUCCESS
+
+    report_action_execution(bundle_id, pipeline_id, action_type, engine, status)
+
+    mock_emit_metric.assert_called_once_with(
+        bundle_id=bundle_id,
+        pipeline_id=pipeline_id,
+        metric="action_execution",
+        status="SUCCESS",
+        metric_callback=_incr_callback,
+        additional_tags={"action_type": "NOTEBOOK", "engine": "DATAFORM"},
+    )
+
+
+@patch(f"{TARGET_MODULE}._emit_metric")
+def test_report_action_execution_with_none_bundle_id(mock_emit_metric):
+    """Tests report_action_execution correctly invokes _emit_metric with None bundle_id."""  # noqa: E501
+    bundle_id = None
+    pipeline_id = "test_pipeline"
+    action_type = ActionExecutionType.PYTHON
+    engine = ActionExecutionEngine.LOCAL
+    status = BasicStatus.FAILED
+
+    report_action_execution(bundle_id, pipeline_id, action_type, engine, status)
+
+    mock_emit_metric.assert_called_once_with(
+        bundle_id=None,
+        pipeline_id=pipeline_id,
+        metric="action_execution",
+        status="FAILED",
+        metric_callback=_incr_callback,
+        additional_tags={"action_type": "PYTHON", "engine": "LOCAL"},
+    )
+
+
+@patch(f"{TARGET_MODULE}._emit_metric")
+def test_report_init_context(mock_emit_metric):
+    """Tests report_init_context correctly invokes _emit_metric."""
+    bundle_id = "test_bundle"
+    pipeline_id = "test_pipeline"
+    status = BasicStatus.SUCCESS
+
+    report_init_context(bundle_id, pipeline_id, status)
+
+    mock_emit_metric.assert_called_once_with(
+        bundle_id=bundle_id,
+        pipeline_id=pipeline_id,
+        metric="init_context",
+        status="SUCCESS",
+        metric_callback=_incr_callback,
+    )
+
+
+@patch(f"{TARGET_MODULE}._emit_metric")
+def test_report_init_context_with_none_bundle_id(mock_emit_metric):
+    """Tests report_init_context correctly invokes _emit_metric with None bundle_id."""  # noqa: E501
+    bundle_id = None
+    pipeline_id = "test_pipeline"
+    status = BasicStatus.FAILED
+
+    report_init_context(bundle_id, pipeline_id, status)
+
+    mock_emit_metric.assert_called_once_with(
+        bundle_id=None,
+        pipeline_id=pipeline_id,
+        metric="init_context",
+        status="FAILED",
+        metric_callback=_incr_callback,
+    )
+
+
 @patch(f"{TARGET_MODULE}.Stats.incr")
 def test_incr_callback(mock_stats_incr):
     """Tests _incr_callback correctly invokes Stats.incr."""
@@ -129,7 +253,7 @@ def test_emit_metric_success():
     metric = "my_metric"
     status = ParsingStatus.SUCCESS
 
-    expected_statsd_name = f"{MODULE_NAME}.{bundle_id}.{pipeline_id}.{metric}.{status}.{VERSION_LABEL}"  # noqa: E501
+    expected_statsd_name = f"{MODULE_NAME}.{bundle_id}.{pipeline_id}.{metric}.SUCCESS.{VERSION_LABEL}"  # noqa: E501
     expected_otel_name = f"{MODULE_NAME}.{metric}"
     expected_tags = {
         "status": "SUCCESS",
@@ -147,12 +271,8 @@ def test_emit_metric_success():
     )
 
     assert mock_callback.call_count == 2
-    mock_callback.assert_has_calls(
-        [
-            call(expected_statsd_name, None),
-            call(expected_otel_name, expected_tags),
-        ]
-    )
+    mock_callback.assert_any_call(expected_statsd_name, None)
+    mock_callback.assert_any_call(expected_otel_name, expected_tags)
 
 
 def test_emit_metric_default_bundle_id():
@@ -325,3 +445,142 @@ def test_pipeline_run_trigger_type_from_dag_run_type(
     result = PipelineRunTriggerType.from_dag_run_type(dag_run_type)
 
     assert result == expected_trigger_type
+
+
+class DummyBaseOperator:
+    """A dummy base class simulating Airflow's BaseOperator."""
+
+    def execute(self, context):  # noqa: D102
+        return "base_execute_result"
+
+
+class DummyOperator(DummyBaseOperator):
+    """A test operator simulating a concrete implementation."""
+
+    pass
+
+
+class NotAnOperator:
+    """A class that does NOT inherit from the dummy BaseOperator."""
+
+    pass
+
+
+def test_rename_observability_class():
+    """Tests that the wrapper class is renamed with the correct suffix."""
+
+    class OriginalClass:
+        pass
+
+    class WrappedClass:
+        pass
+
+    _rename_observability_class(WrappedClass, OriginalClass)
+
+    assert WrappedClass.__name__ == "OriginalClassObservability"
+    assert (
+        WrappedClass.__qualname__
+        == f"{OriginalClass.__qualname__}Observability"
+    )
+
+
+
+@patch(MOCK_BASIC_STATUS)
+@patch(MOCK_REPORT_ACTION)
+def test_observability_context_reports_success(
+    mock_report_action,
+    mock_basic_status_class,
+    operator_instance,
+    context_dict,
+    action_type,
+    engine,
+    get_pipeline_metadata,
+):
+    """Tests that a successful execution within the context manager reports SUCCESS."""  # noqa: E501
+    mock_basic_status_class.SUCCESS = "MOCK_SUCCESS"
+
+    with _action_observability_context(
+        operator_instance,
+        context_dict,
+        action_type,
+        engine,
+        get_pipeline_metadata,
+    ):
+        pass
+
+    get_pipeline_metadata.assert_called_once_with(operator_instance.dag)
+    mock_report_action.assert_called_once_with(
+        "test_bundle", "test_pipeline", action_type, engine, "MOCK_SUCCESS"
+    )
+
+
+@patch(MOCK_BASIC_STATUS)
+@patch(MOCK_REPORT_ACTION)
+def test_observability_context_reports_failure_and_raises(
+    mock_report_action,
+    mock_basic_status_class,
+    operator_instance,
+    context_dict,
+    action_type,
+    engine,
+    get_pipeline_metadata,
+):
+    """Tests that an exception within the context manager reports FAILED and re-raises."""  # noqa: E501
+    mock_basic_status_class.FAILED = "MOCK_FAILED"
+
+    with pytest.raises(ValueError, match="Mocked execution error"):
+        with _action_observability_context(
+            operator_instance,
+            context_dict,
+            action_type,
+            engine,
+            get_pipeline_metadata,
+        ):
+            raise ValueError("Mocked execution error")
+
+    mock_report_action.assert_called_once_with(
+        "test_bundle", "test_pipeline", action_type, engine, "MOCK_FAILED"
+    )
+
+
+@patch(MOCK_BASE_OPERATOR, DummyBaseOperator)
+def test_wrap_operator_returns_early_for_invalid_class(
+    action_type, engine, get_pipeline_metadata
+):
+    """Tests that classes not inheriting from BaseOperator are returned untouched."""  # noqa: E501
+    result = wrap_observability_operator(
+        NotAnOperator,  # type: ignore
+        action_type,
+        engine,
+        get_pipeline_metadata,
+    )
+    assert result is NotAnOperator
+
+
+@patch(MOCK_OBSERVABILITY_CONTEXT)
+@patch(MOCK_BASE_OPERATOR, DummyBaseOperator)
+def test_wrap_operator_creates_wrapper_and_executes(
+    mock_context_manager,
+    action_type,
+    engine,
+    get_pipeline_metadata,
+    context_dict,
+):
+    """Tests that a valid base class is wrapped and uses the context manager on execute."""  # noqa: E501
+    mock_context_manager.return_value.__enter__.return_value = None
+    WrappedClass = wrap_observability_operator(
+        DummyOperator,  # type: ignore
+        action_type,
+        engine,
+        get_pipeline_metadata,
+    )
+
+    instance = WrappedClass()  # type: ignore
+    result = instance.execute(context_dict)
+
+    assert result == "base_execute_result"
+    assert WrappedClass.__name__ == "DummyOperatorObservability"
+    assert issubclass(WrappedClass, DummyOperator)
+    mock_context_manager.assert_called_once_with(
+        instance, context_dict, action_type, engine, get_pipeline_metadata
+    )

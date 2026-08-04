@@ -28,6 +28,11 @@ from orchestration_pipelines_lib.scripts.dbt_wrapper import invoke_dbt_run
 from orchestration_pipelines_lib.utils.duration_utils import (
     duration_to_timedelta,
 )
+from orchestration_pipelines_lib.utils.metrics import (
+    ActionExecutionEngine,
+    ActionExecutionType,
+    wrap_observability_operator,
+)
 
 if TYPE_CHECKING:
     from airflow.operators.python import (
@@ -110,7 +115,14 @@ def create_python_script_task(
             }
             return python_callable(**filtered_kwargs)
 
-        return PythonOperator(
+        ObservablePythonOperator = wrap_observability_operator(
+            PythonOperator,
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.LOCAL,
+            task_utils.get_pipeline_metadata,
+        )
+
+        return ObservablePythonOperator(
             task_id=action.name,
             python_callable=runtime_wrapper,
             op_kwargs=action.config.opKwargs or {},
@@ -153,7 +165,14 @@ def create_python_virtualenv_task(
             else action.config.requirements
         )
 
-        return PythonVirtualenvOperator(
+        ObservablePythonVirtualenvOperator = wrap_observability_operator(
+            PythonVirtualenvOperator,
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.LOCAL,
+            task_utils.get_pipeline_metadata,
+        )
+
+        return ObservablePythonVirtualenvOperator(
             task_id=action.name,
             python_callable=python_callable,
             op_kwargs=action.config.opKwargs or {},
@@ -211,7 +230,14 @@ def create_dbt_task(
         if action.params:
             op_kwargs["params"] = action.params
 
-        return PythonOperator(
+        ObservablePythonOperator = wrap_observability_operator(
+            PythonOperator,
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.LOCAL,
+            task_utils.get_pipeline_metadata,
+        )
+
+        return ObservablePythonOperator(
             task_id=action.name,
             python_callable=invoke_dbt_run,
             op_kwargs=op_kwargs,
@@ -265,7 +291,14 @@ def create_orchestration_pipeline_trigger_task(
     try:
         wait_for_completion = action.wait_for_completion or False
 
-        return TriggerDagRunOperator(
+        ObservableTriggerDagRunOperator = wrap_observability_operator(
+            TriggerDagRunOperator,
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.LOCAL,
+            task_utils.get_pipeline_metadata,
+        )
+
+        return ObservableTriggerDagRunOperator(
             task_id=action.name,
             trigger_dag_id="{{ params.resolve_latest_pipeline_dag_id(params.current_dag_id, params.target_pipeline_id, params.bundle_id) }}",
             params={
