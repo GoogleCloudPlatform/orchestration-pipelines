@@ -14,20 +14,22 @@
 #
 """A simple Python script demonstrating custom dependencies imports."""
 
+
 def main() -> None:
-  """Main function for the script."""
-  try:
-    import sys
-    import pandas as pd
-  except ImportError as e:
+    """Main function for the script."""
+    try:
+        import sys
+
+        import pandas as pd
+    except ImportError as e:
         print(f"Error importing libraries: {e}")
         raise
 
-  print(f"Running in Python version: {sys.version}")
-  print(f"Pandas version: {pd.__version__}")
+    print(f"Running in Python version: {sys.version}")
+    print(f"Pandas version: {pd.__version__}")
 
-  s = pd.Series([1, 3, 5, 6, 8])
-  print("Pandas Series created:")
-  print(s)
+    s = pd.Series([1, 3, 5, 6, 8])
+    print("Pandas Series created:")
+    print(s)
 
-  print("\nScript execution finished.")
+    print("\nScript execution finished.")

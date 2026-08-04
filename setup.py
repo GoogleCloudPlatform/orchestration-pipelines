@@ -15,6 +15,7 @@
 """Setup script for the orchestration-pipelines package."""
 
 import os
+
 from setuptools import setup
 
 version = os.environ.get("ORCHESTRATION_PIPELINES_VERSION")

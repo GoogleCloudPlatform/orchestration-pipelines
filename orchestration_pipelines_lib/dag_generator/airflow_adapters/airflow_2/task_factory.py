@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (

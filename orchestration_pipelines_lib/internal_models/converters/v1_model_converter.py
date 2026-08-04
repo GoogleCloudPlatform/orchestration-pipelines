@@ -511,11 +511,7 @@ class ConverterV1ToInternal:
                     resourceProfile=resource_profile
                 )
             )
-        params = (
-                    dict(action.params)
-                    if action.params
-                    else None
-                )
+        params = dict(action.params) if action.params else None
 
         merged_labels = dict(shared_labels)
         if action.labels:
@@ -703,11 +699,7 @@ class ConverterV1ToInternal:
             execution_type = dbt.WhichOneof("execution")
             if execution_type == "airflow_worker":
                 airflow_worker = dbt.airflow_worker
-                params = (
-                    dict(action.params)
-                    if action.params
-                    else None
-                )
+                params = dict(action.params) if action.params else None
                 return internal_actions.DBTActionModel(
                     name=action.name,
                     executionTimeout=action.execution_timeout or None,
@@ -729,11 +721,7 @@ class ConverterV1ToInternal:
             execution_type = dataform.WhichOneof("execution")
             if execution_type == "airflow_worker":
                 airflow_worker = dataform.airflow_worker
-                params = (
-                    dict(action.params)
-                    if action.params
-                    else None
-                )
+                params = dict(action.params) if action.params else None
                 shared_labels = shared_labels or {}
                 merged_labels = dict(shared_labels)
                 if action.labels:
@@ -811,8 +799,19 @@ class ConverterV1ToInternal:
             spec_model = internal_actions.BigQueryDtsSpecModel(
                 transferConfigId=dts_spec.transfer_config_id,
                 runtimeParams=runtime_params,
-                requestedRunTime=dts_spec.requested_run_time if dts_spec.WhichOneof("time") == "requested_run_time" else None,
-                requestedTimeRange={"start_time": dts_spec.requested_time_range.start_time, "end_time": dts_spec.requested_time_range.end_time} if dts_spec.WhichOneof("time") == "requested_time_range" else None,
+                requestedRunTime=(
+                    dts_spec.requested_run_time
+                    if dts_spec.WhichOneof("time") == "requested_run_time"
+                    else None
+                ),
+                requestedTimeRange=(
+                    {
+                        "start_time": dts_spec.requested_time_range.start_time,
+                        "end_time": dts_spec.requested_time_range.end_time,
+                    }
+                    if dts_spec.WhichOneof("time") == "requested_time_range"
+                    else None
+                ),
                 impersonationChain=impersonation_chain,
                 projectId=dts_spec.project_id or defaults.project_id,
                 location=dts_spec.location or defaults.location,

@@ -26,9 +26,9 @@ from orchestration_pipelines_lib.internal_models.actions import (
     DataIngestionActionModel,
     DataprocOperatorActionModel,
     DBTActionModel,
+    OrchestrationPipelineActionModel,
     PythonScriptActionModel,
     PythonVirtualenvActionModel,
-    OrchestrationPipelineActionModel,
 )
 from orchestration_pipelines_lib.internal_models.triggers import (
     ScheduleTriggerModel,

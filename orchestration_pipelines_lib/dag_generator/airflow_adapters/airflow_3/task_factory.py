@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (
@@ -55,9 +54,9 @@ def _resolve_latest_pipeline_dag_id(
         return target_pipeline_id
 
     try:
-        from . import airflow_client_utils
         import airflow_client.client
-        from airflow_client.client.rest import ApiException
+
+        from . import airflow_client_utils
 
         # Get the Airflow API client
         api_client = airflow_client_utils.get_airflow_api_client()

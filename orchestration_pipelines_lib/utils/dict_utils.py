@@ -15,9 +15,9 @@
 """Dictionary manipulation utilities."""
 
 import re
+from datetime import datetime
 from typing import Any, Dict, Type
 
-from datetime import datetime
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.message import Message
 
@@ -96,7 +96,8 @@ def dict_to_struct(
     """
     parsed_message = target_message_class()
     ParseDict(
-        js_dict=message_dict, message=parsed_message._pb # pylint: disable=protected-access
+        js_dict=message_dict,
+        message=parsed_message._pb,  # pylint: disable=protected-access
     )
     return parsed_message
 

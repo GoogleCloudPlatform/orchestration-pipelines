@@ -23,15 +23,15 @@ Python >= 3.9
 
 ## Features
 
--   **Declarative DAGs**: Define your pipeline structure, triggers, and actions in YAML.
--   **Rich Actions Support**: Built-in support for:
-    -   Python Scripts
-    -   Google Cloud BigQuery
-    -   Google Cloud Dataproc (Serverless, Ephemeral and existing clusters)
-    -   Google Cloud Dataform
-    -   DBT
--   **Automatic Generation**: A simple Python call generates the full Airflow DAG.
--   **Versioning**: Supports versioning of pipelines via a manifest file(as of Preview, on Google Cloud Composer).
+- **Declarative DAGs**: Define your pipeline structure, triggers, and actions in YAML.
+- **Rich Actions Support**: Built-in support for:
+  - Python Scripts
+  - Google Cloud BigQuery
+  - Google Cloud Dataproc (Serverless, Ephemeral and existing clusters)
+  - Google Cloud Dataform
+  - DBT
+- **Automatic Generation**: A simple Python call generates the full Airflow DAG.
+- **Versioning**: Supports versioning of pipelines via a manifest file(as of Preview, on Google Cloud Composer).
 
 ## Installation
 
@@ -85,7 +85,6 @@ are required (e.g., using `CAST` in SQL).
 > Avoid using `n` or `y` (as well as `yes`, `no`, `on`, or `off`) as unquoted keys in your YAML definitions.
 > Due to YAML 1.1 parsing specifications, these unquoted words are implicitly evaluated as boolean `false`/`true` rather than strings.
 > *If you must use them as strings*, they **must** be wrapped in explicit quotes (e.g. `'n'` or `"y"`).
-
 
 ### 2. Generate the Airflow DAG
 

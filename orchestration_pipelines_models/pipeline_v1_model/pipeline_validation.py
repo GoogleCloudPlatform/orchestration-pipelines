@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections.abc import MutableMapping
 import re
 import warnings
-from graphlib import TopologicalSorter, CycleError
+from collections.abc import MutableMapping
 from datetime import datetime
+from graphlib import CycleError, TopologicalSorter
 
 from google.protobuf.descriptor import Descriptor, FieldDescriptor
 from google.protobuf.message import Message
@@ -334,7 +334,9 @@ class PipelineValidator:
             if value.startswith(('"', "'")) or value.endswith(('"', "'")):
                 if len(value) < 2 or value[0] != value[-1]:
                     raise ValueError("mismatched quote boundaries.")
-                raise ValueError("value should not be wrapped in literal quotes.")
+                raise ValueError(
+                    "value should not be wrapped in literal quotes."
+                )
 
             # General error for quotes anywhere else
             raise ValueError("field contains invalid quote characters.")
@@ -384,7 +386,9 @@ class PipelineValidator:
             return
 
         action_name_map = {}  # Maps action name to its index in the pipeline.
-        all_dependencies = []  # Stores tuples of (dependency_name, action_index, action_type, action_name).
+        all_dependencies = (
+            []
+        )  # Stores tuples of (dependency_name, action_index, action_type, action_name).
 
         for i, action_wrapper in enumerate(pipeline.actions):
             action_type = action_wrapper.WhichOneof("action")
@@ -409,7 +413,7 @@ class PipelineValidator:
 
         # 2. Check for undefined dependencies
         action_names = action_name_map.keys()
-        action_to_dependencies = {action:[] for action in action_names}
+        action_to_dependencies = {action: [] for action in action_names}
         for (
             dep_name,
             action_index,

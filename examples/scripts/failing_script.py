@@ -13,5 +13,5 @@
 # limitations under the License.
 #
 def fail_with_zero_division_error():
-  result = 10 / 0
-  print(result)
+    result = 10 / 0
+    print(result)

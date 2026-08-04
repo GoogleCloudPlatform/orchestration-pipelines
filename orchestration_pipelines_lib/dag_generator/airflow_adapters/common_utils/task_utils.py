@@ -689,6 +689,7 @@ def create_local_dataform_task(
         An instance of KubernetesPodOperator configured to run Dataform locally.
     """
     import shlex
+
     from airflow.providers.cncf.kubernetes.operators.pod import (
         KubernetesPodOperator,
     )
@@ -696,14 +697,16 @@ def create_local_dataform_task(
     labels = getattr(action, "labels", None) or {}
     params = getattr(action, "params", None) or {}
 
-    dataform_cmd = (
-        "gcloud storage cp --recursive $GCS_BUCKET_PATH/* . && dataform run --timeout=60s"
-    )
+    dataform_cmd = "gcloud storage cp --recursive $GCS_BUCKET_PATH/* . && dataform run --timeout=60s"
     if labels:
-        labels_str = ",".join(shlex.quote(f"{k}={v}") for k, v in labels.items())
+        labels_str = ",".join(
+            shlex.quote(f"{k}={v}") for k, v in labels.items()
+        )
         dataform_cmd += f" --job-labels={labels_str}"
     if params:
-        params_str = ",".join(shlex.quote(f"{k}={v}") for k, v in params.items())
+        params_str = ",".join(
+            shlex.quote(f"{k}={v}") for k, v in params.items()
+        )
         dataform_cmd += f" --vars={params_str}"
 
     return KubernetesPodOperator(
@@ -753,6 +756,7 @@ def create_bq_dts_task(
         BigQueryDataTransferServiceTransferRunSensor,
     )
     from airflow.utils.task_group import TaskGroup
+
     from orchestration_pipelines_lib.utils.dict_utils import (
         iso_to_timestamp_dict,
     )

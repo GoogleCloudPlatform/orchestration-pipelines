@@ -12,17 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from pyspark.sql import SparkSession
 import lib1
+from pyspark.sql import SparkSession
+
 
 def main():
-    """
-    Main function for the PySpark job.
-    """
+    """Main function for the PySpark job."""
     spark = SparkSession.builder.appName("PySparkJobWithPyFiles").getOrCreate()
     print("PySpark job running")
     lib1.hello_lib1()
     spark.stop()
+
 
 if __name__ == "__main__":
     main()
