@@ -13,11 +13,22 @@
 # limitations under the License.
 #
 """Module with uncommon util methods."""
+
 import importlib
 import logging
 import os
 import sys
-from typing import Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
+
+from orchestration_pipelines_lib.utils.metrics import (
+    BasicStatus,
+    PipelineRunTriggerType,
+    report_pipeline_run,
+)
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 
 def import_callable(path: str, function: str) -> Any:
@@ -59,3 +70,29 @@ def import_callable(path: str, function: str) -> Any:
             path,
             e,
         )
+
+
+def pipeline_run_callback(
+    bundle_id: str | None, pipeline_id: str
+) -> Callable[["Context"], None]:
+    """Prepares a callback for pipeline runs."""
+
+    def callback(context: "Context") -> None:
+        dag_run = context.get("dag_run")
+
+        if not dag_run:
+            return
+
+        trigger_type = PipelineRunTriggerType.from_dag_run_type(
+            dag_run.run_type
+        )
+        status = BasicStatus.from_dag_run_state(dag_run.state)
+
+        report_pipeline_run(
+            bundle_id,
+            pipeline_id,
+            trigger_type,
+            status,
+        )
+
+    return callback

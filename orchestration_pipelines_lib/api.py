@@ -290,7 +290,14 @@ def _generate_dag(
         )
 
         # Step 3: Generate DAG
-        dag = core.generate(internal_pipeline, tags, doc_md, data_root)
+        dag = core.generate(
+            internal_pipeline,
+            tags,
+            doc_md,
+            data_root,
+            bundle_id,
+            pipeline_id,
+        )
 
         # Step 4: Validate DAG (TODO: Should be Airflow version specific)
         if hasattr(dag, "validate"):

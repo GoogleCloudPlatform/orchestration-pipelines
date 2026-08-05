@@ -17,14 +17,21 @@
 from importlib.metadata import version
 from typing import Any
 
-from orchestration_pipelines_lib.dag_generator.airflow_adapters.adapter_factory import (
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.adapter_factory import (  # noqa: E501
     get_adapter,
 )
 
 AIRFLOW_VERSION = version("apache-airflow").split("+")[0].replace(".", "_")
 
 
-def generate(pipeline, tags: list[str], dag_notes: str, data_root: str) -> Any:
+def generate(
+    pipeline,
+    tags: list[str],
+    dag_notes: str,
+    data_root: str,
+    bundle_id: str | None,
+    pipeline_id: str,
+) -> Any:
     """Generates the pipeline DAG.
 
     It uses an adapter factory to load the appropriate Airflow version adapter
@@ -35,12 +42,17 @@ def generate(pipeline, tags: list[str], dag_notes: str, data_root: str) -> Any:
         tags: A list of tags to apply to the generated DAG.
         dag_notes: Notes or documentation for the DAG.
         data_root: The root directory for the pipeline data.
+        bundle_id: The ID of the bundle.
+        pipeline_id: The ID of the pipeline.
 
     Returns:
         The generated DAG object.
     """
     adapter = get_adapter(AIRFLOW_VERSION)
-    return adapter.generate(pipeline, tags, dag_notes, data_root)
+
+    return adapter.generate(
+        pipeline, tags, dag_notes, data_root, bundle_id, pipeline_id
+    )
 
 
 def get_actively_running_versions(pipeline_id, bundle_id) -> list[str]:

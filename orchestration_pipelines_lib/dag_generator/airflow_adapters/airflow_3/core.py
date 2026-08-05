@@ -13,12 +13,16 @@
 # limitations under the License.
 #
 """Module to validate and build pipeline from YAML in Airflow 3."""
+
 import json
 from functools import partial
 from typing import Any
 
-from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
     action_handler_registry,
+)
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.utils import (  # noqa: E501
+    pipeline_run_callback,
 )
 from orchestration_pipelines_lib.internal_models.pipeline import PipelineModel
 from orchestration_pipelines_lib.internal_models.triggers import (
@@ -169,6 +173,8 @@ def generate(
     tags: list[str],
     dag_notes: str,
     data_root: str,
+    bundle_id: str | None,
+    pipeline_id: str,
 ) -> Any:
     """Generates the Airflow DAG for the given pipeline model.
 
@@ -177,6 +183,8 @@ def generate(
         tags: A list of tags to apply to the generated DAG.
         dag_notes: The markdown documentation/notes for the DAG.
         data_root: Root directory for pipeline data used for template search.
+        bundle_id: The ID of the bundle.
+        pipeline_id: The ID of the pipeline.
 
     Returns:
         The fully constructed Airflow DAG.
@@ -202,6 +210,16 @@ def generate(
         None,
     )
 
+    finish_callback = pipeline_run_callback(bundle_id, pipeline_id)
+    on_failure_callbacks = [finish_callback]
+
+    if pipeline.notifications and pipeline.notifications.onPipelineFailure:
+        emails = pipeline.notifications.onPipelineFailure.email
+        on_failure_callback = partial(
+            email_utils.send_failure_notification_email, emails
+        )
+        on_failure_callbacks.append(on_failure_callback)
+
     dag_kwargs = {
         "dag_id": pipeline.metadata.pipelineId,
         "description": pipeline.metadata.description,
@@ -214,14 +232,9 @@ def generate(
         "user_defined_macros": {
             "resolve_latest_pipeline_dag_id": task_factory._resolve_latest_pipeline_dag_id,
         },
+        "on_failure_callback": on_failure_callbacks,
+        "on_success_callback": [finish_callback],
     }
-
-    if pipeline.notifications and pipeline.notifications.onPipelineFailure:
-        emails = pipeline.notifications.onPipelineFailure.email
-        on_failure_callback = partial(
-            email_utils.send_failure_notification_email, emails
-        )
-        dag_kwargs["on_failure_callback"] = on_failure_callback
 
     if schedule_trigger:
         task_factory.create_schedule_trigger_task(dag_kwargs, schedule_trigger)
