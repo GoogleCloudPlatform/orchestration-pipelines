@@ -45,17 +45,11 @@ def _resolve_latest_pipeline_dag_id(
     target_pipeline_id: str,
     bundle_id: Optional[str] = None,
 ) -> str:
-    """Resolves the trigger DAG ID against the latest bundle version.
-
-    If the current DAG ID is versioned, this reads the bundle manifest and
-    resolves the bundle's current default version. If that fails, the raw
-    target pipeline ID is returned as a safe fallback.
+    """Resolves the trigger DAG ID against the latest version.
 
     For Airflow 3, uses the Airflow client API to find the latest version tagged
-    as current for the target pipeline.
-
-    If an explicit bundle_id is provided, it is used directly; otherwise the
-    bundle ID is derived from the current DAG ID.
+    as current for the target pipeline. If bundle_id is not provided, it simply
+    returns the target_pipeline_id as is.
     """
     if not bundle_id:
         return target_pipeline_id

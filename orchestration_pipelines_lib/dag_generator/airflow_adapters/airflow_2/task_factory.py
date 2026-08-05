@@ -46,8 +46,8 @@ def _resolve_latest_pipeline_dag_id(
     """Resolves the trigger DAG ID against the latest version.
 
     For Airflow 2, queries the database to find the latest version tagged as
-    current for the target pipeline. If the bundle_id is not provided, it
-    attempts to use the bundle from the current DAG ID.
+    current for the target pipeline. If bundle_id is not provided, it simply
+    returns the target_pipeline_id as is.
     """
     if not bundle_id:
         return target_pipeline_id

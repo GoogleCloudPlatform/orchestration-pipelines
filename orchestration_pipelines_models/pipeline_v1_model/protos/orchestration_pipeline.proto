@@ -502,7 +502,7 @@ message OrchestrationPipelineAction {
     (pipeline_models.validation.min_len) = 1,
     (pipeline_models.validation.max_len) = 64
   ];
-  string bundle_id = 5; // Default: current bundle.
+  string bundle_id = 5;
   bool wait_for_completion = 6; // Default: false.
   TriggerRule trigger_rule = 7; // Default: all_success.
 }
