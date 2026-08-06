@@ -52,7 +52,6 @@ show_missing = true
 
 [tool.black]
 line-length = 80
-skip-string-normalization = true
 exclude = '.*_pb2\.py'
 
 [tool.ruff]
@@ -70,3 +69,9 @@ ignore = []
 [tool.ruff.lint.pydocstyle]
 # Enforce Google style docstring conventions
 convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "double"
