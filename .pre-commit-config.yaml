@@ -1,23 +1,23 @@
 exclude: ^tests/
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: da7847c1a27e7807d8ec7747e449c4f1c99f9258
+    rev: v0.0.292
     hooks:
       - id: ruff
         args: [ --fix ]
   - repo: https://github.com/psf/black-pre-commit-mirror
-    rev: e0d9b4334ed50085a676b701c9c43d22b6a5559f
+    rev: 24.3.0
     hooks:
       - id: black
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: 2c159846c483f2343d2c0b43530f28246f4146a4
+    rev: v4.5.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: b99d5543c7b8026778f7e2a441e97d159a6d0c65
+    rev: v0.39.0
     hooks:
       - id: markdownlint
         args: ["--config", ".markdownlint.yaml", "--fix"]

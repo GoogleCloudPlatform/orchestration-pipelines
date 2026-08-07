@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import os
 import traceback
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from orchestration_pipelines_lib.utils.file_manager import FileManager
@@ -44,7 +44,7 @@ def validate(pipeline_definition_file: str) -> None:
 
 
 def generate(
-    pipeline_definition_file: str, globals_dict: Dict[str, Any] = None
+    pipeline_definition_file: str, globals_dict: dict[str, Any] = None
 ):
     """Generates the DAG based on the input pipeline.
 
@@ -68,7 +68,9 @@ def generate(
         file_manager,
         pipeline_definition_file,
         dag_id=dag_id,
-        metadata=PipelineMetadata(pipeline_id=dag_id, source_filepath=source_filepath),
+        metadata=PipelineMetadata(
+            pipeline_id=dag_id, source_filepath=source_filepath
+        ),
         data_root=None,
         globals_dict=globals_dict,
     )
@@ -78,9 +80,10 @@ def generate_dags(
     data_root: str,
     bundle_id: str,
     pipeline_id: str,
-    globals_dict: Dict[str, Any] = None,
+    globals_dict: dict[str, Any] = None,
 ):
-    """Validates and generates DAGs for all versions of a pipeline from a
+    """Validates and generates DAGs for all versions of a pipeline from a.
+
     bundle.
 
     Args:
@@ -166,7 +169,7 @@ def _generate_dag(
     dag_id: str,
     metadata: PipelineMetadata,
     data_root: str,
-    globals_dict: Dict[str, Any],
+    globals_dict: dict[str, Any],
 ):
     """Generates a single DAG based on the provided pipeline definition.
 
@@ -278,10 +281,11 @@ def _generate_dag_for_version(
     bundle_id: str,
     version_id: str,
     pipeline_id: str,
-    globals_dict: Dict[str, Any],
+    globals_dict: dict[str, Any],
     file_manager: VersionedFileManager,
 ):
-    """Validates and generates the DAG based on the bundle, version, and
+    """Validates and generates the DAG based on the bundle, version, and.
+
     pipeline ID.
 
     Args:
@@ -297,6 +301,7 @@ def _generate_dag_for_version(
     from orchestration_pipelines_lib.utils.pipeline_metadata import (
         PipelineMetadata,
     )
+
     pipeline_definition_path = f"{pipeline_id}.yml"
 
     metadata = PipelineMetadata(
