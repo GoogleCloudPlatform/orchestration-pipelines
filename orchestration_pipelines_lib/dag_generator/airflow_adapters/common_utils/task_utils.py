@@ -19,11 +19,30 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Callable
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import pytz
 
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
+    dataproc_utils,
+    gcs_utils,
+    utils,
+)
+from orchestration_pipelines_lib.internal_models.actions import (
+    AIActionModel,
+    BqOperationActionModel,
+    DataformActionModel,
+    DataIngestionActionModel,
+    DataprocOperatorActionModel,
+    DBTActionModel,
+    OrchestrationPipelineActionModel,
+    PythonScriptActionModel,
+    PythonVirtualenvActionModel,
+)
+from orchestration_pipelines_lib.internal_models.pipeline import PipelineModel
+from orchestration_pipelines_lib.scripts.dbt_wrapper import invoke_dbt_run
 from orchestration_pipelines_lib.utils.duration_utils import (
     duration_to_timedelta,
 )
@@ -31,23 +50,291 @@ from orchestration_pipelines_lib.utils.file_manager import FileManager
 from orchestration_pipelines_lib.utils.metrics import (
     ActionExecutionEngine,
     ActionExecutionType,
-    wrap_observability_operator,
+    wrap_operator,
 )
 
-from . import dataproc_utils, gcs_utils
 from .retry_resolver import RetryResolver
 
 if TYPE_CHECKING:
-    try:
-        from airflow.sdk import DAG
-    except ImportError:
-        from airflow.models import DAG
+    from airflow.models import DAG
     from airflow.utils.task_group import TaskGroup
 
     from .dag_utils import DAGKwargs
 
 
-def get_pipeline_metadata(dag: DAG) -> tuple[str, str, str]:
+def create_python_script_task(
+    get_operator: Callable[[], type],
+    action: PythonScriptActionModel,
+    pipeline: PipelineModel,
+    dag: DAG,
+) -> Any:
+    """Converts an action into a PythonOperator.
+
+    Args:
+        get_operator: Callable returning the Airflow PythonOperator class.
+        action: The Python script action model configuration.
+        pipeline: The pipeline model configuration.
+        dag: The Airflow DAG instance.
+
+    Returns:
+        An instantiated Airflow operator wrapped with observability.
+
+    Raises:
+        Exception: If operator instantiation fails.
+    """
+    try:
+        callable_path = action.filename
+        entrypoint = action.config.pythonCallable
+        user_kwargs = action.config.opKwargs or {}
+
+        def runtime_wrapper(**kwargs):
+            """Imports the target callable at runtime and filters kwargs."""
+            python_callable = utils.import_callable(callable_path, entrypoint)
+            filtered_kwargs = {
+                k: v for k, v in kwargs.items() if k in user_kwargs
+            }
+            return python_callable(**filtered_kwargs)
+
+        OrchestrationPythonOperator = wrap_operator(
+            get_operator(),
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.LOCAL,
+            get_pipeline_metadata,
+        )
+
+        return OrchestrationPythonOperator(
+            task_id=action.name,
+            python_callable=runtime_wrapper,
+            op_kwargs=action.config.opKwargs or {},
+            execution_timeout=(
+                duration_to_timedelta(action.executionTimeout)
+                if action.executionTimeout
+                else None
+            ),
+            trigger_rule=action.triggerRule,
+            doc_md=json.dumps({"op_action_name": action.name}),
+            dag=dag,
+            **get_action_retry_kwargs(action),
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}' "
+            f"from '{action.config.pythonCallable}': {e}"
+        ) from e
+
+
+def create_python_virtualenv_task(
+    get_operator: Callable[[], type],
+    action: PythonVirtualenvActionModel,
+    pipeline: PipelineModel,
+    dag: DAG,
+) -> Any:
+    """Converts an action into a PythonVirtualenvOperator.
+
+    Args:
+        get_operator: Callable returning the Airflow PythonVirtualenvOperator
+            class.
+        action: The Python virtualenv action model configuration.
+        pipeline: The pipeline model configuration.
+        dag: The Airflow DAG instance.
+
+    Returns:
+        An instantiated Airflow operator wrapped with observability.
+
+    Raises:
+        ValueError: If the target entrypoint does not resolve to a callable.
+        Exception: If operator instantiation fails.
+    """
+    try:
+        callable_path = action.filename
+        entrypoint = action.config.pythonCallable
+        python_callable = utils.import_callable(callable_path, entrypoint)
+        if not callable(python_callable):
+            raise ValueError(
+                f"Action {action.name}: filename {callable_path} with "
+                f"callable {entrypoint} did not resolve to a callable object."
+            )
+
+        requirements = (
+            action.config.requirementsPath
+            if action.config.requirementsPath
+            else action.config.requirements
+        )
+
+        OrchestrationPythonVirtualenvOperator = wrap_operator(
+            get_operator(),
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.LOCAL,
+            get_pipeline_metadata,
+        )
+
+        return OrchestrationPythonVirtualenvOperator(
+            task_id=action.name,
+            python_callable=python_callable,
+            op_kwargs=action.config.opKwargs or {},
+            requirements=requirements,
+            system_site_packages=action.config.systemSitePackages or False,
+            execution_timeout=(
+                duration_to_timedelta(action.executionTimeout)
+                if action.executionTimeout
+                else None
+            ),
+            trigger_rule=action.triggerRule,
+            doc_md=json.dumps({"op_action_name": action.name}),
+            dag=dag,
+            **get_action_retry_kwargs(action),
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}' "
+            f"from '{action.config.pythonCallable}': {e}"
+        ) from e
+
+
+def create_dbt_task(
+    get_operator: Callable[[], type],
+    action: DBTActionModel,
+    pipeline: PipelineModel,
+    dag: DAG,
+) -> Any:
+    """Converts an action into a PythonOperator for dbt.
+
+    Args:
+        get_operator: Callable returning the Airflow PythonOperator class.
+        action: The dbt action model configuration.
+        pipeline: The pipeline model configuration.
+        dag: The Airflow DAG instance.
+
+    Returns:
+        An instantiated Airflow operator wrapped with observability.
+
+    Raises:
+        Exception: If operator instantiation fails.
+    """
+    try:
+        op_kwargs: dict[str, Any] = {
+            "project_dir": action.source.path,
+            "profiles_dir": action.source.path,
+        }
+        if action.select_models:
+            op_kwargs["select_models"] = action.select_models
+        if action.params:
+            op_kwargs["params"] = action.params
+
+        OrchestrationPythonOperator = wrap_operator(
+            get_operator(),
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.LOCAL,
+            get_pipeline_metadata,
+        )
+
+        return OrchestrationPythonOperator(
+            task_id=action.name,
+            python_callable=invoke_dbt_run,
+            op_kwargs=op_kwargs,
+            execution_timeout=(
+                duration_to_timedelta(action.executionTimeout)
+                if action.executionTimeout
+                else None
+            ),
+            trigger_rule=action.triggerRule,
+            doc_md=json.dumps({"op_action_name": action.name}),
+            dag=dag,
+            **get_action_retry_kwargs(action),
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}': {e}"
+        ) from e
+
+
+def create_dataform_task(
+    get_variable: Callable[[], type],
+    action: DataformActionModel,
+    pipeline: PipelineModel,
+    dag: DAG,
+) -> Any:
+    """Converts an action into a Dataform operator.
+
+    Depending on the execution mode, it either runs a local
+    KubernetesPodOperator or invokes the Dataform service operator.
+
+    Args:
+        get_variable: Callable returning the Airflow Variable class.
+        action: The Dataform action model configuration.
+        pipeline: The pipeline model configuration.
+        dag: The Airflow DAG instance.
+
+    Returns:
+        An instantiated Dataform operator (local pod or service operator).
+    """
+    if action.executionMode == "local":
+        gcs_bucket_path = get_variable().get(
+            "dataform_gcs_path", action.dataform_project_path
+        )
+        return create_local_dataform_task(
+            action, pipeline, gcs_bucket_path, dag=dag
+        )
+    else:
+        return create_service_dataform_task(action, pipeline, dag=dag)
+
+
+def create_orchestration_pipeline_trigger_task(
+    get_operator: Callable[[], type],
+    action: OrchestrationPipelineActionModel,
+    pipeline: PipelineModel,
+    dag: DAG,
+) -> Any:
+    """Converts an action into a TriggerDagRunOperator.
+
+    Args:
+        get_operator: Callable returning the Airflow TriggerDagRunOperator
+            class.
+        action: The orchestration pipeline trigger action model.
+        pipeline: The pipeline model configuration.
+        dag: The Airflow DAG instance.
+
+    Returns:
+        An instantiated Airflow operator wrapped with observability.
+
+    Raises:
+        Exception: If operator instantiation fails.
+    """
+    try:
+        wait_for_completion = action.wait_for_completion or False
+
+        OrchestrationTriggerDagRunOperator = wrap_operator(
+            get_operator(),
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.LOCAL,
+            get_pipeline_metadata,
+        )
+
+        return OrchestrationTriggerDagRunOperator(
+            task_id=action.name,
+            trigger_dag_id="{{ resolve_latest_pipeline_dag_id(params.target_pipeline_id, params.bundle_id) }}",  # noqa: E501
+            params={
+                "target_pipeline_id": action.pipeline_id,
+                "bundle_id": action.bundle_id,
+            },
+            wait_for_completion=wait_for_completion,
+            execution_timeout=(
+                duration_to_timedelta(action.executionTimeout)
+                if action.executionTimeout
+                else None
+            ),
+            trigger_rule=action.triggerRule,
+            doc_md=json.dumps({"op_action_name": action.name}),
+            dag=dag,
+            **get_action_retry_kwargs(action),
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}': {e}"
+        ) from e
+
+
+def get_pipeline_metadata(dag: Any) -> tuple[str, str, str]:
     """Extracts bundle_id, version_id, and pipeline_id from a DAG object's
     doc_md property.
 
@@ -217,7 +504,7 @@ def get_dataproc_submit_job_inline_sql_operator_class():
 
 
 def create_dataproc_create_batch_operator_task(
-    action: dict[str, Any], pipeline: dict[str, Any], dag
+    action: DataprocOperatorActionModel, pipeline: PipelineModel, dag: DAG
 ):
     """Converts an action into a DataprocCreateBatchOperator.
 
@@ -242,7 +529,10 @@ def create_dataproc_create_batch_operator_task(
             wrapper_uri = gcs_utils.get_run_notebook_gcs_path()
             gcs_utils.upload_run_notebook_if_needed(wrapper_uri)
             job_specific_config["pyspark_batch"] = (
-                dataproc_utils.get_pyspark_batch_config(action, wrapper_uri)
+                dataproc_utils.get_pyspark_batch_config(
+                    action,
+                    wrapper_uri,
+                )
             )
 
         dataproc_create_batch_operator = DataprocCreateBatchOperator
@@ -286,7 +576,7 @@ def create_dataproc_create_batch_operator_task(
         )
         batch_dict = type(batch).to_dict(batch)
 
-        ObservableDataprocCreateBatchOperator = wrap_observability_operator(
+        ObservableDataprocCreateBatchOperator = wrap_operator(
             dataproc_create_batch_operator,
             ActionExecutionType.from_action_type(action.type),
             ActionExecutionEngine.DATAPROC,
@@ -321,7 +611,7 @@ def create_dataproc_create_batch_operator_task(
 
 
 def create_bq_operation_task(
-    action: dict[str, Any], pipeline: dict[str, Any], dag
+    action: BqOperationActionModel, pipeline: PipelineModel, dag: DAG
 ):
     """Converts an action into a BigQueryInsertJobOperator.
 
@@ -337,7 +627,7 @@ def create_bq_operation_task(
         BigQueryInsertJobOperator,
     )
 
-    ObservableBigQueryInsertJobOperator = wrap_observability_operator(
+    ObservableBigQueryInsertJobOperator = wrap_operator(
         BigQueryInsertJobOperator,
         ActionExecutionType.from_action_type(action.type),
         ActionExecutionEngine.BIGQUERY,
@@ -416,7 +706,9 @@ def create_bq_operation_task(
         ) from e
 
 
-def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
+def dataproc_ephemeral_task(
+    action: DataprocOperatorActionModel, dag: DAG
+) -> TaskGroup:
     """Converts an action into a TaskGroup for an ephemeral Dataproc
     workflow.
 
@@ -497,7 +789,7 @@ def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
                 pyspark_job["properties"] = action.config.properties
                 job["pyspark_job"] = pyspark_job
 
-            ObservableDataprocSubmitJobOperator = wrap_observability_operator(
+            ObservableDataprocSubmitJobOperator = wrap_operator(
                 dataproc_submit_job_operator,
                 ActionExecutionType.from_action_type(action.type),
                 ActionExecutionEngine.DATAPROC,
@@ -541,7 +833,7 @@ def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
 
 
 def dataproc_existing_cluster(
-    action: dict[str, Any], pipeline: dict[str, Any], dag
+    action: DataprocOperatorActionModel, pipeline: PipelineModel, dag: DAG
 ):
     """Converts action into DataprocSubmitJobOperator for existing
     cluster.
@@ -599,7 +891,7 @@ def dataproc_existing_cluster(
                 job["pyspark_job"]["python_file_uris"] = action.pyFiles
             job["pyspark_job"]["properties"] = action.config.properties
 
-        ObservableDataprocSubmitJobOperator = wrap_observability_operator(
+        ObservableDataprocSubmitJobOperator = wrap_operator(
             dataproc_submit_job_operator,
             ActionExecutionType.from_action_type(action.type),
             ActionExecutionEngine.DATAPROC,
@@ -651,7 +943,7 @@ def create_schedule_trigger_task(dag_kwargs: DAGKwargs, schedule_trigger: Any):
 
 
 def create_dataproc_operator_task(
-    action: dict[str, Any], pipeline: dict[str, Any], dag
+    action: DataprocOperatorActionModel, pipeline: PipelineModel, dag: DAG
 ):
     """Converts an action into a specific Dataproc operator or task group.
 
@@ -704,7 +996,7 @@ def _get_config_or_default(
 
 
 def create_service_dataform_task(
-    action: dict[str, Any], pipeline: dict[str, Any], dag
+    action: DataformActionModel, pipeline: PipelineModel, dag: DAG
 ):
     """Converts an action into a DataformCreateWorkflowInvocationOperator.
 
@@ -720,13 +1012,11 @@ def create_service_dataform_task(
         DataformCreateWorkflowInvocationOperator,
     )
 
-    ObservableDataformCreateWorkflowInvocationOperator = (
-        wrap_observability_operator(
-            DataformCreateWorkflowInvocationOperator,
-            ActionExecutionType.from_action_type(action.type),
-            ActionExecutionEngine.DATAFORM,
-            get_pipeline_metadata,
-        )
+    ObservableDataformCreateWorkflowInvocationOperator = wrap_operator(
+        DataformCreateWorkflowInvocationOperator,
+        ActionExecutionType.from_action_type(action.type),
+        ActionExecutionEngine.DATAFORM,
+        get_pipeline_metadata,
     )
 
     return ObservableDataformCreateWorkflowInvocationOperator(
@@ -742,8 +1032,8 @@ def create_service_dataform_task(
             if action.executionTimeout
             else None
         ),
-        repository_id=action.dataformServiceConfig.repository_id,
-        workflow_invocation=action.dataformServiceConfig.workflow_invocation,
+        repository_id=action.dataformServiceConfig.repository_id,  # type: ignore
+        workflow_invocation=action.dataformServiceConfig.workflow_invocation,  # type: ignore
         trigger_rule=action.triggerRule,
         doc_md=json.dumps({"op_action_name": action.name}),
         dag=dag,
@@ -752,10 +1042,10 @@ def create_service_dataform_task(
 
 
 def create_local_dataform_task(
-    action: dict[str, Any],
-    _: dict[str, Any],
+    action: DataformActionModel,
+    _: PipelineModel,
     gcs_bucket_path_template: str,
-    dag,
+    dag: DAG,
 ):
     """Converts an action into a KubernetesPodOperator for a Dataform
     workflow.
@@ -775,7 +1065,7 @@ def create_local_dataform_task(
         KubernetesPodOperator,
     )
 
-    ObservableKubernetesPodOperator = wrap_observability_operator(
+    ObservableKubernetesPodOperator = wrap_operator(
         KubernetesPodOperator,
         ActionExecutionType.from_action_type(action.type),
         ActionExecutionEngine.LOCAL,
@@ -829,7 +1119,7 @@ def create_local_dataform_task(
 
 
 def create_bq_dts_task(
-    action: dict[str, Any], pipeline: dict[str, Any], dag
+    action: DataIngestionActionModel, pipeline: PipelineModel, dag: DAG
 ) -> TaskGroup:
     """Converts an action into a TaskGroup for a BigQuery DTS workflow.
 
@@ -915,7 +1205,7 @@ def create_bq_dts_task(
             )
 
             ObservableBigQueryDataTransferServiceTransferRunSensor = (
-                wrap_observability_operator(
+                wrap_operator(
                     BigQueryDataTransferServiceTransferRunSensor,
                     ActionExecutionType.from_action_type(action.type),
                     ActionExecutionEngine.BIGQUERY,
@@ -952,7 +1242,7 @@ def create_bq_dts_task(
 
 
 def create_vertex_upload_model_task(
-    action: dict[str, Any], pipeline: dict[str, Any], dag
+    action: AIActionModel, pipeline: PipelineModel, dag
 ):
     """Converts an AI action into an UploadModelOperator for Vertex AI.
 
@@ -984,7 +1274,7 @@ def create_vertex_upload_model_task(
         if action.labels:
             model["labels"] = action.labels
 
-        ObservableUploadModelOperator = wrap_observability_operator(
+        ObservableUploadModelOperator = wrap_operator(
             UploadModelOperator,
             ActionExecutionType.from_action_type(action.type),
             ActionExecutionEngine.AGENT_PLATFORM,
@@ -1013,7 +1303,7 @@ def create_vertex_upload_model_task(
 
 
 def create_vertex_batch_inference_task(
-    action: dict[str, Any], pipeline: dict[str, Any], dag
+    action: AIActionModel, pipeline: PipelineModel, dag: DAG
 ):
     """Converts an AI action into a CreateBatchPredictionJobOperator
     for Vertex AI.
@@ -1060,13 +1350,11 @@ def create_vertex_batch_inference_task(
                 action.config.impersonation_chain
             )
 
-        ObservableCreateBatchPredictionJobOperator = (
-            wrap_observability_operator(
-                CreateBatchPredictionJobOperator,
-                ActionExecutionType.from_action_type(action.type),
-                ActionExecutionEngine.AGENT_PLATFORM,
-                get_pipeline_metadata,
-            )
+        ObservableCreateBatchPredictionJobOperator = wrap_operator(
+            CreateBatchPredictionJobOperator,
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.AGENT_PLATFORM,
+            get_pipeline_metadata,
         )
 
         return ObservableCreateBatchPredictionJobOperator(
@@ -1093,7 +1381,7 @@ def create_vertex_batch_inference_task(
         ) from e
 
 
-def create_ai_task(action: dict[str, Any], pipeline: dict[str, Any], dag):
+def create_ai_task(action: AIActionModel, pipeline: PipelineModel, dag: DAG):
     """Converts an AI action into the appropriate Airflow operator.
 
     Args:

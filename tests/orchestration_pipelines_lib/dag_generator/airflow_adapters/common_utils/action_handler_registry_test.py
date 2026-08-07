@@ -12,63 +12,84 @@
 #
 """Unit tests for the action handler registry."""
 
-import unittest
-from unittest.mock import MagicMock
+from functools import partial
 
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
     action_handler_registry as registry,
 )
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
+    task_utils,
+)
 from orchestration_pipelines_lib.internal_models import actions
 
 
-class ActionHandlerRegistryTest(unittest.TestCase):
-    """Tests for the action handler registry."""
-
-    def test_get_action_handlers(self):
-        """Tests that the static action handler mapping resolves correctly."""
-        mock_task_factory = MagicMock()
-        mock_task_factory.create_python_script_task = "python_script_handler"
-        mock_task_factory.create_python_virtualenv_task = (
-            "python_virtualenv_handler"
-        )
-        mock_task_factory.create_bq_operation_task = "bq_operation_handler"
-        mock_task_factory.create_dataproc_operator_task = (
-            "dataproc_operator_handler"
-        )
-        mock_task_factory.create_dbt_task = "dbt_handler"
-        mock_task_factory.create_dataform_task = "dataform_handler"
-        mock_task_factory.create_bq_dts_task = "data_ingestion_handler"
-        mock_task_factory.create_orchestration_pipeline_trigger_task = (
-            "orchestration_pipeline_handler"
-        )
-        mock_task_factory.create_ai_task = "ai_handler"
-
-        handlers = registry.get_action_handlers(mock_task_factory)
-
-        self.assertEqual(handlers[actions.PythonScriptActionModel],
-                         "python_script_handler")
-        self.assertEqual(handlers[actions.PythonVirtualenvActionModel],
-                         "python_virtualenv_handler")
-        self.assertEqual(handlers[actions.BqOperationActionModel],
-                         "bq_operation_handler")
-        self.assertEqual(handlers[actions.DataprocOperatorActionModel],
-                         "dataproc_operator_handler")
-        self.assertEqual(handlers[actions.DBTActionModel], "dbt_handler")
-        self.assertEqual(handlers[actions.DataformActionModel],
-                         "dataform_handler")
-        self.assertEqual(
-            handlers[actions.DataIngestionActionModel], "data_ingestion_handler"
-        )
-        self.assertEqual(
-            handlers[actions.OrchestrationPipelineActionModel],
-            "orchestration_pipeline_handler",
-        )
-        self.assertEqual(
-            handlers[actions.AIActionModel],
-            "ai_handler",
-        )
-        self.assertEqual(len(handlers), 9)
+def _assert_partial(handler: object, func: object, arg: object) -> None:
+    """Asserts that handler is a partial wrapping func with single arg."""
+    assert isinstance(handler, partial)
+    assert handler.func is func
+    assert handler.args == (arg,)
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_get_action_handlers():
+    """Tests that the static action handler mapping resolves correctly."""
+
+    def get_python_op() -> type:
+        return type
+
+    def get_venv_op() -> type:
+        return type
+
+    def get_trigger_op() -> type:
+        return type
+
+    def get_variable() -> type:
+        return type
+
+    adapter_imports = registry.AdapterImports(
+        get_python_operator=get_python_op,
+        get_python_virtualenv_operator=get_venv_op,
+        get_trigger_dagrun_operator=get_trigger_op,
+        get_variable_class=get_variable,
+    )
+
+    handlers = registry.get_action_handlers(adapter_imports)
+
+    assert len(handlers) == 9
+    _assert_partial(
+        handlers[actions.PythonScriptActionModel],
+        task_utils.create_python_script_task,
+        get_python_op,
+    )
+    _assert_partial(
+        handlers[actions.PythonVirtualenvActionModel],
+        task_utils.create_python_virtualenv_task,
+        get_venv_op,
+    )
+    _assert_partial(
+        handlers[actions.DBTActionModel],
+        task_utils.create_dbt_task,
+        get_python_op,
+    )
+    _assert_partial(
+        handlers[actions.DataformActionModel],
+        task_utils.create_dataform_task,
+        get_variable,
+    )
+    _assert_partial(
+        handlers[actions.OrchestrationPipelineActionModel],
+        task_utils.create_orchestration_pipeline_trigger_task,
+        get_trigger_op,
+    )
+    assert (
+        handlers[actions.BqOperationActionModel]
+        is task_utils.create_bq_operation_task
+    )
+    assert (
+        handlers[actions.DataprocOperatorActionModel]
+        is task_utils.create_dataproc_operator_task
+    )
+    assert (
+        handlers[actions.DataIngestionActionModel]
+        is task_utils.create_bq_dts_task
+    )
+    assert handlers[actions.AIActionModel] is task_utils.create_ai_task

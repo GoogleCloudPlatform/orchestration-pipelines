@@ -16,13 +16,14 @@
 
 from typing import TYPE_CHECKING
 
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.airflow_2 import (  # noqa: E501
+    adapter_imports,
+    email_utils,
+    query_utils,
+)
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
     dag_utils,
 )
-
-# Airflow and SQLAlchemy imports moved inside functions to reduce import tax
-from . import task_factory
-from .email_utils import send_notification_email
 
 if TYPE_CHECKING:
     from airflow.models import DAG, DagRun, TaskInstance
@@ -34,13 +35,13 @@ if TYPE_CHECKING:
 
 def get_deps() -> dag_utils.AirflowVersionedDependencies:
     """Returns Airflow 2 specific dependencies for DAG generation."""
-    from airflow.operators.python import PythonOperator
-
     return dag_utils.AirflowVersionedDependencies(
-        task_factory=task_factory,
-        emails_callback=send_notification_email,
+        adapter_imports=adapter_imports.get_imports(),
+        resolve_latest_pipeline_dag_id=(
+            query_utils.resolve_latest_pipeline_dag_id
+        ),
+        emails_callback=email_utils.send_notification_email,
         init_pipeline_context=init_orchestration_pipeline_context,
-        init_task_operator=PythonOperator,
     )
 
 
@@ -232,38 +233,12 @@ def get_previous_default_versions(
     from airflow.utils.session import create_session
 
     with create_session() as session:
-        subquery = _get_dag_tags_subquery(session, pipeline_id, bundle_id)
+        subquery = query_utils.get_dag_tags_with_all_required_tags(
+            session, pipeline_id, bundle_id
+        ).subquery()
         tags = _get_tags(session, subquery)
 
         return _extract_versions(tags)
-
-
-def _get_dag_tags_subquery(
-    session: "Session", pipeline_id: str, bundle_id: str
-) -> "Subquery":
-    """Subquery to find dag_ids that have the required tags.
-
-    This uses a "Tag Intersection" pattern (GROUP BY + HAVING COUNT)
-    which avoids multiple joins and table scans.
-    """
-    from airflow.models import DagTag
-    from sqlalchemy import func
-
-    return (
-        session.query(DagTag.dag_id)
-        .filter(
-            DagTag.name.in_(
-                [
-                    "op:is_current",
-                    f"op:bundle:{bundle_id}",
-                    f"op:pipeline:{pipeline_id}",
-                ]
-            )
-        )  # pyright: ignore[reportOptionalCall]
-        .group_by(DagTag.dag_id)
-        .having(func.count(DagTag.name) == 3)
-        .subquery()
-    )
 
 
 def _get_tags(

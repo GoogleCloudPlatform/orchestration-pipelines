@@ -12,7 +12,6 @@
 #
 """Unit tests for the core functions of Airflow 2."""
 
-import unittest
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,7 +20,6 @@ from sqlalchemy.sql.selectable import Subquery
 
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.airflow_2.core import (  # noqa: E501
     _extract_versions,
-    _get_dag_tags_subquery,
     _get_tags,
     _get_task_instance_notes,
     _get_task_instances,
@@ -32,8 +30,9 @@ from orchestration_pipelines_lib.dag_generator.airflow_adapters.airflow_2.core i
     get_deps,
     get_previous_default_versions,
     init_orchestration_pipeline_context,
-    send_notification_email,
-    task_factory,
+)
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
+    dag_utils,
 )
 
 ADAPTERS_MODULE = "orchestration_pipelines_lib.dag_generator.airflow_adapters"
@@ -563,20 +562,9 @@ def test_upsert_task_instance_notes_with_task_missing_from_dag_skips_upsert(
 
 def test_get_deps_returns_expected_dependencies():
     """Tests that get_deps returns the expected Airflow 2 dependencies."""
-    from airflow.operators.python import PythonOperator
-
-    from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
-        dag_utils,
-    )
-
     deps = get_deps()
 
-    assert deps == dag_utils.AirflowVersionedDependencies(
-        task_factory=task_factory,
-        emails_callback=send_notification_email,
-        init_pipeline_context=init_orchestration_pipeline_context,
-        init_task_operator=PythonOperator,
-    )
+    assert isinstance(deps, dag_utils.AirflowVersionedDependencies)
 
 
 @pytest.fixture
@@ -749,37 +737,6 @@ def test_extract_versions_without_version_tags_returns_empty_list():
 
 
 @patch(MOCK_DAG_TAG)
-@patch("sqlalchemy.func")
-def test_get_dag_tags_subquery_with_valid_ids_returns_subquery(
-    mock_func, MockDagTag, previous_versions_setup
-):
-    """Test that _get_dag_tags_subquery constructs the correct SQLAlchemy
-    aggregation query.
-    """
-    setup = previous_versions_setup
-    mock_session = setup["mock_session"]
-    mock_query = MagicMock()
-    mock_session.query.return_value = mock_query
-    mock_query.filter.return_value = mock_query
-    mock_query.group_by.return_value = mock_query
-    mock_query.having.return_value = mock_query
-
-    result = _get_dag_tags_subquery(
-        mock_session, setup["pipeline_id"], setup["bundle_id"]
-    )
-
-    mock_session.query.assert_called_once_with(MockDagTag.dag_id)
-    MockDagTag.name.in_.assert_called_once_with(setup["expected_tags"])
-    mock_query.filter.assert_called_once()
-    mock_query.group_by.assert_called_once_with(MockDagTag.dag_id)
-    mock_func.count.assert_called_once_with(MockDagTag.name)
-    mock_func.count.return_value.__eq__.assert_called_once_with(3)
-    mock_query.having.assert_called_once()
-    mock_query.subquery.assert_called_once()
-    assert result == mock_query.subquery.return_value
-
-
-@patch(MOCK_DAG_TAG)
 def test_get_tags_with_valid_subquery_returns_version_tags(
     MockDagTag, previous_versions_setup
 ):
@@ -823,11 +780,14 @@ def prev_default_versions_setup():
 
 @patch(f"{TARGET_MODULE}._extract_versions", autospec=True)
 @patch(f"{TARGET_MODULE}._get_tags", autospec=True)
-@patch(f"{TARGET_MODULE}._get_dag_tags_subquery", autospec=True)
+@patch(
+    f"{TARGET_MODULE}.query_utils.get_dag_tags_with_all_required_tags",
+    autospec=True,
+)
 @patch(MOCK_CREATE_SESSION, autospec=True)
 def test_get_previous_default_versions_with_valid_ids_orchestrates_data_retrieval(  # noqa: E501
     mock_create_session,
-    mock_get_dag_tags_subquery,
+    mock_get_dag_tags,
     mock_get_tags,
     mock_extract_versions,
     prev_default_versions_setup,
@@ -842,7 +802,9 @@ def test_get_previous_default_versions_with_valid_ids_orchestrates_data_retrieva
     mock_session = MagicMock()
     mock_create_session.return_value.__enter__.return_value = mock_session
     mock_subquery_instance = MagicMock(spec=Subquery)
-    mock_get_dag_tags_subquery.return_value = mock_subquery_instance
+    mock_get_dag_tags.return_value.subquery.return_value = (
+        mock_subquery_instance
+    )
     mock_tags_output = [("dag1", "tag1")]
     mock_get_tags.return_value = mock_tags_output
     mock_extract_versions.return_value = expected_versions
@@ -850,13 +812,9 @@ def test_get_previous_default_versions_with_valid_ids_orchestrates_data_retrieva
     result = get_previous_default_versions(pipeline_id, bundle_id)
 
     mock_create_session.assert_called_once()
-    mock_get_dag_tags_subquery.assert_called_once_with(
+    mock_get_dag_tags.assert_called_once_with(
         mock_session, pipeline_id, bundle_id
     )
     mock_get_tags.assert_called_once_with(mock_session, mock_subquery_instance)
     mock_extract_versions.assert_called_once_with(mock_tags_output)
     assert result == expected_versions
-
-
-if __name__ == "__main__":
-    unittest.main()

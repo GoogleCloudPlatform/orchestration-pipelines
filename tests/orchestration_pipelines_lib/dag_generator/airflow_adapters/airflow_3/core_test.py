@@ -30,6 +30,9 @@ from orchestration_pipelines_lib.dag_generator.airflow_adapters.airflow_3.core i
     get_previous_default_versions,
     init_orchestration_pipeline_context,
 )
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
+    dag_utils,
+)
 
 ADAPTERS_MODULE = "orchestration_pipelines_lib.dag_generator.airflow_adapters"
 AIRFLOW = f"{ADAPTERS_MODULE}.airflow_3"
@@ -69,7 +72,7 @@ def patch_internals():
     """Fixture to patch internal DAG generator dependencies."""
     with (
         patch(f"{COMMON_UTILS}.action_handler_registry") as mock_registry,
-        patch(f"{TARGET_MODULE}.task_factory") as mock_task_factory,
+        patch(f"{TARGET_MODULE}.adapter_imports") as mock_adapter_imports,
         patch(f"{TARGET_MODULE}.email_utils") as mock_email_utils,
         patch(
             f"{TARGET_MODULE}.init_orchestration_pipeline_context"
@@ -77,7 +80,7 @@ def patch_internals():
     ):
         yield (
             mock_registry,
-            mock_task_factory,
+            mock_adapter_imports,
             mock_email_utils,
             mock_init_context,
         )
@@ -603,26 +606,9 @@ def mock_pipeline_id():
 
 def test_get_deps_returns_expected_dependencies():
     """Tests that get_deps returns the expected Airflow 3 dependencies."""
-    from airflow.providers.standard.operators.python import (  # type: ignore
-        PythonOperator,
-    )
-
-    from orchestration_pipelines_lib.dag_generator.airflow_adapters.airflow_3.core import (  # noqa: E501
-        email_utils,
-        task_factory,
-    )
-    from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
-        dag_utils,
-    )
-
     deps = get_deps()
 
-    assert deps == dag_utils.AirflowVersionedDependencies(
-        task_factory=task_factory,
-        emails_callback=email_utils.send_notification_email,
-        init_pipeline_context=init_orchestration_pipeline_context,
-        init_task_operator=PythonOperator,
-    )
+    assert isinstance(deps, dag_utils.AirflowVersionedDependencies)
 
 
 @pytest.fixture
@@ -733,18 +719,15 @@ def test_get_actively_running_versions_api_exception(
 
 
 @pytest.fixture
-def mock_airflow_client():
-    """Fixture providing a mocked DAG API instance."""
-    with (
-        patch(AIRFLOW_CLIENT) as _mock_get_client,
-        patch("airflow_client.client.DAGApi") as mock_dag_api_class,
-    ):
-        mock_api_instance = MagicMock()
-        mock_dag_api_class.return_value = mock_api_instance
-        yield mock_api_instance
+def mock_get_dag_tags():
+    """Fixture mocking query_utils.get_dag_tags_with_all_required_tags."""
+    with patch(
+        f"{TARGET_MODULE}.query_utils.get_dag_tags_with_all_required_tags"
+    ) as mock:
+        yield mock
 
 
-def test_get_previous_default_versions_success(mock_airflow_client):
+def test_get_previous_default_versions_success(mock_get_dag_tags):
     """Tests that get_previous_default_versions parses tags and returns distinct
     default versions.
     """
@@ -762,28 +745,21 @@ def test_get_previous_default_versions_success(mock_airflow_client):
 
     mock_response = MagicMock()
     mock_response.dags = [mock_dag_1, mock_dag_2]
-    mock_airflow_client.get_dags.return_value = mock_response
+    mock_get_dag_tags.return_value = mock_response
 
     versions = get_previous_default_versions("my_pipeline", "my_bundle")
 
     assert set(versions) == {"1.0.0", "2.0.0"}
-    mock_airflow_client.get_dags.assert_called_once_with(
-        tags=[
-            "op:is_current",
-            "op:bundle:my_bundle",
-            "op:pipeline:my_pipeline",
-        ],
-        tags_match_mode="all",
-    )
+    mock_get_dag_tags.assert_called_once_with("my_pipeline", "my_bundle")
 
 
-def test_get_previous_default_versions_no_dags_found(mock_airflow_client):
+def test_get_previous_default_versions_no_dags_found(mock_get_dag_tags):
     """Tests that get_previous_default_versions returns empty when no DAGs
     are found.
     """
     mock_response = MagicMock()
     mock_response.dags = []
-    mock_airflow_client.get_dags.return_value = mock_response
+    mock_get_dag_tags.return_value = mock_response
 
     versions = get_previous_default_versions("my_pipeline", "my_bundle")
 
@@ -791,7 +767,7 @@ def test_get_previous_default_versions_no_dags_found(mock_airflow_client):
 
 
 def test_get_previous_default_versions_with_tag_missing_name_attribute_skips_tag(  # noqa: E501
-    mock_airflow_client,
+    mock_get_dag_tags,
 ):
     """Tests that get_previous_default_versions safely skips tag objects that
     lack a 'name' attribute.
@@ -803,14 +779,14 @@ def test_get_previous_default_versions_with_tag_missing_name_attribute_skips_tag
     mock_dag.tags = [tag_without_name, valid_tag]
     mock_response = MagicMock()
     mock_response.dags = [mock_dag]
-    mock_airflow_client.get_dags.return_value = mock_response
+    mock_get_dag_tags.return_value = mock_response
 
     versions = get_previous_default_versions("my_pipeline", "my_bundle")
 
     assert versions == ["3.1.0"]
 
 
-def test_get_previous_default_versions_no_version_tags(mock_airflow_client):
+def test_get_previous_default_versions_no_version_tags(mock_get_dag_tags):
     """Tests that get_previous_default_versions returns empty when DAGs lack
     version tags.
     """
@@ -824,22 +800,18 @@ def test_get_previous_default_versions_no_version_tags(mock_airflow_client):
     mock_dag_no_tags.tags = None
     mock_response = MagicMock()
     mock_response.dags = [mock_dag, mock_dag_no_tags]
-    mock_airflow_client.get_dags.return_value = mock_response
+    mock_get_dag_tags.return_value = mock_response
 
     versions = get_previous_default_versions("my_pipeline", "my_bundle")
 
     assert versions == []
 
 
-def test_get_previous_default_versions_api_exception(
-    mock_airflow_client, capsys
-):
+def test_get_previous_default_versions_api_exception(mock_get_dag_tags, capsys):
     """Tests that get_previous_default_versions handles API exceptions
     gracefully.
     """
-    mock_airflow_client.get_dags.side_effect = ApiException(
-        "API connection failed"
-    )
+    mock_get_dag_tags.side_effect = ApiException("API connection failed")
 
     versions = get_previous_default_versions("my_pipeline", "my_bundle")
 

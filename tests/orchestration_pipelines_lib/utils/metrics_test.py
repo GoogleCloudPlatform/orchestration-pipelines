@@ -26,7 +26,6 @@ from orchestration_pipelines_lib.utils.metrics import (
     report_init_context,
     report_parsing,
     report_pipeline_run,
-    wrap_observability_operator,
     wrap_operator,
 )
 
@@ -555,7 +554,7 @@ def test_wrap_operator_returns_early_for_invalid_class(
     action_type, engine, get_pipeline_metadata
 ):
     """Tests that classes not inheriting from BaseOperator are returned untouched."""  # noqa: E501
-    result = wrap_observability_operator(
+    result = wrap_operator(
         NotAnOperator,  # type: ignore
         action_type,
         engine,
@@ -616,7 +615,7 @@ def test_wrap_operator_inherits_custom_retry_policy_from_dag_default_args(
     mock_dag = MagicMock()
     mock_dag.default_args = {"_op_custom_retry_policy": policy}
 
-    WrappedClass = wrap_observability_operator(
+    WrappedClass = wrap_operator(
         DummyOperator,  # type: ignore
         action_type,
         engine,
@@ -653,7 +652,7 @@ def test_wrap_operator_overrides_custom_retry_policy(
     mock_dag = MagicMock()
     mock_dag.default_args = {"_op_custom_retry_policy": dag_policy}
 
-    WrappedClass = wrap_observability_operator(
+    WrappedClass = wrap_operator(
         DummyOperator,  # type: ignore
         action_type,
         engine,

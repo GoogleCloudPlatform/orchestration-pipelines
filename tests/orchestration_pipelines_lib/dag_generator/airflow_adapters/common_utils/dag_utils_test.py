@@ -13,7 +13,6 @@
 """Tests for dag_utils."""
 
 import json
-import unittest
 from datetime import datetime
 from functools import partial
 from typing import Any
@@ -136,8 +135,7 @@ def test_build_dag_kwargs_with_data_root_returns_kwargs_with_template_searchpath
     tags = ["tag1", "tag2"]
     dag_notes = "## Pipeline Notes"
     data_root = "/path/to/data"
-    mock_task_factory = MagicMock()
-    mock_task_factory._resolve_latest_pipeline_dag_id = MagicMock()
+    mock_resolve_dag_id = MagicMock()
     mock_emails_callback = MagicMock()
     expected_kwargs = {
         "dag_id": "test_pipe",
@@ -149,7 +147,7 @@ def test_build_dag_kwargs_with_data_root_returns_kwargs_with_template_searchpath
         "tags": tags,
         "template_searchpath": [data_root],
         "user_defined_macros": {
-            "resolve_latest_pipeline_dag_id": mock_task_factory._resolve_latest_pipeline_dag_id,  # noqa: E501
+            "resolve_latest_pipeline_dag_id": mock_resolve_dag_id,
         },
         "doc_md": dag_notes,
         "on_failure_callback": [ANY, ANY],
@@ -164,7 +162,7 @@ def test_build_dag_kwargs_with_data_root_returns_kwargs_with_template_searchpath
         pipeline_setup["bundle_id"],
         pipeline_setup["pipeline_id"],
         mock_emails_callback,
-        task_factory=mock_task_factory,
+        resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
     )
 
     assert result == expected_kwargs
@@ -179,7 +177,7 @@ def test_build_dag_kwargs_without_data_root_returns_kwargs_without_template_sear
     tags = []
     dag_notes = "Notes"
     data_root = ""
-    mock_task_factory = MagicMock()
+    mock_resolve_dag_id = MagicMock()
     mock_emails_callback = MagicMock()
 
     result = _build_dag_kwargs(
@@ -190,7 +188,7 @@ def test_build_dag_kwargs_without_data_root_returns_kwargs_without_template_sear
         pipeline_setup["bundle_id"],
         pipeline_setup["pipeline_id"],
         mock_emails_callback,
-        task_factory=mock_task_factory,
+        resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
     )
 
     assert result.get("template_searchpath") == []
@@ -204,7 +202,7 @@ def test_build_dag_kwargs_without_notifications_adds_only_finish_callback(
     """
     mock_pipeline = pipeline_setup["pipeline"]
     mock_pipeline.notifications = None
-    mock_task_factory = MagicMock()
+    mock_resolve_dag_id = MagicMock()
 
     result = _build_dag_kwargs(
         mock_pipeline,
@@ -214,7 +212,7 @@ def test_build_dag_kwargs_without_notifications_adds_only_finish_callback(
         bundle_id=pipeline_setup["bundle_id"],
         pipeline_id=pipeline_setup["pipeline_id"],
         emails_callback=MagicMock(),
-        task_factory=mock_task_factory,
+        resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
     )
 
     assert len(result["on_failure_callback"]) == 1  # type: ignore
@@ -231,7 +229,7 @@ def test_build_dag_kwargs_without_on_pipeline_failure_adds_only_finish_callback(
     mock_pipeline.notifications = MagicMock()
     mock_pipeline.notifications.onPipelineFailure = None
     mock_pipeline.notifications.onPipelineSuccess = None
-    mock_task_factory = MagicMock()
+    mock_resolve_dag_id = MagicMock()
 
     result = _build_dag_kwargs(
         mock_pipeline,
@@ -241,7 +239,7 @@ def test_build_dag_kwargs_without_on_pipeline_failure_adds_only_finish_callback(
         bundle_id=pipeline_setup["bundle_id"],
         pipeline_id=pipeline_setup["pipeline_id"],
         emails_callback=MagicMock(),
-        task_factory=mock_task_factory,
+        resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
     )
 
     assert len(result["on_failure_callback"]) == 1  # type: ignore
@@ -258,7 +256,7 @@ def test_build_dag_kwargs_with_emails_configures_emails_callback(
     test_emails = ["test1@google.com", "test2@google.com"]
     mock_pipeline.notifications.onPipelineFailure.email = test_emails
     mock_pipeline.notifications.onPipelineSuccess.email = test_emails
-    mock_task_factory = MagicMock()
+    mock_resolve_dag_id = MagicMock()
     mock_emails_callback = MagicMock()
 
     result = _build_dag_kwargs(
@@ -269,7 +267,7 @@ def test_build_dag_kwargs_with_emails_configures_emails_callback(
         bundle_id=pipeline_setup["bundle_id"],
         pipeline_id=pipeline_setup["pipeline_id"],
         emails_callback=mock_emails_callback,
-        task_factory=mock_task_factory,
+        resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
     )
 
     failure_callbacks = result["on_failure_callback"]
@@ -297,7 +295,7 @@ def test_build_dag_kwargs_with_only_on_pipeline_failure_configures_only_failure_
     mock_pipeline.notifications = MagicMock()
     mock_pipeline.notifications.onPipelineFailure.email = ["fail@google.com"]
     mock_pipeline.notifications.onPipelineSuccess = None
-    mock_task_factory = MagicMock()
+    mock_resolve_dag_id = MagicMock()
     mock_emails_callback = MagicMock()
 
     result = _build_dag_kwargs(
@@ -308,7 +306,7 @@ def test_build_dag_kwargs_with_only_on_pipeline_failure_configures_only_failure_
         bundle_id=pipeline_setup["bundle_id"],
         pipeline_id=pipeline_setup["pipeline_id"],
         emails_callback=mock_emails_callback,
-        task_factory=mock_task_factory,
+        resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
     )
 
     assert len(result["on_failure_callback"]) == 2  # type: ignore
@@ -326,7 +324,7 @@ def test_build_dag_kwargs_with_only_on_pipeline_success_configures_only_success_
     mock_pipeline.notifications = MagicMock()
     mock_pipeline.notifications.onPipelineFailure = None
     mock_pipeline.notifications.onPipelineSuccess.email = ["ok@google.com"]
-    mock_task_factory = MagicMock()
+    mock_resolve_dag_id = MagicMock()
     mock_emails_callback = MagicMock()
 
     result = _build_dag_kwargs(
@@ -337,7 +335,7 @@ def test_build_dag_kwargs_with_only_on_pipeline_success_configures_only_success_
         bundle_id=pipeline_setup["bundle_id"],
         pipeline_id=pipeline_setup["pipeline_id"],
         emails_callback=mock_emails_callback,
-        task_factory=mock_task_factory,
+        resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
     )
 
     assert len(result["on_failure_callback"]) == 1  # type: ignore
@@ -363,8 +361,8 @@ def test_build_dag_kwargs_with_retry_policy_sets_default_args_and_custom_key(
         fixedDelay=FixedDelayStrategyModel(retryDelay="2m"),
     )
     pipeline_setup["pipeline"].defaults.retryPolicy = policy
-    mock_task_factory = MagicMock()
     mock_emails_callback = MagicMock()
+    mock_resolve_dag_id = MagicMock()
 
     result = _build_dag_kwargs(
         pipeline_setup["pipeline"],
@@ -374,7 +372,7 @@ def test_build_dag_kwargs_with_retry_policy_sets_default_args_and_custom_key(
         bundle_id=pipeline_setup["bundle_id"],
         pipeline_id=pipeline_setup["pipeline_id"],
         emails_callback=mock_emails_callback,
-        task_factory=mock_task_factory,
+        resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
     )
 
     assert result["default_args"]["retries"] == 5
@@ -394,7 +392,9 @@ def schedule_setup():
     }
 
 
+@patch(f"{TARGET_MODULE}.task_utils.create_schedule_trigger_task")
 def test_configure_dag_schedule_with_schedule_trigger_creates_trigger_task(
+    mock_create_schedule,
     schedule_setup,
 ):
     """Test that a schedule trigger task is created and 'schedule' is not set
@@ -407,21 +407,22 @@ def test_configure_dag_schedule_with_schedule_trigger_creates_trigger_task(
         mock_non_schedule_trigger,
         mock_schedule_trigger,
     ]
-    mock_task_factory = MagicMock()
 
     with patch(
         MOCK_SCHEDULE_TRIGGER_MODEL,
         new=type(mock_schedule_trigger),
     ):
-        _configure_dag_schedule(dag_kwargs, triggers, mock_task_factory)
+        _configure_dag_schedule(dag_kwargs, triggers)
 
-    mock_task_factory.create_schedule_trigger_task.assert_called_once_with(
+    mock_create_schedule.assert_called_once_with(
         dag_kwargs, mock_schedule_trigger
     )
     assert "schedule" not in dag_kwargs
 
 
+@patch(f"{TARGET_MODULE}.task_utils.create_schedule_trigger_task")
 def test_configure_dag_schedule_without_schedule_trigger_sets_schedule_none(
+    mock_create_schedule,
     schedule_setup,
 ):
     """Test that 'schedule' is set to None and no task is created when no
@@ -430,7 +431,6 @@ def test_configure_dag_schedule_without_schedule_trigger_sets_schedule_none(
     dag_kwargs = schedule_setup["dag_kwargs"]
     mock_non_schedule_trigger = schedule_setup["mock_non_schedule_trigger"]
     triggers = [mock_non_schedule_trigger]
-    mock_task_factory = MagicMock()
 
     class MockScheduleTriggerModel:
         pass
@@ -439,10 +439,10 @@ def test_configure_dag_schedule_without_schedule_trigger_sets_schedule_none(
         MOCK_SCHEDULE_TRIGGER_MODEL,
         new=MockScheduleTriggerModel,
     ):
-        _configure_dag_schedule(dag_kwargs, triggers, mock_task_factory)
+        _configure_dag_schedule(dag_kwargs, triggers)
 
     assert dag_kwargs.get("schedule") is None
-    mock_task_factory.create_schedule_trigger_task.assert_not_called()
+    mock_create_schedule.assert_not_called()
 
 
 def test_configure_dag_schedule_populates_dag_kwargs_schedule_fields(
@@ -462,7 +462,7 @@ def test_configure_dag_schedule_populates_dag_kwargs_schedule_fields(
         create_schedule_trigger_task
     )
 
-    _configure_dag_schedule(dag_kwargs, [mock_trigger], mock_task_factory)
+    _configure_dag_schedule(dag_kwargs, [mock_trigger])
 
     tz = pytz.timezone("UTC")
     assert dag_kwargs["start_date"] == tz.localize(
@@ -492,7 +492,7 @@ def test_configure_dag_schedule_without_end_time_sets_end_date_none(
         create_schedule_trigger_task
     )
 
-    _configure_dag_schedule(dag_kwargs, [mock_trigger], mock_task_factory)
+    _configure_dag_schedule(dag_kwargs, [mock_trigger])
 
     tz = pytz.timezone("UTC")
     assert dag_kwargs["start_date"] == tz.localize(
@@ -778,10 +778,13 @@ def test_generate_with_valid_pipeline_orchestrates_dag_creation(
     data_root = setup["data_root"]
     bundle_id = setup["bundle_id"]
     pipeline_id = setup["pipeline_id"]
-    mock_task_factory = MagicMock()
+    mock_adapter_imports = MagicMock()
+    mock_init_task_operator = (
+        mock_adapter_imports.get_python_operator.return_value
+    )
+    mock_resolve_dag_id = MagicMock()
     mock_emails_callback = MagicMock()
     mock_init_pipeline_context = MagicMock()
-    mock_init_task_operator = MagicMock()
     mock_handlers = {}
     mock_action_registry.get_action_handlers.return_value = mock_handlers
     mock_kwargs_in = {"dag_id": "test_pipe", "doc_md": dag_notes}
@@ -798,15 +801,15 @@ def test_generate_with_valid_pipeline_orchestrates_dag_creation(
         bundle_id,
         pipeline_id,
         AirflowVersionedDependencies(
-            task_factory=mock_task_factory,
+            adapter_imports=mock_adapter_imports,
+            resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
             emails_callback=mock_emails_callback,
             init_pipeline_context=mock_init_pipeline_context,
-            init_task_operator=mock_init_task_operator,
         ),
     )
 
     mock_action_registry.get_action_handlers.assert_called_once_with(
-        mock_task_factory
+        mock_adapter_imports
     )
     mock_build_dag_kwargs.assert_called_once_with(
         mock_pipeline,
@@ -816,10 +819,10 @@ def test_generate_with_valid_pipeline_orchestrates_dag_creation(
         bundle_id,
         pipeline_id,
         mock_emails_callback,
-        mock_task_factory,
+        mock_resolve_dag_id,
     )
     mock_configure_dag_schedule.assert_called_once_with(
-        mock_kwargs_in, mock_pipeline.triggers, mock_task_factory
+        mock_kwargs_in, mock_pipeline.triggers
     )
     MockDAG.assert_called_once_with(**mock_kwargs_in)
     mock_dag_instance = MockDAG.return_value
@@ -848,10 +851,13 @@ def test_generate_with_basic_pipeline_creates_dag_and_init_task(
     with its init task.
     """
     mock_dag_class = patch_airflow
-    mock_task_factory = MagicMock()
+    mock_adapter_imports = MagicMock()
+    mock_init_task_operator = (
+        mock_adapter_imports.get_python_operator.return_value
+    )
+    mock_resolve_dag_id = MagicMock()
     mock_emails_callback = MagicMock()
     mock_init_pipeline_context = MagicMock()
-    mock_init_task_operator = MagicMock()
 
     dag = generate(
         pipeline=mock_pipeline,
@@ -861,10 +867,10 @@ def test_generate_with_basic_pipeline_creates_dag_and_init_task(
         bundle_id=mock_bundle_id,
         pipeline_id=mock_pipeline_id,
         versioned_deps=AirflowVersionedDependencies(
-            task_factory=mock_task_factory,
+            adapter_imports=mock_adapter_imports,
+            resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
             emails_callback=mock_emails_callback,
             init_pipeline_context=mock_init_pipeline_context,
-            init_task_operator=mock_init_task_operator,
         ),
     )
 
@@ -894,7 +900,9 @@ def test_generate_with_basic_pipeline_creates_dag_and_init_task(
     assert dag == mock_dag_class.return_value
 
 
+@patch(f"{TARGET_MODULE}.task_utils.create_schedule_trigger_task")
 def test_generate_with_schedule_and_notifications_configures_dag_callbacks(
+    mock_create_schedule,
     mock_pipeline,
     mock_notification,
     mock_trigger,
@@ -905,10 +913,10 @@ def test_generate_with_schedule_and_notifications_configures_dag_callbacks(
     """Test that schedule triggers and email notifications
     are appropriately configured.
     """
-    mock_task_factory = MagicMock()
+    mock_adapter_imports = MagicMock()
+    mock_resolve_dag_id = MagicMock()
     mock_emails_callback = MagicMock()
     mock_init_pipeline_context = MagicMock()
-    mock_init_task_operator = MagicMock()
     mock_pipeline.triggers = [mock_trigger]
     mock_notification.onPipelineFailure = MagicMock()
     mock_pipeline.notifications = mock_notification
@@ -923,16 +931,14 @@ def test_generate_with_schedule_and_notifications_configures_dag_callbacks(
         mock_bundle_id,
         mock_pipeline_id,
         AirflowVersionedDependencies(
-            task_factory=mock_task_factory,
+            adapter_imports=mock_adapter_imports,
+            resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
             emails_callback=mock_emails_callback,
             init_pipeline_context=mock_init_pipeline_context,
-            init_task_operator=mock_init_task_operator,
         ),
     )
 
-    mock_task_factory.create_schedule_trigger_task.assert_called_once_with(
-        ANY, mock_trigger
-    )
+    mock_create_schedule.assert_called_once_with(ANY, mock_trigger)
     call_kwargs = mock_dag_class.call_args.kwargs
     assert "on_failure_callback" in call_kwargs
     failure_callbacks = call_kwargs["on_failure_callback"]
@@ -952,10 +958,10 @@ def test_generate_with_on_pipeline_success_configures_dag_success_callback(
     """Test that onPipelineSuccess email notifications are configured on DAG
     on_success_callback during generate.
     """
-    mock_task_factory = MagicMock()
+    mock_adapter_imports = MagicMock()
+    mock_resolve_dag_id = MagicMock()
     mock_emails_callback = MagicMock()
     mock_init_pipeline_context = MagicMock()
-    mock_init_task_operator = MagicMock()
     mock_notification.onPipelineSuccess = MagicMock()
     mock_notification.onPipelineSuccess.email = ["ok@example.com"]
     mock_pipeline.notifications = mock_notification
@@ -969,10 +975,10 @@ def test_generate_with_on_pipeline_success_configures_dag_success_callback(
         mock_bundle_id,
         mock_pipeline_id,
         AirflowVersionedDependencies(
-            task_factory=mock_task_factory,
+            adapter_imports=mock_adapter_imports,
+            resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
             emails_callback=mock_emails_callback,
             init_pipeline_context=mock_init_pipeline_context,
-            init_task_operator=mock_init_task_operator,
         ),
     )
 
@@ -996,10 +1002,10 @@ def test_generate_with_actions_creates_tasks_and_sets_dependencies(
     """Test that tasks are generated from actions and their dependencies
     are correctly resolved.
     """
-    mock_task_factory = MagicMock()
+    mock_adapter_imports = MagicMock()
+    mock_resolve_dag_id = MagicMock()
     mock_emails_callback = MagicMock()
     mock_init_pipeline_context = MagicMock()
-    mock_init_task_operator = MagicMock()
 
     class MockAction:
         def __init__(self, name, dependsOn):
@@ -1031,10 +1037,10 @@ def test_generate_with_actions_creates_tasks_and_sets_dependencies(
         mock_bundle_id,
         mock_pipeline_id,
         AirflowVersionedDependencies(
-            task_factory=mock_task_factory,
+            adapter_imports=mock_adapter_imports,
+            resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
             emails_callback=mock_emails_callback,
             init_pipeline_context=mock_init_pipeline_context,
-            init_task_operator=mock_init_task_operator,
         ),
     )
 
@@ -1080,10 +1086,10 @@ def test_generate_with_missing_dependency_raises_value_error(
     mock_registry_direct.get_action_handlers.return_value = {
         MockAction: fake_handler
     }
-    task_factory = MagicMock()
+    mock_adapter_imports = MagicMock()
+    mock_resolve_dag_id = MagicMock()
     emails_callback = MagicMock()
     init_pipeline_context = MagicMock()
-    init_task_operator = MagicMock()
 
     with pytest.raises(ValueError) as exc_info:
         generate(
@@ -1094,10 +1100,10 @@ def test_generate_with_missing_dependency_raises_value_error(
             mock_bundle_id,
             mock_pipeline_id,
             AirflowVersionedDependencies(
-                task_factory=task_factory,
+                adapter_imports=mock_adapter_imports,
+                resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
                 emails_callback=emails_callback,
                 init_pipeline_context=init_pipeline_context,
-                init_task_operator=init_task_operator,
             ),
         )
 
@@ -1179,7 +1185,3 @@ def test_extract_additional_notes_without_allowed_keys_returns_empty_string():
     result = extract_additional_notes(input_content)
 
     assert result == ""
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -14,8 +14,14 @@
 #
 """Module for action handler registry."""
 
-from typing import Any, Dict
+from collections.abc import Callable
+from dataclasses import dataclass
+from functools import partial
+from typing import Any
 
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
+    task_utils,
+)
 from orchestration_pipelines_lib.internal_models.actions import (
     AIActionModel,
     BqOperationActionModel,
@@ -29,23 +35,50 @@ from orchestration_pipelines_lib.internal_models.actions import (
 )
 
 
-def get_action_handlers(task_factory) -> Dict[Any, Any]:
+@dataclass(frozen=True, slots=True)
+class AdapterImports:
+    """Airflow adapter-specific imports to use for creating tasks."""
+
+    get_python_operator: Callable[[], type]
+    get_python_virtualenv_operator: Callable[[], type]
+    get_trigger_dagrun_operator: Callable[[], type]
+    get_variable_class: Callable[[], type]
+
+
+def get_action_handlers(
+    adapter_imports: AdapterImports,
+) -> dict[type, Callable[[Any, Any, Any], Any]]:
     """Returns a static mapping of action models to task factory methods.
 
     Args:
-        task_factory: The task factory instance to use for creating tasks.
+        adapter_imports: The adapter imports to use for creating tasks.
 
     Returns:
         A dictionary mapping internal action models to task factory methods.
     """
     return {
-        PythonScriptActionModel: task_factory.create_python_script_task,
-        PythonVirtualenvActionModel: task_factory.create_python_virtualenv_task,
-        BqOperationActionModel: task_factory.create_bq_operation_task,
-        DataprocOperatorActionModel: task_factory.create_dataproc_operator_task,
-        DBTActionModel: task_factory.create_dbt_task,
-        DataformActionModel: task_factory.create_dataform_task,
-        DataIngestionActionModel: task_factory.create_bq_dts_task,
-        OrchestrationPipelineActionModel: task_factory.create_orchestration_pipeline_trigger_task,
-        AIActionModel: task_factory.create_ai_task,
+        PythonScriptActionModel: partial(
+            task_utils.create_python_script_task,
+            adapter_imports.get_python_operator,
+        ),
+        PythonVirtualenvActionModel: partial(
+            task_utils.create_python_virtualenv_task,
+            adapter_imports.get_python_virtualenv_operator,
+        ),
+        BqOperationActionModel: task_utils.create_bq_operation_task,
+        DataprocOperatorActionModel: task_utils.create_dataproc_operator_task,
+        DBTActionModel: partial(
+            task_utils.create_dbt_task,
+            adapter_imports.get_python_operator,
+        ),
+        DataformActionModel: partial(
+            task_utils.create_dataform_task,
+            adapter_imports.get_variable_class,
+        ),
+        DataIngestionActionModel: task_utils.create_bq_dts_task,
+        OrchestrationPipelineActionModel: partial(
+            task_utils.create_orchestration_pipeline_trigger_task,
+            adapter_imports.get_trigger_dagrun_operator,
+        ),
+        AIActionModel: task_utils.create_ai_task,
     }

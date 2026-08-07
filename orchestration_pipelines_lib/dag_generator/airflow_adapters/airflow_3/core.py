@@ -16,11 +16,15 @@
 
 from typing import TYPE_CHECKING
 
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.airflow_3 import (  # noqa: E501
+    adapter_imports,
+    airflow_client_utils,
+    email_utils,
+    query_utils,
+)
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
     dag_utils,
 )
-
-from . import airflow_client_utils, email_utils, task_factory
 
 if TYPE_CHECKING:
     from airflow.models import DagRun
@@ -33,13 +37,13 @@ if TYPE_CHECKING:
 
 def get_deps() -> dag_utils.AirflowVersionedDependencies:
     """Returns Airflow 3 specific dependencies for DAG generation."""
-    from airflow.providers.standard.operators.python import PythonOperator
-
     return dag_utils.AirflowVersionedDependencies(
-        task_factory=task_factory,
+        adapter_imports=adapter_imports.get_imports(),
+        resolve_latest_pipeline_dag_id=(
+            query_utils.resolve_latest_pipeline_dag_id
+        ),
         emails_callback=email_utils.send_notification_email,
         init_pipeline_context=init_orchestration_pipeline_context,
-        init_task_operator=PythonOperator,
     )
 
 
@@ -230,21 +234,12 @@ def get_previous_default_versions(
     Queries the Airflow API for DAGs tagged as current for the specific
     bundle and pipeline.
     """
-    import airflow_client.client
-    from airflow_client.client.rest import ApiException
-
-    api_client = airflow_client_utils.get_airflow_api_client()
-    dag_api = airflow_client.client.DAGApi(api_client)
+    from airflow_client.client import ApiException
 
     versions = set()
     try:
-        response = dag_api.get_dags(
-            tags=[
-                "op:is_current",
-                f"op:bundle:{bundle_id}",
-                f"op:pipeline:{pipeline_id}",
-            ],
-            tags_match_mode="all",
+        response = query_utils.get_dag_tags_with_all_required_tags(
+            pipeline_id, bundle_id
         )
 
         if response.dags:

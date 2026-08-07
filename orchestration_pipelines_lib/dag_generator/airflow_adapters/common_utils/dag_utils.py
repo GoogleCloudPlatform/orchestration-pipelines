@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
     action_handler_registry,
+    task_utils,
 )
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.retry_resolver import (  # noqa: E501
     RetryResolver,
@@ -76,10 +77,10 @@ class DAGKwargs(TypedDict, total=False):
 class AirflowVersionedDependencies:
     """Airflow version-specific dependencies required for DAG generation."""
 
-    task_factory: Any
+    adapter_imports: action_handler_registry.AdapterImports
+    resolve_latest_pipeline_dag_id: Callable[[str, str | None], str]
     emails_callback: Callable[[list[str], bool, "Context"], None]
     init_pipeline_context: Callable[..., None]
-    init_task_operator: type
 
 
 def generate(
@@ -101,8 +102,8 @@ def generate(
         bundle_id: The ID of the bundle.
         pipeline_id: The ID of the pipeline.
         versioned_deps: Object containing Airflow version-specific dependencies
-            (task_factory, emails_callback, init_pipeline_context,
-            init_task_operator).
+            (adapter_imports, resolve_latest_pipeline_dag_id,
+            emails_callback, init_pipeline_context).
 
     Returns:
         The fully constructed Airflow DAG.
@@ -115,8 +116,9 @@ def generate(
     except ImportError:
         from airflow.models import DAG  # pyright: ignore[reportMissingImports]
 
+    adapter_imports = versioned_deps.adapter_imports
     action_handlers = action_handler_registry.get_action_handlers(
-        versioned_deps.task_factory
+        adapter_imports
     )
 
     dag_kwargs = _build_dag_kwargs(
@@ -127,11 +129,9 @@ def generate(
         bundle_id,
         pipeline_id,
         versioned_deps.emails_callback,
-        versioned_deps.task_factory,
+        versioned_deps.resolve_latest_pipeline_dag_id,
     )
-    _configure_dag_schedule(
-        dag_kwargs, pipeline.triggers, versioned_deps.task_factory
-    )
+    _configure_dag_schedule(dag_kwargs, pipeline.triggers)
 
     dag = DAG(**dag_kwargs)
     _create_init_task(
@@ -140,7 +140,7 @@ def generate(
         bundle_id,
         pipeline_id,
         versioned_deps.init_pipeline_context,
-        versioned_deps.init_task_operator,
+        adapter_imports.get_python_operator(),
     )
 
     tasks = _create_tasks(dag, action_handlers, pipeline)
@@ -159,7 +159,7 @@ def _build_dag_kwargs(
     bundle_id: str | None,
     pipeline_id: str,
     emails_callback: Callable[[list[str], bool, "Context"], None],
-    task_factory,
+    resolve_latest_pipeline_dag_id: Callable[[str, str | None], str],
 ) -> DAGKwargs:
     finish_callback = pipeline_run_callback(bundle_id, pipeline_id)
     on_failure_callbacks = [finish_callback]
@@ -187,7 +187,7 @@ def _build_dag_kwargs(
         "template_searchpath": [data_root] if data_root else [],
         "doc_md": dag_notes,
         "user_defined_macros": {
-            "resolve_latest_pipeline_dag_id": task_factory._resolve_latest_pipeline_dag_id,  # noqa: E501
+            "resolve_latest_pipeline_dag_id": resolve_latest_pipeline_dag_id,
         },
         "on_failure_callback": on_failure_callbacks,
         "on_success_callback": on_success_callbacks,
@@ -195,7 +195,7 @@ def _build_dag_kwargs(
 
 
 def _configure_dag_schedule(
-    dag_kwargs: DAGKwargs, triggers: list["AnyScheduleTrigger"], task_factory
+    dag_kwargs: DAGKwargs, triggers: list["AnyScheduleTrigger"]
 ):
     from orchestration_pipelines_lib.internal_models.triggers import (
         ScheduleTriggerModel,
@@ -207,7 +207,7 @@ def _configure_dag_schedule(
     )
 
     if schedule_trigger:
-        task_factory.create_schedule_trigger_task(dag_kwargs, schedule_trigger)
+        task_utils.create_schedule_trigger_task(dag_kwargs, schedule_trigger)
     else:
         dag_kwargs["schedule"] = None
 

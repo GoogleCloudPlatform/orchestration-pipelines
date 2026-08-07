@@ -359,9 +359,6 @@ def wrap_operator(
     return cast(type[T], orchestration_cls)
 
 
-wrap_observability_operator = wrap_operator
-
-
 def _incr_callback(topic: str, tags: dict[str, str] | None = None):
     Stats.incr(topic, tags=tags)
 
