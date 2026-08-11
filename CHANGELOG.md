@@ -5,9 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - yyyy-mm-dd
+## [Unreleased]  - yyyy-mm-dd
 
 ...
+
+## [0.4.0] - 2026-08-12
+
+### Added
+
+- Support for `.yaml` extension for pipeline definition files in addition to
+  `.yml`.
+- `doc_md` documentation generation for unversioned pipeline workflows.
+- Source pipeline definition file path included in DAG `doc_md` metadata.
+- Support for Agent Platform upload model in `AIAction`.
+- Support for triggering batch inference on Agent Platform in `AIAction`.
+- Emiting metrics with respect to count and duration of parsing pipeline.
+
+### Changed
+
+- Migrated local Dataform file staging command from `gsutil` to
+  `gcloud storage`.
+
+### Fixed
+
+- Detection of circular dependencies between actions during pipeline validation.
+- Path resolution in `FileManager` for non-versioned pipelines.
+- `dag_id` verification check in `globals()`.
+- PyPI documentation links in `README.md`.
 
 ## [0.3.0] - 2026-07-08
 
@@ -54,4 +78,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Auto-generated batch_id for actions using dataprocServerless is now resolved properly in both Airflow 2 and Airflow 3.
 
-[Unreleased]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.0...main
+[0.4.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.1.2...v0.2.0
+[0.1.2]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/releases/tag/v0.1.2
+
