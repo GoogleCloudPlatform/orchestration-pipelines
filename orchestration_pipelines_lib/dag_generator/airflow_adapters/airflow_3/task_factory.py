@@ -269,9 +269,8 @@ def create_orchestration_pipeline_trigger_task(
 
         return TriggerDagRunOperator(
             task_id=action.name,
-            trigger_dag_id="{{ params.resolve_latest_pipeline_dag_id(params.current_dag_id, params.target_pipeline_id, params.bundle_id) }}",
+            trigger_dag_id="{{ resolve_latest_pipeline_dag_id(params.current_dag_id, params.target_pipeline_id, params.bundle_id) }}",
             params={
-                "resolve_latest_pipeline_dag_id": _resolve_latest_pipeline_dag_id,
                 "current_dag_id": dag.dag_id,
                 "target_pipeline_id": action.pipeline_id,
                 "bundle_id": action.bundle_id,

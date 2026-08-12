@@ -211,6 +211,9 @@ def generate(
         },
         "tags": tags,
         "template_searchpath": template_searchpath,
+        "user_defined_macros": {
+            "resolve_latest_pipeline_dag_id": task_factory._resolve_latest_pipeline_dag_id,
+        },
     }
 
     if pipeline.notifications and pipeline.notifications.onPipelineFailure:
