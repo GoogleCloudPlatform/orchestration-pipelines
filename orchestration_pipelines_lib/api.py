@@ -296,11 +296,19 @@ def _generate_dag(
         if hasattr(dag, "validate"):
             dag.validate()
 
-        from airflow.serialization.serialized_objects import SerializedDAG
         from airflow.utils.dag_cycle_tester import check_cycle
 
         check_cycle(dag)
-        SerializedDAG.to_dict(dag)
+        try:
+            from airflow.serialization.serialized_objects import (
+                DagSerialization as DagSerializer,
+            )
+        except ImportError:
+            from airflow.serialization.serialized_objects import (
+                SerializedDAG as DagSerializer,
+            )
+
+        DagSerializer.to_dict(dag)
 
         # Step 5: Register DAG
         if globals_dict is not None:
