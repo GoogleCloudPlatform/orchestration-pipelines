@@ -88,7 +88,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Auto-generated batch_id for actions using dataprocServerless is now resolved properly in both Airflow 2 and Airflow 3.
 
-[Unreleased]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.0...main
+[Unreleased]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.1...main
+[0.4.1]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.1.2...v0.2.0
