@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ...
 
+## [0.4.1] - 2026-08-18
+
+### Added
+
+- A separate document for known limitations and compatibility constraints (`docs/limitations.md`).
+
+### Fixed
+
+- Serialization compatibility with Airflow 3.2+.
+
 ## [0.4.0] - 2026-08-12
 
 ### Added
