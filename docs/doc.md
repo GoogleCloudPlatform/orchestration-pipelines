@@ -6,7 +6,7 @@ defined in the protocol buffers.
 
 Reference Codebase Path: `../orchestration_pipelines_models/pipeline_v1_model/protos/`
 
-**Links:** [Home (README)](../README.md) | [Changelog](../CHANGELOG.md)
+**Links:** [Home (README)](../README.md) | [Changelog](../CHANGELOG.md) | [Limitations](./limitations.md)
 
 ---
 
