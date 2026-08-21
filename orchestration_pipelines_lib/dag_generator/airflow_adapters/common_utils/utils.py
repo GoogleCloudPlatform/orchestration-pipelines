@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 from orchestration_pipelines_lib.utils.metrics import (
     BasicStatus,
     PipelineRunTriggerType,
+    report_init_context,
     report_pipeline_run,
 )
 
@@ -94,5 +95,22 @@ def pipeline_run_callback(
             trigger_type,
             status,
         )
+
+    return callback
+
+
+def init_context_callback(
+    bundle_id: str | None, pipeline_id: str
+) -> Callable[["Context"], None]:
+    """Prepares a callback for the initialization task context."""
+
+    def callback(context: "Context") -> None:
+        ti = context.get("ti") or context.get("task_instance")
+
+        if not ti:
+            return
+
+        status = BasicStatus.from_task_instance_state(ti.state)
+        report_init_context(bundle_id, pipeline_id, status)
 
     return callback

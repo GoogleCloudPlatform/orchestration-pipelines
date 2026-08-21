@@ -8,17 +8,17 @@ from typing import TYPE_CHECKING, TypeVar, cast
 
 from airflow.models import BaseOperator
 from airflow.stats import Stats
-from airflow.utils.state import DagRunState
+from airflow.utils.state import DagRunState, TaskInstanceState
 from airflow.utils.types import DagRunType
 
 from orchestration_pipelines_lib import __version__
 
 if TYPE_CHECKING:
     try:
-        from airflow.sdk import DAG
+        from airflow.sdk import DAG, Context
     except ImportError:
         from airflow import DAG
-    from airflow.utils.context import Context
+        from airflow.utils.context import Context
 
 
 MODULE_NAME = "orchestration_pipeline"
@@ -119,6 +119,14 @@ class BasicStatus(str, Enum):
     def from_dag_run_state(dag_run_state: str) -> "BasicStatus":
         """Converts DAG run state to BasicStatus."""
         if dag_run_state == DagRunState.SUCCESS.value:
+            return BasicStatus.SUCCESS
+
+        return BasicStatus.FAILED
+
+    @staticmethod
+    def from_task_instance_state(ti_state: str | None) -> "BasicStatus":
+        """Converts task instance state to BasicStatus."""
+        if ti_state == TaskInstanceState.SUCCESS.value:
             return BasicStatus.SUCCESS
 
         return BasicStatus.FAILED

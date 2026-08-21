@@ -22,6 +22,7 @@ from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils imp
     action_handler_registry,
 )
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.utils import (  # noqa: E501
+    init_context_callback,
     pipeline_run_callback,
 )
 from orchestration_pipelines_lib.internal_models.pipeline import PipelineModel
@@ -213,11 +214,16 @@ def generate(
     dag_kwargs["doc_md"] = dag_notes
 
     dag = DAG(**dag_kwargs)
+
+    task_finish_callback = init_context_callback(bundle_id, pipeline_id)
+
     _ = PythonOperator(
         task_id="init_orchestration_pipeline_context",
         python_callable=init_orchestration_pipeline_context,
         op_args=[dag_notes],
         dag=dag,
+        on_failure_callback=[task_finish_callback],
+        on_success_callback=[task_finish_callback],
     )
     tasks = {}
     # 2. Create tasks in a task group and explicitly associate them with the dag

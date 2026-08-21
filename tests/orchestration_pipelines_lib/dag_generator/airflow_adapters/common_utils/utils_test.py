@@ -28,7 +28,10 @@ from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils imp
 TARGET_MODULE = "orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.utils"  # noqa: E501
 
 MOCK_REPORT_RUN = f"{TARGET_MODULE}.report_pipeline_run"
+MOCK_REPORT_INIT_CONTEXT = f"{TARGET_MODULE}.report_init_context"
 MOCK_BASIC_STATUS = f"{TARGET_MODULE}.BasicStatus"
+MOCK_STATUS_FROM_DAG_RUN_STATE = f"{MOCK_BASIC_STATUS}.from_dag_run_state"
+MOCK_STATUS_FROM_TI_STATE = f"{MOCK_BASIC_STATUS}.from_task_instance_state"
 MOCK_TRIGGER_TYPE = f"{TARGET_MODULE}.PipelineRunTriggerType"
 
 
@@ -48,6 +51,12 @@ def pipeline_id():
 def mock_dag_run():
     """Creates a mock DAG run with a predefined run type and state."""
     return MagicMock(run_type="manual", state="success")
+
+
+@pytest.fixture
+def mock_task_instance():
+    """Creates a mock TaskInstance with a predefined state."""
+    return MagicMock(state="success")
 
 
 @pytest.fixture
@@ -183,6 +192,108 @@ def test_pipeline_run_callback_with_none_bundle_id(
     mock_report_run.assert_called_once_with(
         None, pipeline_id, "MOCK_TRIGGER", "MOCK_STATUS"
     )
+
+
+@patch(MOCK_REPORT_INIT_CONTEXT)
+@patch(MOCK_STATUS_FROM_TI_STATE)
+def test_init_context_callback_success(
+    mock_from_ti_state: MagicMock,
+    mock_report_init_context: MagicMock,
+    mock_task_instance: MagicMock,
+):
+    """Tests that init_context_callback correctly extracts task instance run
+    status when the task instance passed as "task_instance" and reports context.
+    """
+    bundle_id = "bundle-123"
+    pipeline_id = "pipeline-abc"
+    expected_status = MagicMock()
+    mock_from_ti_state.return_value = expected_status
+    context = {"task_instance": mock_task_instance}
+
+    callback = util.init_context_callback(bundle_id, pipeline_id)
+    callback(context)  # pyright: ignore[reportArgumentType]
+
+    mock_from_ti_state.assert_called_once_with("success")
+    mock_report_init_context.assert_called_once_with(
+        bundle_id, pipeline_id, expected_status
+    )
+
+
+@patch(MOCK_REPORT_INIT_CONTEXT)
+@patch(MOCK_STATUS_FROM_TI_STATE)
+def test_ti_init_context_callback_success(
+    mock_from_ti_state: MagicMock,
+    mock_report_init_context: MagicMock,
+    mock_task_instance: MagicMock,
+):
+    """Tests that init_context_callback correctly extracts task instance run
+    status when the task instance passed as "ti" and reports context.
+    """
+    bundle_id = "bundle-123"
+    pipeline_id = "pipeline-abc"
+    expected_status = MagicMock()
+    mock_from_ti_state.return_value = expected_status
+    context = {"ti": mock_task_instance}
+
+    callback = util.init_context_callback(bundle_id, pipeline_id)
+    callback(context)  # pyright: ignore[reportArgumentType]
+
+    mock_from_ti_state.assert_called_once_with("success")
+    mock_report_init_context.assert_called_once_with(
+        bundle_id, pipeline_id, expected_status
+    )
+
+
+@patch(MOCK_REPORT_INIT_CONTEXT)
+@patch(MOCK_STATUS_FROM_TI_STATE)
+def test_init_context_callback_with_none_bundle_id(
+    mock_from_ti_state: MagicMock,
+    mock_report_init_context: MagicMock,
+    mock_task_instance: MagicMock,
+):
+    """Tests that init_context_callback handles optional bundle_id
+    when set to None.
+    """
+    bundle_id = None
+    pipeline_id = "pipeline-abc"
+    expected_status = MagicMock()
+    mock_from_ti_state.return_value = expected_status
+
+    context = {"task_instance": mock_task_instance}
+    callback = util.init_context_callback(bundle_id, pipeline_id)
+
+    callback(context)  # pyright: ignore[reportArgumentType]
+
+    mock_report_init_context.assert_called_once_with(
+        None, pipeline_id, expected_status
+    )
+
+
+@pytest.mark.parametrize(
+    "context",
+    [
+        {},
+        {"dag_run": None},
+    ],
+)
+@patch(MOCK_REPORT_INIT_CONTEXT)
+@patch(MOCK_STATUS_FROM_DAG_RUN_STATE)
+def test_init_context_callback_missing_dag_run(
+    mock_from_dag_run_state: MagicMock,
+    mock_report_init_context: MagicMock,
+    context: dict,
+):
+    """Tests that init_context_callback early returns without reporting
+    when dag_run is missing or None.
+    """
+    bundle_id = "bundle-123"
+    pipeline_id = "pipeline-abc"
+    callback = util.init_context_callback(bundle_id, pipeline_id)
+
+    callback(context)  # pyright: ignore[reportArgumentType]
+
+    mock_from_dag_run_state.assert_not_called()
+    mock_report_init_context.assert_not_called()
 
 
 if __name__ == "__main__":
