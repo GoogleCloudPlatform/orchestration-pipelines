@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ...
 
+## [1.0.0] - 2026-08-24
+
+### Added
+
+- Observability metrics for pipeline runs via DAG callbacks (success/failure counters).
+- Observability metrics for action execution using a custom operator.
+- Observability metrics for internal pipeline metadata population.
+- The library limitations have been documented and can be found under `docs/limitations.md`.
+
+### Fixed
+
+- Dummy DAG indicating parsing errors now fails by default with an `AirflowFailException` showing the parsing error message.
+- Actions running on Dataproc Ephemeral Cluster as engine are properly marked as success/failed based on the job status, abstracting the cleanup step result.
+
 ## [0.4.1] - 2026-08-18
 
 ### Added
@@ -88,7 +102,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Auto-generated batch_id for actions using dataprocServerless is now resolved properly in both Airflow 2 and Airflow 3.
 
-[Unreleased]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.1...main
+[Unreleased]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.0.0...main
+[1.0.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.1...v1.0.0
 [0.4.1]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.2.0...v0.3.0
