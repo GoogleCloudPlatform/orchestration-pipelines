@@ -21,7 +21,6 @@ from datetime import datetime
 import pytz
 from unittest.mock import patch
 
-from airflow.operators.empty import EmptyOperator
 from airflow.models import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
@@ -119,7 +118,7 @@ class TestApi(unittest.TestCase):
         self.assertEqual(len(dag.tasks), 1)
         error_task = dag.tasks[0]
         self.assertEqual(error_task.task_id, "parsing_failed")
-        self.assertIsInstance(error_task, EmptyOperator)
+        self.assertIsInstance(error_task, PythonOperator)
 
     def _run_and_assert_successful_generation(self,
                                               pipeline_id,

@@ -17,8 +17,9 @@
 import json
 import unittest
 
+from airflow.exceptions import AirflowFailException
 from airflow.models import DAG
-from airflow.operators.empty import EmptyOperator
+from airflow.operators.python import PythonOperator
 
 from orchestration_pipelines_lib.utils.dummy_dag import create as create_dummy_dag
 
@@ -76,7 +77,9 @@ class TestDummyDag(unittest.TestCase):
         # Assert task structure
         self.assertEqual(len(dag.tasks), 1)
         task = dag.get_task("parsing_failed")
-        self.assertIsInstance(task, EmptyOperator)
+        self.assertIsInstance(task, PythonOperator)
+        with self.assertRaisesRegex(AirflowFailException, self.error_message):
+            task.python_callable(**task.op_kwargs)
 
     def test_create_dummy_dag_without_doc_md(self):
         """
@@ -101,7 +104,10 @@ class TestDummyDag(unittest.TestCase):
 
         # Assert task structure
         self.assertEqual(len(dag.tasks), 1)
-        self.assertIsInstance(dag.get_task("parsing_failed"), EmptyOperator)
+        task = dag.get_task("parsing_failed")
+        self.assertIsInstance(task, PythonOperator)
+        with self.assertRaisesRegex(AirflowFailException, self.error_message):
+            task.python_callable(**task.op_kwargs)
 
     def test_create_dummy_dag_with_empty_doc_md(self):
         """Tests dummy DAG creation for a paused and non-current pipeline."""
@@ -124,7 +130,10 @@ class TestDummyDag(unittest.TestCase):
 
         # Assert task structure
         self.assertEqual(len(dag.tasks), 1)
-        self.assertIsInstance(dag.get_task("parsing_failed"), EmptyOperator)
+        task = dag.get_task("parsing_failed")
+        self.assertIsInstance(task, PythonOperator)
+        with self.assertRaisesRegex(AirflowFailException, self.error_message):
+            task.python_callable(**task.op_kwargs)
 
 
 if __name__ == '__main__':

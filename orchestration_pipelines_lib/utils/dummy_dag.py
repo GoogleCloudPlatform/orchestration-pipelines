@@ -18,10 +18,16 @@ import json
 from datetime import datetime
 from typing import List, Optional
 
+from airflow.exceptions import AirflowFailException
 from airflow.models import DAG
-from airflow.operators.empty import EmptyOperator
+from airflow.operators.python import PythonOperator
 
 _ERROR_DAG_PREFIX = "ERROR__"
+
+
+def _fail_task(error_message: str):
+    """Raises an AirflowFailException with the parsing error message."""
+    raise AirflowFailException(error_message)
 
 
 def create(
@@ -37,7 +43,7 @@ def create(
             metadata.
 
     Returns:
-        An instantiated Airflow DAG containing a single EmptyOperator
+        An instantiated Airflow DAG containing a single PythonOperator
         indicating failure.
     """
     dag_id = _ERROR_DAG_PREFIX + dag_base_id
@@ -54,6 +60,11 @@ def create(
         doc_md=json.dumps(error_doc_md),
     )
 
-    EmptyOperator(task_id="parsing_failed", dag=dag)
+    PythonOperator(
+        task_id="parsing_failed",
+        python_callable=_fail_task,
+        op_kwargs={"error_message": error_message},
+        dag=dag,
+    )
 
     return dag
