@@ -28,10 +28,10 @@ from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperato
 from airflow.providers.google.cloud.operators.bigquery import BigQueryInsertJobOperator
 from airflow.providers.google.cloud.operators.dataproc import (
     DataprocCreateBatchOperator,
+    DataprocCreateClusterOperator,
     DataprocSubmitJobOperator,
     DataprocDeleteClusterOperator,
 )
-from airflow.utils.trigger_rule import TriggerRule
 
 from orchestration_pipelines_lib import api
 
@@ -326,10 +326,14 @@ class TestApi(unittest.TestCase):
         expected_dag_id = _get_expected_dag_id(
             "dataproc-ephemeral-inline-pyspark")
         dag = getattr(_API_MODULE, expected_dag_id)
+        create_cluster_task = next(
+            t for t in dag.tasks
+            if isinstance(t, DataprocCreateClusterOperator))
         delete_cluster_task = next(
             t for t in dag.tasks
             if isinstance(t, DataprocDeleteClusterOperator))
-        self.assertEqual(delete_cluster_task.trigger_rule, TriggerRule.ALL_DONE)
+        self.assertTrue(create_cluster_task.is_setup)
+        self.assertTrue(delete_cluster_task.is_teardown)
 
     @patch(
         "orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils.gcs_utils.upload_run_notebook_if_needed"

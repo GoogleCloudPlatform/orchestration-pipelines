@@ -676,6 +676,55 @@ class TaskUtilsTest(unittest.TestCase):
         ):
             create_ai_task(action, pipeline, dag)
 
+    @patch("orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils.gcs_utils.upload_run_notebook_if_needed")
+    @patch("orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils.gcs_utils.get_run_notebook_gcs_path", return_value="gs://fake/notebook_runner.py")
+    def test_dataproc_ephemeral_task_setup_and_teardown(
+        self, mock_get_path, mock_upload
+    ):
+        """Tests that dataproc_ephemeral_task configures create_cluster as setup and delete_cluster as teardown."""
+        import pendulum
+        from airflow.models import DAG
+        from airflow.providers.google.cloud.operators.dataproc import (
+            DataprocCreateClusterOperator,
+            DataprocDeleteClusterOperator,
+            DataprocSubmitJobOperator,
+        )
+        from airflow.utils.task_group import TaskGroup
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            dataproc_ephemeral_task,
+        )
+        action = MagicMock()
+        action.name = "ephemeral_action"
+        action.type = "pyspark"
+        action.config.cluster_config = {"master_config": {}}
+        action.config.project_id = "test-project"
+        action.config.region = "us-central1"
+        action.config.cluster_name = "test-cluster"
+        action.config.properties = {}
+        action.depsBucket = None
+        action.pyFiles = None
+        action.impersonationChain = None
+        action.triggerRule = "all_success"
+        action.labels = {"key": "val"}
+        action.executionTimeout = None
+
+        dag = DAG(
+            dag_id="test_dag_ephemeral",
+            start_date=pendulum.today("UTC").add(days=-1),
+            schedule="@daily",
+        )
+
+        tg = dataproc_ephemeral_task(action, dag)
+        self.assertIsInstance(tg, TaskGroup)
+        create_task = dag.get_task(f"{action.name}.{action.name}_create_cluster")
+        submit_task = dag.get_task(f"{action.name}.{action.name}_submit_job")
+        delete_task = dag.get_task(f"{action.name}.{action.name}_delete_cluster")
+        self.assertIsInstance(create_task, DataprocCreateClusterOperator)
+        self.assertIsInstance(submit_task, DataprocSubmitJobOperator)
+        self.assertIsInstance(delete_task, DataprocDeleteClusterOperator)
+        self.assertTrue(create_task.is_setup)
+        self.assertTrue(delete_task.is_teardown)
+
 
 if __name__ == "__main__":
     unittest.main()

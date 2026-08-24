@@ -413,7 +413,6 @@ def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
         DataprocSubmitJobOperator,
     )
     from airflow.utils.task_group import TaskGroup
-    from airflow.utils.trigger_rule import TriggerRule
 
     try:
         with TaskGroup(group_id=action.name, dag=dag) as task_group:
@@ -432,7 +431,7 @@ def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
                 doc_md=json.dumps({"op_action_name": action.name}),
                 labels=action.labels,
                 dag=dag,
-            )
+            ).as_setup()
 
             job = {
                 "placement": {"cluster_name": action.config.cluster_name},
@@ -508,8 +507,7 @@ def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
                 impersonation_chain=action.impersonationChain,
                 doc_md=json.dumps({"op_action_name": action.name}),
                 dag=dag,
-                trigger_rule=TriggerRule.ALL_DONE,
-            )
+            ).as_teardown(setups=create_cluster)
 
             # pylint: disable=pointless-statement
             create_cluster >> submit_job >> delete_cluster
