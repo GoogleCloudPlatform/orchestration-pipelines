@@ -17,11 +17,19 @@
 import json
 import unittest
 
+import pytest
 from airflow.exceptions import AirflowFailException
 from airflow.models import DAG
 from airflow.operators.python import PythonOperator
 
-from orchestration_pipelines_lib.utils.dummy_dag import create as create_dummy_dag
+from orchestration_pipelines_lib.utils.dummy_dag import (
+    create as create_dummy_dag,
+)
+from tests.conftest import IS_AIRFLOW_2
+
+pytestmark = pytest.mark.skipif(
+    not IS_AIRFLOW_2, reason="This file requires Airflow 2"
+)
 
 
 class TestDummyDag(unittest.TestCase):

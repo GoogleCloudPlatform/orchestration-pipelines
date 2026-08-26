@@ -18,21 +18,32 @@ import os
 import sys
 import unittest
 from datetime import datetime
-import pytz
 from unittest.mock import patch
 
+import pytest
+import pytz
 from airflow.models import DAG
 from airflow.operators.python import PythonOperator
-from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
-from airflow.providers.google.cloud.operators.bigquery import BigQueryInsertJobOperator
+from airflow.providers.cncf.kubernetes.operators.pod import (
+    KubernetesPodOperator,
+)
+from airflow.providers.google.cloud.operators.bigquery import (
+    BigQueryInsertJobOperator,
+)
 from airflow.providers.google.cloud.operators.dataproc import (
     DataprocCreateBatchOperator,
     DataprocCreateClusterOperator,
-    DataprocSubmitJobOperator,
     DataprocDeleteClusterOperator,
+    DataprocSubmitJobOperator,
 )
 
 from orchestration_pipelines_lib import api
+from tests.conftest import IS_AIRFLOW_2
+
+pytestmark = pytest.mark.skipif(
+    not IS_AIRFLOW_2, reason="This file requires Airflow 2"
+)
+
 
 # Define the project root to reliably locate test data files
 _PROJECT_ROOT = os.path.abspath(

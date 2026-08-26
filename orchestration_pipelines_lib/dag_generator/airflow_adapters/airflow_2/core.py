@@ -14,19 +14,10 @@
 #
 """Module to validate and build pipeline from YAML in Airflow 2."""
 
-import json
-from functools import partial
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING
 
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
-    action_handler_registry,
-)
-from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.retry_resolver import (  # noqa: E501
-    RetryResolver,
-)
-from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.utils import (  # noqa: E501
-    init_context_callback,
-    pipeline_run_callback,
+    dag_utils,
 )
 
 # Airflow and SQLAlchemy imports moved inside functions to reduce import tax
@@ -34,37 +25,22 @@ from . import task_factory
 from .email_utils import send_notification_email
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
-
     from airflow.models import DAG, DagRun, TaskInstance
-    from airflow.models.dag import DagStateChangeCallback, ScheduleArg
     from airflow.models.taskinstance import TaskInstanceNote
     from airflow.utils.context import Context
     from sqlalchemy.orm import Session
     from sqlalchemy.sql.selectable import Subquery
 
-    from orchestration_pipelines_lib.internal_models.pipeline import (
-        AnyAction,
-        AnyScheduleTrigger,
-        PipelineModel,
-    )
 
+def get_deps() -> dag_utils.AirflowVersionedDependencies:
+    """Returns Airflow 2 specific dependencies for DAG generation."""
+    from airflow.operators.python import PythonOperator
 
-class DAGKwargs(TypedDict, total=False):
-    """A not comprehensive list of keys for Airflow DAG constructor."""
-
-    dag_id: str
-    description: str | None
-    default_args: dict[str, "Any"]
-    tags: list[str] | None
-    template_searchpath: "str | Iterable[str] | None"
-    schedule: "ScheduleArg"
-    doc_md: str | None
-    on_failure_callback: (
-        "DagStateChangeCallback | list[DagStateChangeCallback] | None"
-    )
-    on_success_callback: (
-        "DagStateChangeCallback | list[DagStateChangeCallback] | None"
+    return dag_utils.AirflowVersionedDependencies(
+        task_factory=task_factory,
+        emails_callback=send_notification_email,
+        init_pipeline_context=init_orchestration_pipeline_context,
+        init_task_operator=PythonOperator,
     )
 
 
@@ -106,7 +82,7 @@ def init_orchestration_pipeline_context(note_content: str, **context):
     dag_run = _get_dag_run(context)  # pyright: ignore[reportArgumentType]
     dag = _get_dag(context)  # pyright: ignore[reportArgumentType]
 
-    additional_notes = _extract_additional_notes(note_content)
+    additional_notes = dag_utils.extract_additional_notes(note_content)
     with create_session() as session:
         try:
             _upsert_dag_run_note(session, additional_notes, dag_run)
@@ -122,41 +98,11 @@ def init_orchestration_pipeline_context(note_content: str, **context):
             raise
 
 
-def _extract_additional_notes(note_content: str | None) -> str:
-    # Filter note_content to keep only specific fields
-    if not note_content:
-        return ""
-
-    notes_data = json.loads(note_content)
-    if not isinstance(notes_data, dict):
-        return ""
-
-    allowed_keys = [
-        "op_bundle",
-        "op_version",
-        "op_pipeline",
-        "op_owner",
-        "op_origination",
-        "op_deployment_details",
-        "op_repository",
-        "op_branch",
-        "op_commit_sha",
-        "op_is_current",
-    ]
-
-    notes_dict = {k: v for k, v in notes_data.items() if k in allowed_keys}
-    if not notes_dict:
-        return ""
-
-    return json.dumps(notes_dict, indent=4)
-
-
 def _upsert_dag_run_note(
     session: "Session", additional_notes: str, dag_run: "DagRun"
 ):
     from airflow.models.dagrun import DagRunNote
 
-    # 1. Update/Insert DAG RUN Note (Single query/operation)
     dr_note = session.query(DagRunNote).filter_by(dag_run_id=dag_run.id).first()
     if dr_note:
         if dr_note.content != additional_notes:
@@ -244,167 +190,6 @@ def _get_task_instances(
     )
 
 
-def generate(
-    pipeline: "PipelineModel",
-    tags: list[str],
-    dag_notes: str,
-    data_root: str,
-    bundle_id: str | None,
-    pipeline_id: str,
-) -> "DAG":
-    """Generates the Airflow DAG for the given pipeline model.
-
-    Args:
-        pipeline: The parsed pipeline model.
-        tags: A list of tags to apply to the generated DAG.
-        dag_notes: The markdown documentation/notes for the DAG.
-        data_root: Root directory for pipeline data used for template search.
-        bundle_id: The ID of the bundle.
-        pipeline_id: The ID of the pipeline.
-
-    Returns:
-        The fully constructed Airflow DAG.
-
-    Raises:
-        ValueError: If a task dependency cannot be resolved.
-    """
-    from airflow.models import DAG
-
-    action_handlers = action_handler_registry.get_action_handlers(task_factory)
-
-    dag_kwargs = _build_dag_kwargs(
-        pipeline, tags, dag_notes, data_root, bundle_id, pipeline_id
-    )
-    _configure_dag_schedule(dag_kwargs, pipeline.triggers)
-    dag = DAG(**dag_kwargs)
-    _create_init_task(bundle_id, pipeline_id, dag, dag_notes)
-
-    tasks = _create_tasks(dag, action_handlers, pipeline)
-
-    # 3. Add cross-task dependencies
-    for action in pipeline.actions:
-        _set_dependencies(tasks, action)
-
-    return dag
-
-
-def _build_dag_kwargs(
-    pipeline: "PipelineModel",
-    tags: list[str],
-    dag_notes: str,
-    data_root: str,
-    bundle_id: str | None,
-    pipeline_id: str,
-) -> DAGKwargs:
-    finish_callback = pipeline_run_callback(bundle_id, pipeline_id)
-    on_failure_callbacks = [finish_callback]
-    on_success_callbacks = [finish_callback]
-
-    if pipeline.notifications:
-        if pipeline.notifications.onPipelineFailure:
-            emails = pipeline.notifications.onPipelineFailure.email
-            on_failure_callback = partial(
-                send_notification_email, emails, False
-            )
-            on_failure_callbacks.append(on_failure_callback)
-
-        if pipeline.notifications.onPipelineSuccess:
-            emails = pipeline.notifications.onPipelineSuccess.email
-            on_success_callback = partial(send_notification_email, emails, True)
-            on_success_callbacks.append(on_success_callback)
-
-    default_args = {
-        "owner": pipeline.metadata.owner,
-        **RetryResolver.resolve_default_args(pipeline.defaults),
-    }
-
-    dag_kwargs = {
-        "dag_id": pipeline.metadata.pipelineId,
-        "description": pipeline.metadata.description,
-        "default_args": default_args,
-        "tags": tags,
-        "template_searchpath": [data_root] if data_root else [],
-        "doc_md": dag_notes,
-        "on_failure_callback": on_failure_callbacks,
-        "on_success_callback": on_success_callbacks,
-    }
-    return dag_kwargs
-
-
-def _configure_dag_schedule(
-    dag_kwargs: DAGKwargs, triggers: list["AnyScheduleTrigger"]
-):
-    from orchestration_pipelines_lib.internal_models.triggers import (
-        ScheduleTriggerModel,
-    )
-
-    schedule_trigger = next(
-        (t for t in triggers if isinstance(t, ScheduleTriggerModel)),
-        None,
-    )
-
-    if schedule_trigger:
-        task_factory.create_schedule_trigger_task(dag_kwargs, schedule_trigger)
-    else:
-        dag_kwargs["schedule"] = None
-
-
-def _create_init_task(
-    bundle_id: str | None, pipeline_id: str, dag: "DAG", dag_notes: str
-):
-    from airflow.operators.python import PythonOperator
-
-    task_finish_callback = init_context_callback(bundle_id, pipeline_id)
-
-    _ = PythonOperator(
-        task_id="init_orchestration_pipeline_context",
-        python_callable=init_orchestration_pipeline_context,
-        op_args=[dag_notes],
-        dag=dag,
-        on_failure_callback=[task_finish_callback],
-        on_success_callback=[task_finish_callback],
-    )
-
-
-def _create_tasks(
-    dag: "DAG",
-    action_handlers: dict[type, "Callable"],
-    pipeline: "PipelineModel",
-) -> dict[str, "Any"]:
-    tasks = {}
-
-    # 2. Create tasks in a task group and explicitly associate them with the dag
-    for action in pipeline.actions:
-        handler = action_handlers.get(type(action))
-
-        if not handler:
-            continue
-
-        # IMPORTANT: Ensure your handler passes 'dag=dag' to the
-        # Operator constructor
-        task_obj = handler(action, pipeline, dag=dag)
-        tasks[action.name] = task_obj
-
-    return tasks
-
-
-def _set_dependencies(tasks: dict[str, "Any"], action: "AnyAction"):
-    if not (action.dependsOn and action.name in tasks):
-        return
-
-    current_task = tasks[action.name]
-    for dep_name in action.dependsOn:
-        if dep_name not in tasks:
-            raise ValueError(
-                f"Task {dep_name} being upstream dependency for "
-                f"{action.name} does not exist."
-            )
-
-        upstream_task = tasks[dep_name]
-        # Relationships are safely set on the objects directly
-        current_task.set_upstream(upstream_task)
-
-
 def get_actively_running_versions(pipeline_id, bundle_id) -> list[str]:
     """Retrieves a list of actively running versions for a given pipeline.
 
@@ -456,9 +241,11 @@ def get_previous_default_versions(
 def _get_dag_tags_subquery(
     session: "Session", pipeline_id: str, bundle_id: str
 ) -> "Subquery":
-    # 1. Subquery to find dag_ids that have ALL THREE required tags.
-    # This uses a "Tag Intersection" pattern (GROUP BY + HAVING COUNT)
-    # which avoids multiple joins and table scans.
+    """Subquery to find dag_ids that have the required tags.
+
+    This uses a "Tag Intersection" pattern (GROUP BY + HAVING COUNT)
+    which avoids multiple joins and table scans.
+    """
     from airflow.models import DagTag
     from sqlalchemy import func
 
@@ -482,9 +269,11 @@ def _get_dag_tags_subquery(
 def _get_tags(
     session: "Session", subquery: "Subquery"
 ) -> list[tuple[str, str]]:
-    # 2. Outer query to fetch ONLY the version tags for the matching DAGs.
-    # This is pure tag-based filtering and completely decouples the query
-    # from the dag_id naming convention.
+    """Outer query to fetch ONLY the version tags for the matching DAGs.
+
+    This is pure tag-based filtering and completely decouples the query
+    from the dag_id naming convention.
+    """
     from airflow.models import DagTag
 
     return (

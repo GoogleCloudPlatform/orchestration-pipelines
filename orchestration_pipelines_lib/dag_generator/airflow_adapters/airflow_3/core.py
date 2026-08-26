@@ -14,33 +14,39 @@
 #
 """Module to validate and build pipeline from YAML in Airflow 3."""
 
-import json
-from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING
 
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
-    action_handler_registry,
-)
-from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.retry_resolver import (  # noqa: E501
-    RetryResolver,
-)
-from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.utils import (  # noqa: E501
-    init_context_callback,
-    pipeline_run_callback,
-)
-from orchestration_pipelines_lib.internal_models.pipeline import PipelineModel
-from orchestration_pipelines_lib.internal_models.triggers import (
-    ScheduleTriggerModel,
+    dag_utils,
 )
 
 from . import airflow_client_utils, email_utils, task_factory
+
+if TYPE_CHECKING:
+    from airflow.models import DagRun
+    from airflow_client.client import (
+        DagRunApi,
+        TaskInstanceApi,
+        TaskInstanceResponse,
+    )
+
+
+def get_deps() -> dag_utils.AirflowVersionedDependencies:
+    """Returns Airflow 3 specific dependencies for DAG generation."""
+    from airflow.providers.standard.operators.python import PythonOperator
+
+    return dag_utils.AirflowVersionedDependencies(
+        task_factory=task_factory,
+        emails_callback=email_utils.send_notification_email,
+        init_pipeline_context=init_orchestration_pipeline_context,
+        init_task_operator=PythonOperator,
+    )
 
 
 def _update_metadata(
     dag_run, dag, additional_notes, dag_run_api, task_instance_api
 ):
     """Updates DAG run and task instance metadata notes with retry."""
-    import airflow_client.client
     from airflow_client.client.exceptions import ServiceException
     from tenacity import (
         retry,
@@ -55,63 +61,88 @@ def _update_metadata(
         retry=retry_if_exception_type(ServiceException),
     )
     def _do_update():
-        # 1. Update/Insert DAG RUN Note
-        dag_run_api.patch_dag_run(
-            dag_id=dag_run.dag_id,
-            dag_run_id=dag_run.run_id,
-            dag_run_patch_body={"note": additional_notes},
-            update_mask=["note"],
-        )
-
-        # 2. Update/Insert TASK INSTANCE Note
-        task_instances = task_instance_api.get_task_instances(
-            dag_id=dag_run.dag_id, dag_run_id=dag_run.run_id
-        ).task_instances
-
-        existing_notes_map = {
-            (ti.task_id, ti.map_index): ti.note for ti in task_instances
-        }
+        _set_additional_notes(dag_run, additional_notes, dag_run_api)
+        task_instances = _get_task_instances(dag_run, task_instance_api)
 
         doc_md_map = {t.task_id: t.doc_md for t in dag.tasks}
-        entities = []
-
-        for task_instance in task_instances:
-            new_content = doc_md_map.get(task_instance.task_id, "")
-            if not new_content:
-                continue
-
-            existing_note = existing_notes_map.get(
-                (task_instance.task_id, task_instance.map_index)
-            )
-
-            if existing_note and existing_note == new_content:
-                continue
-
-            entities.append(
-                {"task_id": task_instance.task_id, "note": new_content}
-            )
+        entities = _calculate_updates(task_instances, doc_md_map)
 
         if entities:
-            batch_body = (
-                airflow_client.client.BulkBodyBulkTaskInstanceBody.from_dict(
-                    {
-                        "actions": [
-                            {
-                                "action": "update",
-                                "action_on_non_existence": "skip",
-                                "entities": entities,
-                            }
-                        ]
-                    }
-                )
-            )
-            task_instance_api.bulk_task_instances(
-                dag_id=dag_run.dag_id,
-                dag_run_id=dag_run.run_id,
-                bulk_body_bulk_task_instance_body=batch_body,
-            )
+            _update_task_instances(entities, dag_run, task_instance_api)
 
     _do_update()
+
+
+def _set_additional_notes(
+    dag_run: "DagRun",
+    additional_notes: str,
+    dag_run_api: "DagRunApi",
+):
+    dag_run_api.patch_dag_run(
+        dag_id=dag_run.dag_id,
+        dag_run_id=dag_run.run_id,
+        dag_run_patch_body={"note": additional_notes},
+        update_mask=["note"],
+    )
+
+
+def _get_task_instances(
+    dag_run: "DagRun", task_instance_api: "TaskInstanceApi"
+):
+    return task_instance_api.get_task_instances(
+        dag_id=dag_run.dag_id, dag_run_id=dag_run.run_id
+    ).task_instances
+
+
+def _calculate_updates(
+    task_instances: list["TaskInstanceResponse"], doc_md_map: dict[str, str]
+) -> list[dict]:
+    existing_notes_map = {
+        (ti.task_id, ti.map_index): ti.note for ti in task_instances
+    }
+
+    entities = []
+
+    for task_instance in task_instances:
+        new_content = doc_md_map.get(task_instance.task_id, "")
+        if not new_content:
+            continue
+
+        existing_note = existing_notes_map.get(
+            (task_instance.task_id, task_instance.map_index)
+        )
+
+        if existing_note and existing_note == new_content:
+            continue
+
+        entities.append({"task_id": task_instance.task_id, "note": new_content})
+
+    return entities
+
+
+def _update_task_instances(
+    entities: list[dict],
+    dag_run: "DagRun",
+    task_instance_api: "TaskInstanceApi",
+):
+    import airflow_client.client
+
+    batch_body = airflow_client.client.BulkBodyBulkTaskInstanceBody.from_dict(
+        {
+            "actions": [
+                {
+                    "action": "update",
+                    "action_on_non_existence": "skip",
+                    "entities": entities,
+                }
+            ]
+        }
+    )
+    task_instance_api.bulk_task_instances(
+        dag_id=dag_run.dag_id,
+        dag_run_id=dag_run.run_id,
+        bulk_body_bulk_task_instance_body=batch_body,
+    )
 
 
 def init_orchestration_pipeline_context(note_content: str, **context):
@@ -134,27 +165,7 @@ def init_orchestration_pipeline_context(note_content: str, **context):
     dag = context.get("dag")
 
     # Filter note_content to keep only specific fields
-    additional_notes = ""
-    if note_content:
-        notes_data = json.loads(note_content)
-        if isinstance(notes_data, dict):
-            allowed_keys = [
-                "op_bundle",
-                "op_version",
-                "op_pipeline",
-                "op_owner",
-                "op_origination",
-                "op_deployment_details",
-                "op_repository",
-                "op_branch",
-                "op_commit_sha",
-                "op_is_current",
-            ]
-            notes_dict = {
-                k: v for k, v in notes_data.items() if k in allowed_keys
-            }
-            if notes_dict:
-                additional_notes = json.dumps(notes_dict, indent=4)
+    additional_notes = dag_utils.extract_additional_notes(note_content)
 
     api_client = airflow_client_utils.get_airflow_api_client()
     dag_run_api = airflow_client.client.DagRunApi(api_client)
@@ -170,134 +181,6 @@ def init_orchestration_pipeline_context(note_content: str, **context):
             f"metadata application: {e}"
         )
         raise
-
-
-def generate(
-    pipeline: PipelineModel,
-    tags: list[str],
-    dag_notes: str,
-    data_root: str,
-    bundle_id: str | None,
-    pipeline_id: str,
-) -> Any:
-    """Generates the Airflow DAG for the given pipeline model.
-
-    Args:
-        pipeline: The parsed pipeline model.
-        tags: A list of tags to apply to the generated DAG.
-        dag_notes: The markdown documentation/notes for the DAG.
-        data_root: Root directory for pipeline data used for template search.
-        bundle_id: The ID of the bundle.
-        pipeline_id: The ID of the pipeline.
-
-    Returns:
-        The fully constructed Airflow DAG.
-
-    Raises:
-        ValueError: If a task dependency cannot be resolved.
-    """
-    from airflow.providers.standard.operators.python import PythonOperator
-    from airflow.sdk import DAG
-
-    # Defines list of non-relative path to the additional folders where
-    # jinja will look for templates. For example, .txt file format is
-    # treated as jinja template. By default, it searches in
-    # /home/airflow/gcs/dags folder first.
-    template_searchpath = []
-    if data_root:
-        template_searchpath.append(data_root)
-
-    action_handlers = action_handler_registry.get_action_handlers(task_factory)
-
-    schedule_trigger = next(
-        (t for t in pipeline.triggers if isinstance(t, ScheduleTriggerModel)),
-        None,
-    )
-
-    finish_callback = pipeline_run_callback(bundle_id, pipeline_id)
-    on_failure_callbacks = [finish_callback]
-    on_success_callbacks = [finish_callback]
-
-    if pipeline.notifications:
-        if pipeline.notifications.onPipelineFailure:
-            emails = pipeline.notifications.onPipelineFailure.email
-            on_failure_callback = partial(
-                email_utils.send_notification_email, emails, False
-            )
-            on_failure_callbacks.append(on_failure_callback)
-
-        if pipeline.notifications.onPipelineSuccess:
-            emails = pipeline.notifications.onPipelineSuccess.email
-            on_success_callback = partial(
-                email_utils.send_notification_email, emails, True
-            )
-            on_success_callbacks.append(on_success_callback)
-
-    default_args = {
-        "owner": pipeline.metadata.owner,
-        **RetryResolver.resolve_default_args(pipeline.defaults),
-    }
-
-    dag_kwargs = {
-        "dag_id": pipeline.metadata.pipelineId,
-        "description": pipeline.metadata.description,
-        "default_args": default_args,
-        "tags": tags,
-        "template_searchpath": template_searchpath,
-        "user_defined_macros": {
-            "resolve_latest_pipeline_dag_id": (
-                task_factory._resolve_latest_pipeline_dag_id
-            ),
-        },
-        "on_failure_callback": on_failure_callbacks,
-        "on_success_callback": on_success_callbacks,
-    }
-
-    if schedule_trigger:
-        task_factory.create_schedule_trigger_task(dag_kwargs, schedule_trigger)
-    else:
-        dag_kwargs["schedule"] = None
-
-    dag_kwargs["doc_md"] = dag_notes
-
-    dag = DAG(**dag_kwargs)
-
-    task_finish_callback = init_context_callback(bundle_id, pipeline_id)
-
-    _ = PythonOperator(
-        task_id="init_orchestration_pipeline_context",
-        python_callable=init_orchestration_pipeline_context,
-        op_args=[dag_notes],
-        dag=dag,
-        on_failure_callback=[task_finish_callback],
-        on_success_callback=[task_finish_callback],
-    )
-
-    tasks = {}
-    # 2. Create tasks in a task group and explicitly associate them with the dag
-    for action in pipeline.actions:
-        handler = action_handlers.get(type(action))
-        if handler:
-            # IMPORTANT: Ensure your handler passes 'dag=dag' to the
-            # Operator constructor
-            task_obj = handler(action, pipeline, dag=dag)
-            tasks[action.name] = task_obj
-
-    # 3. Add cross-task dependencies
-    for action in pipeline.actions:
-        if action.dependsOn and action.name in tasks:
-            current_task = tasks[action.name]
-            for dep_name in action.dependsOn:
-                if dep_name not in tasks:
-                    raise ValueError(
-                        f"Task {dep_name} being upstream dependency for "
-                        f"{action.name} does not exist."
-                    )
-
-                upstream_task = tasks[dep_name]
-                # Relationships are safely set on the objects directly
-                current_task.set_upstream(upstream_task)
-    return dag
 
 
 def get_actively_running_versions(

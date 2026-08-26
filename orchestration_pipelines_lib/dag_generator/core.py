@@ -20,6 +20,9 @@ from typing import Any
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.adapter_factory import (  # noqa: E501
     get_adapter,
 )
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
+    dag_utils,
+)
 
 AIRFLOW_VERSION = version("apache-airflow").split("+")[0].replace(".", "_")
 
@@ -35,7 +38,7 @@ def generate(
     """Generates the pipeline DAG.
 
     It uses an adapter factory to load the appropriate Airflow version adapter
-    and calls its generate method.
+    and delegates DAG generation to dag_utils with adapter dependencies.
 
     Args:
         pipeline: The parsed pipeline definition.
@@ -50,8 +53,14 @@ def generate(
     """
     adapter = get_adapter(AIRFLOW_VERSION)
 
-    return adapter.generate(
-        pipeline, tags, dag_notes, data_root, bundle_id, pipeline_id
+    return dag_utils.generate(
+        pipeline,
+        tags,
+        dag_notes,
+        data_root,
+        bundle_id,
+        pipeline_id,
+        adapter.get_deps(),
     )
 
 

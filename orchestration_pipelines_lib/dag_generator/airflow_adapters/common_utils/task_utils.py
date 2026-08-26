@@ -41,8 +41,10 @@ if TYPE_CHECKING:
     try:
         from airflow.sdk import DAG
     except ImportError:
-        from airflow import DAG
+        from airflow.models import DAG
     from airflow.utils.task_group import TaskGroup
+
+    from .dag_utils import DAGKwargs
 
 
 def get_pipeline_metadata(dag: DAG) -> tuple[str, str, str]:
@@ -623,7 +625,7 @@ def dataproc_existing_cluster(
         raise
 
 
-def create_schedule_trigger_task(dag_kwargs, schedule_trigger):
+def create_schedule_trigger_task(dag_kwargs: DAGKwargs, schedule_trigger: Any):
     """Converts the input trigger config into schedule parameters for the
     DAG.
 

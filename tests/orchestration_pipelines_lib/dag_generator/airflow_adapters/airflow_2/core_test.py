@@ -12,69 +12,47 @@
 #
 """Unit tests for the core functions of Airflow 2."""
 
-import json
 import unittest
-from typing import Any
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-from airflow import DAG
-from airflow.operators.python import PythonOperator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql.selectable import Subquery
 
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.airflow_2.core import (  # noqa: E501
-    _build_dag_kwargs,
-    _configure_dag_schedule,
-    _create_init_task,
-    _create_tasks,
-    _extract_additional_notes,
     _extract_versions,
     _get_dag_tags_subquery,
     _get_tags,
     _get_task_instance_notes,
     _get_task_instances,
-    _set_dependencies,
     _upsert_dag_run_note,
     _upsert_task_instance_note,
     _upsert_task_instance_notes,
-    generate,
     get_actively_running_versions,
+    get_deps,
     get_previous_default_versions,
     init_orchestration_pipeline_context,
+    send_notification_email,
+    task_factory,
 )
 
-TARGET_MODULE = (
-    "orchestration_pipelines_lib.dag_generator.airflow_adapters.airflow_2.core"
-)
+ADAPTERS_MODULE = "orchestration_pipelines_lib.dag_generator.airflow_adapters"
+TARGET_MODULE = f"{ADAPTERS_MODULE}.airflow_2.core"
 
 MOCK_CREATE_SESSION = "airflow.utils.session.create_session"
 MOCK_DAG_RUN_NOTE = "airflow.models.dagrun.DagRunNote"
 MOCK_TASK_INSTANCE = "airflow.models.TaskInstance"
 MOCK_TASK_INSTANCE_NOTE = "airflow.models.taskinstance.TaskInstanceNote"
 MOCK_DAG_TAG = "airflow.models.DagTag"
-MOCK_SCHEDULE_TRIGGER_MODEL = (
-    "orchestration_pipelines_lib.internal_models.triggers.ScheduleTriggerModel"
+
+MOCK_EXTRACT_ADDITIONAL_NOTES = (
+    f"{TARGET_MODULE}.dag_utils.extract_additional_notes"
 )
-
-MOCK_PARTIAL = "functools.partial"
-MOCK_ACTION_REGISTRY = f"{TARGET_MODULE}.action_handler_registry"
-
-MOCK_EXTRACT_ADDITIONAL_NOTES = f"{TARGET_MODULE}._extract_additional_notes"
 MOCK_UPSERT_DAG_RUN_NOTE = f"{TARGET_MODULE}._upsert_dag_run_note"
 MOCK_UPSERT_TASK_INSTANCE_NOTES = f"{TARGET_MODULE}._upsert_task_instance_notes"
 MOCK_GET_TASK_INSTANCE_NOTES = f"{TARGET_MODULE}._get_task_instance_notes"
 MOCK_GET_TASK_INSTANCES = f"{TARGET_MODULE}._get_task_instances"
 MOCK_UPSERT_TASK_INSTANCE_NOTE = f"{TARGET_MODULE}._upsert_task_instance_note"
-MOCK_BUILD_DAG_KWARGS = f"{TARGET_MODULE}._build_dag_kwargs"
-MOCK_CONFIGURE_DAG_SCHEDULE = f"{TARGET_MODULE}._configure_dag_schedule"
-MOCK_CREATE_INIT_TASK = f"{TARGET_MODULE}._create_init_task"
-MOCK_CREATE_TASKS = f"{TARGET_MODULE}._create_tasks"
-MOCK_SET_DEPENDENCIES = f"{TARGET_MODULE}._set_dependencies"
-MOCK_SEND_NOTIFICATION_EMAIL = (
-    f"{TARGET_MODULE}.send_notification_email"
-)
-MOCK_TASK_FACTORY = f"{TARGET_MODULE}.task_factory"
 
 
 @pytest.fixture
@@ -284,78 +262,27 @@ def test_init_orchestration_pipeline_context_with_db_exception_rolls_back_and_ra
     mock_session.commit.assert_not_called()
 
 
-def test_extract_additional_notes_with_valid_json_returns_allowed_keys():
-    """Test extraction of only allowed metadata keys from a valid JSON dict."""
-    input_json = {
-        "op_bundle": "my_bundle",
-        "op_version": "1.0",
-        "op_owner": "user@google.com",
-        "ignored_key": "some_value",
-        "op_pipeline": "pipeline_name",
-    }
-    expected_dict = {
-        "op_bundle": "my_bundle",
-        "op_version": "1.0",
-        "op_owner": "user@google.com",
-        "op_pipeline": "pipeline_name",
-    }
-    input_content = json.dumps(input_json)
-    expected_output = json.dumps(expected_dict, indent=4)
-
-    result = _extract_additional_notes(input_content)
-
-    assert result == expected_output
-
-
-@pytest.mark.parametrize(
-    "empty_input",
-    [
-        None,
-        "",
-    ],
+@patch(
+    MOCK_UPSERT_TASK_INSTANCE_NOTES,
+    side_effect=IntegrityError("mock_ti_db_error", {}, {}),
 )
-def test_extract_additional_notes_with_empty_input_returns_empty_string(
-    empty_input,
+@patch(MOCK_UPSERT_DAG_RUN_NOTE)
+def test_init_orchestration_pipeline_context_with_integrity_error_on_ti_notes_rolls_back(  # noqa: E501
+    mock_upsert_dag_run_note,
+    mock_upsert_task_instance_notes,
+    note_content,
+    full_context,
+    mock_session,
+    mock_create_session,
 ):
-    """Test that passing None or an empty string returns an empty string."""
-    result = _extract_additional_notes(empty_input)
-
-    assert result == ""
-
-
-@pytest.mark.parametrize(
-    "non_dict_json",
-    [
-        "[1, 2, 3]",
-        '"simple_string"',
-    ],
-)
-def test_extract_additional_notes_with_non_dict_json_returns_empty_string(
-    non_dict_json,
-):
-    """Test that passing valid JSON that is not a dictionary returns an empty
-    string.
+    """Test that an IntegrityError raised during task instance notes upsert
+    after dag run note upsert succeeds still rolls back safely.
     """
-    result = _extract_additional_notes(non_dict_json)
+    init_orchestration_pipeline_context(note_content, **full_context)
 
-    assert result == ""
-
-
-def test_extract_additional_notes_with_invalid_json_raises_json_decode_error():
-    """Test that passing syntactically invalid JSON raises a JSONDecodeError."""
-    with pytest.raises(json.JSONDecodeError):
-        _extract_additional_notes("invalid json")
-
-
-def test_extract_additional_notes_without_allowed_keys_returns_empty_string():
-    """Test that a dictionary with zero matching metadata keys returns an empty
-    string.
-    """
-    input_content = json.dumps({"key_a": 1, "key_b": 2})
-
-    result = _extract_additional_notes(input_content)
-
-    assert result == ""
+    mock_upsert_dag_run_note.assert_called_once()
+    mock_session.rollback.assert_called_once()
+    mock_session.commit.assert_not_called()
 
 
 @patch(MOCK_DAG_RUN_NOTE)
@@ -611,469 +538,45 @@ def test_upsert_task_instance_notes_without_doc_md_skips_upsert(
     mock_upsert_task_instance_note.assert_not_called()
 
 
-@pytest.fixture
-def pipeline_setup():
-    """Sets up the mock pipeline metadata, configuration defaults, and pipeline
-    model.
-    """
-    mock_defaults = MagicMock(executionConfigDefault=MagicMock(retries=3))
-    mock_metadata = MagicMock(
-        pipelineId="test_pipe", description="Desc", owner="team"
-    )
-    mock_pipeline = MagicMock(metadata=mock_metadata, defaults=mock_defaults)
-    return {
-        "pipeline": mock_pipeline,
-        "pipeline_id": "my_pipe",
-        "bundle_id": "bundle_id",
-    }
-
-
-def test_build_dag_kwargs_with_data_root_returns_kwargs_with_template_searchpath(  # noqa: E501
-    pipeline_setup,
+@patch(MOCK_UPSERT_TASK_INSTANCE_NOTE, new_callable=MagicMock)
+@patch(MOCK_GET_TASK_INSTANCES, autospec=True)
+@patch(MOCK_GET_TASK_INSTANCE_NOTES, autospec=True)
+def test_upsert_task_instance_notes_with_task_missing_from_dag_skips_upsert(
+    mock_get_task_instance_notes,
+    mock_get_task_instances,
+    mock_upsert_task_instance_note,
+    mock_session,
+    mock_dag,
+    mock_dag_run,
 ):
-    """Test that dag_kwargs are correctly populated when a valid data_root is
-    provided.
+    """Test that task instances whose task_id is absent from dag.tasks are
+    safely skipped.
     """
-    tags = ["tag1", "tag2"]
-    dag_notes = "## Pipeline Notes"
-    data_root = "/path/to/data"
-    expected_kwargs = {
-        "dag_id": "test_pipe",
-        "description": "Desc",
-        "default_args": {
-            "owner": "team",
-            "retries": 3,
-        },
-        "tags": tags,
-        "template_searchpath": [data_root],
-        "doc_md": dag_notes,
-        "on_failure_callback": [ANY, ANY],
-        "on_success_callback": [ANY, ANY],
-    }
+    orphan_ti = MagicMock(task_id="orphan_task_not_in_dag", map_index=-1)
+    mock_get_task_instance_notes.return_value = []
+    mock_get_task_instances.return_value = [orphan_ti]
 
-    result = _build_dag_kwargs(
-        pipeline_setup["pipeline"],
-        tags,
-        dag_notes,
-        data_root,
-        pipeline_setup["bundle_id"],
-        pipeline_setup["pipeline_id"],
+    _upsert_task_instance_notes(mock_session, mock_dag, mock_dag_run)
+
+    mock_upsert_task_instance_note.assert_not_called()
+
+
+def test_get_deps_returns_expected_dependencies():
+    """Tests that get_deps returns the expected Airflow 2 dependencies."""
+    from airflow.operators.python import PythonOperator
+
+    from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
+        dag_utils,
     )
 
-    assert result == expected_kwargs
+    deps = get_deps()
 
-
-def test_build_dag_kwargs_without_data_root_returns_kwargs_without_template_searchpath(  # noqa: E501
-    pipeline_setup,
-):
-    """Test that template_searchpath is empty when an empty data_root is
-    provided.
-    """
-    tags = []
-    dag_notes = "Notes"
-    data_root = ""
-
-    result = _build_dag_kwargs(
-        pipeline_setup["pipeline"],
-        tags,
-        dag_notes,
-        data_root,
-        pipeline_setup["bundle_id"],
-        pipeline_setup["pipeline_id"],
+    assert deps == dag_utils.AirflowVersionedDependencies(
+        task_factory=task_factory,
+        emails_callback=send_notification_email,
+        init_pipeline_context=init_orchestration_pipeline_context,
+        init_task_operator=PythonOperator,
     )
-
-    assert result.get("template_searchpath") == []
-
-
-def test_build_dag_kwargs_with_retry_policy_sets_default_args_and_custom_key(
-    pipeline_setup,
-):
-    """Test that dag_kwargs default_args includes retries, retry_delay, and _op_custom_retry_policy."""
-    from datetime import timedelta
-    from orchestration_pipelines_lib.internal_models.actions import (
-        FixedDelayStrategyModel,
-        RetryPolicyModel,
-    )
-
-    policy = RetryPolicyModel(
-        maxRetries=5,
-        fixedDelay=FixedDelayStrategyModel(retryDelay="2m"),
-    )
-    pipeline_setup["pipeline"].defaults.retryPolicy = policy
-
-    result = _build_dag_kwargs(
-        pipeline_setup["pipeline"],
-        [],
-        "Notes",
-        "",
-        pipeline_setup["bundle_id"],
-        pipeline_setup["pipeline_id"],
-    )
-
-    assert result["default_args"]["retries"] == 5
-    assert result["default_args"]["retry_delay"] == timedelta(minutes=2)
-    assert result["default_args"]["_op_custom_retry_policy"] == policy
-
-
-@pytest.fixture
-def schedule_setup():
-    """Sets up empty DAG kwargs and mock objects for schedule and non-schedule
-    triggers.
-    """
-    return {
-        "dag_kwargs": {},
-        "mock_schedule_trigger": MagicMock(spec=Any),
-        "mock_non_schedule_trigger": MagicMock(spec=Any),
-    }
-
-
-@patch(MOCK_TASK_FACTORY)
-def test_configure_dag_schedule_with_schedule_trigger_creates_trigger_task(
-    mock_task_factory, schedule_setup
-):
-    """Test that a schedule trigger task is created and 'schedule' is not set
-    when a valid trigger exists.
-    """
-    dag_kwargs = schedule_setup["dag_kwargs"]
-    mock_schedule_trigger = schedule_setup["mock_schedule_trigger"]
-    mock_non_schedule_trigger = schedule_setup["mock_non_schedule_trigger"]
-    triggers = [
-        mock_non_schedule_trigger,
-        mock_schedule_trigger,
-    ]
-
-    with patch(
-        MOCK_SCHEDULE_TRIGGER_MODEL,
-        new=type(mock_schedule_trigger),
-    ):
-        _configure_dag_schedule(dag_kwargs, triggers)
-
-    mock_task_factory.create_schedule_trigger_task.assert_called_once_with(
-        dag_kwargs, mock_schedule_trigger
-    )
-    assert "schedule" not in dag_kwargs
-
-
-@patch(MOCK_TASK_FACTORY)
-def test_configure_dag_schedule_without_schedule_trigger_sets_schedule_none(
-    mock_task_factory, schedule_setup
-):
-    """Test that 'schedule' is set to None and no task is created when no
-    schedule trigger is found.
-    """
-    dag_kwargs = schedule_setup["dag_kwargs"]
-    mock_non_schedule_trigger = schedule_setup["mock_non_schedule_trigger"]
-    triggers = [mock_non_schedule_trigger]
-
-    class MockScheduleTriggerModel:
-        pass
-
-    with patch(
-        MOCK_SCHEDULE_TRIGGER_MODEL,
-        new=MockScheduleTriggerModel,
-    ):
-        _configure_dag_schedule(dag_kwargs, triggers)
-
-    assert dag_kwargs.get("schedule") is None
-    mock_task_factory.create_schedule_trigger_task.assert_not_called()
-
-
-@pytest.fixture
-def init_task_setup():
-    """Sets up the mock DAG and documentation notes for the initialization
-    task.
-    """
-    return {"mock_dag": MagicMock(spec=DAG), "dag_notes": "Notes for init"}
-
-
-@patch("airflow.operators.python.PythonOperator", spec=PythonOperator)
-@patch(f"{TARGET_MODULE}.init_orchestration_pipeline_context")
-def test_create_init_task_with_valid_inputs_creates_python_operator(
-    mock_init_callable, MockPythonOperator, init_task_setup
-):
-    """Test that the PythonOperator is instantiated with correct parameters and
-    linked to the DAG.
-    """
-    mock_dag = init_task_setup["mock_dag"]
-    dag_notes = init_task_setup["dag_notes"]
-    bundle_id = "bundle_id"
-    pipeline_id = "pipeline_id"
-
-    _create_init_task(bundle_id, pipeline_id, mock_dag, dag_notes)
-
-    MockPythonOperator.assert_called_once_with(
-        task_id="init_orchestration_pipeline_context",
-        python_callable=mock_init_callable,
-        op_args=[dag_notes],
-        dag=mock_dag,
-        on_failure_callback=[ANY],
-        on_success_callback=[ANY],
-    )
-
-
-@pytest.fixture
-def create_tasks_setup():
-    """Sets up mock actions, action handlers mapping, and the pipeline with
-    registered actions.
-    """
-    mock_dag = MagicMock(spec=DAG)
-    mock_pipeline = MagicMock()
-
-    action_type_a = type("ActionA", (object,), {"name": "task_a"})
-    action_type_b = type("ActionB", (object,), {"name": "task_b"})
-
-    action_a = action_type_a()
-    action_b = action_type_b()
-    action_c_no_handler = MagicMock(name="task_c")
-
-    mock_pipeline.actions = [
-        action_a,
-        action_b,
-        action_c_no_handler,
-    ]
-
-    mock_handler_a = MagicMock(return_value=MagicMock(task_id="task_a_obj"))
-    mock_handler_b = MagicMock(return_value=MagicMock(task_id="task_b_obj"))
-
-    action_handlers = {
-        action_type_a: mock_handler_a,
-        action_type_b: mock_handler_b,
-    }
-
-    return {
-        "mock_dag": mock_dag,
-        "mock_pipeline": mock_pipeline,
-        "action_a": action_a,
-        "action_b": action_b,
-        "mock_handler_a": mock_handler_a,
-        "mock_handler_b": mock_handler_b,
-        "action_handlers": action_handlers,
-    }
-
-
-def test_create_tasks_with_registered_handlers_creates_tasks(
-    create_tasks_setup,
-):
-    """Test that tasks are successfully created and mapped when matching action
-    handlers are found.
-    """
-    setup = create_tasks_setup
-    mock_dag = setup["mock_dag"]
-    mock_pipeline = setup["mock_pipeline"]
-    mock_handler_a = setup["mock_handler_a"]
-    mock_handler_b = setup["mock_handler_b"]
-
-    tasks = _create_tasks(mock_dag, setup["action_handlers"], mock_pipeline)
-
-    mock_handler_a.assert_called_once_with(
-        setup["action_a"], mock_pipeline, dag=mock_dag
-    )
-    mock_handler_b.assert_called_once_with(
-        setup["action_b"], mock_pipeline, dag=mock_dag
-    )
-    assert len(tasks) == 2
-    assert "task_a" in tasks
-    assert "task_b" in tasks
-    assert tasks["task_a"] == mock_handler_a.return_value
-    assert tasks["task_b"] == mock_handler_b.return_value
-
-
-def test_create_tasks_without_registered_handlers_skips_actions(
-    create_tasks_setup,
-):
-    """Test that actions without any registered handler are silently ignored
-    during task creation.
-    """
-    setup = create_tasks_setup
-
-    tasks = _create_tasks(
-        setup["mock_dag"], setup["action_handlers"], setup["mock_pipeline"]
-    )
-
-    assert len(tasks) == 2
-    setup["mock_handler_a"].assert_called_once()
-    setup["mock_handler_b"].assert_called_once()
-
-
-@pytest.fixture
-def dependencies_setup():
-    """Sets up mock upstream and downstream tasks, and various mock action
-    dependency scenarios.
-    """
-    task_up = MagicMock(name="upstream", set_upstream=MagicMock())
-    task_down = MagicMock(name="downstream", set_upstream=MagicMock())
-    tasks = {"up": task_up, "down": task_down}
-
-    mock_action_depends = MagicMock(dependsOn=["up"])
-    mock_action_depends.name = "down"
-
-    mock_action_no_depends = MagicMock(dependsOn=None)
-    mock_action_no_depends.name = "down"
-
-    mock_action_no_task = MagicMock(dependsOn=["up"])
-    mock_action_no_task.name = "missing"
-
-    return {
-        "task_up": task_up,
-        "task_down": task_down,
-        "tasks": tasks,
-        "mock_action_depends": mock_action_depends,
-        "mock_action_no_depends": mock_action_no_depends,
-        "mock_action_no_task": mock_action_no_task,
-    }
-
-
-def test_set_dependencies_with_valid_upstream_sets_dependency(
-    dependencies_setup,
-):
-    """Test that the downstream task correctly registers the upstream task as
-    its dependency.
-    """
-    setup = dependencies_setup
-
-    _set_dependencies(setup["tasks"], setup["mock_action_depends"])
-
-    setup["task_down"].set_upstream.assert_called_once_with(setup["task_up"])
-
-
-def test_set_dependencies_without_upstream_does_nothing(dependencies_setup):
-    """Test that no task relationships are modified when an action has no
-    defined dependencies.
-    """
-    setup = dependencies_setup
-
-    _set_dependencies(setup["tasks"], setup["mock_action_no_depends"])
-
-    setup["task_down"].set_upstream.assert_not_called()
-    setup["task_up"].set_upstream.assert_not_called()
-
-
-def test_set_dependencies_with_action_not_in_tasks_does_nothing(
-    dependencies_setup,
-):
-    """Test that task configuration is skipped if the action itself does not
-    exist in the task dictionary.
-    """
-    setup = dependencies_setup
-    mock_action_depends = setup["mock_action_depends"]
-    mock_action_depends.name = "missing_task"
-
-    _set_dependencies(setup["tasks"], mock_action_depends)
-
-    setup["task_down"].set_upstream.assert_not_called()
-    setup["task_up"].set_upstream.assert_not_called()
-
-
-def test_set_dependencies_with_unresolved_dependency_raises_value_error(
-    dependencies_setup,
-):
-    """Test that a ValueError is raised when an action references a non-existent
-    upstream task.
-    """
-    setup = dependencies_setup
-    mock_action_depends = setup["mock_action_depends"]
-    mock_action_depends.dependsOn = ["missing_dep"]
-
-    with pytest.raises(
-        ValueError,
-        match=(
-            "Task missing_dep being upstream dependency for down"
-            " does not exist."
-        ),
-    ):
-        _set_dependencies(setup["tasks"], mock_action_depends)
-
-
-@pytest.fixture
-def generate_setup():
-    """Sets up the mock pipeline model, pipeline tags, and the mock
-    Airflow DAG.
-    """
-    mock_pipeline = MagicMock(
-        metadata=MagicMock(pipelineId="test_pipe", description="Desc"),
-        defaults=MagicMock(executionConfigDefault=MagicMock(retries=3)),
-        notifications=MagicMock(),
-        triggers=[],
-        actions=[],
-    )
-
-    return {
-        "mock_pipeline": mock_pipeline,
-        "tags": ["t1"],
-        "dag_notes": "Notes",
-        "data_root": "/data",
-        "pipeline_id": "my_pipe",
-        "bundle_id": "bundle_id",
-        "mock_final_dag": MagicMock(spec=DAG),
-    }
-
-
-@patch("airflow.models.DAG", autospec=True)
-@patch(MOCK_SET_DEPENDENCIES, autospec=True)
-@patch(MOCK_CREATE_TASKS, autospec=True)
-@patch(MOCK_CREATE_INIT_TASK, autospec=True)
-@patch(MOCK_CONFIGURE_DAG_SCHEDULE, autospec=True)
-@patch(MOCK_BUILD_DAG_KWARGS, autospec=True)
-@patch(MOCK_ACTION_REGISTRY)
-def test_generate_with_valid_pipeline_orchestrates_dag_creation(
-    mock_action_registry,
-    mock_build_dag_kwargs,
-    mock_configure_dag_schedule,
-    mock_create_init_task,
-    mock_create_tasks,
-    mock_set_dependencies,
-    MockDAG,
-    generate_setup,
-):
-    """Test that the DAG generation flow correctly invokes all helper and
-    configuration functions.
-    """
-    setup = generate_setup
-    mock_pipeline = setup["mock_pipeline"]
-    tags = setup["tags"]
-    dag_notes = setup["dag_notes"]
-    data_root = setup["data_root"]
-    bundle_id = setup["bundle_id"]
-    pipeline_id = setup["pipeline_id"]
-
-    mock_handlers = {}
-    mock_action_registry.get_action_handlers.return_value = mock_handlers
-    mock_kwargs_in = {"dag_id": "test_pipe", "doc_md": dag_notes}
-    mock_build_dag_kwargs.return_value = mock_kwargs_in
-    mock_tasks_out = {"t1": MagicMock(), "t2": MagicMock()}
-    mock_create_tasks.return_value = mock_tasks_out
-
-    result_dag = generate(
-        mock_pipeline,
-        tags,
-        dag_notes,
-        data_root,
-        bundle_id,
-        pipeline_id,
-    )
-
-    mock_action_registry.get_action_handlers.assert_called_once()
-    mock_build_dag_kwargs.assert_called_once_with(
-        mock_pipeline,
-        tags,
-        dag_notes,
-        data_root,
-        bundle_id,
-        pipeline_id,
-    )
-    mock_configure_dag_schedule.assert_called_once_with(
-        mock_kwargs_in, mock_pipeline.triggers
-    )
-    MockDAG.assert_called_once_with(**mock_kwargs_in)
-    mock_dag_instance = MockDAG.return_value
-    mock_create_init_task.assert_called_once_with(
-        bundle_id, pipeline_id, mock_dag_instance, dag_notes
-    )
-    mock_create_tasks.assert_called_once_with(
-        mock_dag_instance, mock_handlers, mock_pipeline
-    )
-    assert mock_set_dependencies.call_count == len(mock_pipeline.actions)
-    assert result_dag == mock_dag_instance
 
 
 @pytest.fixture
