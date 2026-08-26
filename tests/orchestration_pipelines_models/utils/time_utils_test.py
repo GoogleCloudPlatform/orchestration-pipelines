@@ -27,7 +27,7 @@ class UtilTest(unittest.TestCase):
             '* * * * *', '0 0 1 1 *', '0 0 1 JAN *', '0 0 * * MON',
             '*/15 * * * *', '0 0-23/2 * * *', '0 0 1,15 * *', '@yearly',
             '@annually', '@monthly', '@weekly', '@daily', '@midnight',
-            '@hourly'
+            '@hourly', '@once',
         ]
 
         for expr in valid_expressions:

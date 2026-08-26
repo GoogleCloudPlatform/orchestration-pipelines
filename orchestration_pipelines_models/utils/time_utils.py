@@ -105,6 +105,7 @@ def check_cron_expression(value):
         "@daily",
         "@midnight",
         "@hourly",
+        "@once",
     ]
     if value.strip().lower() in aliases:
         return
