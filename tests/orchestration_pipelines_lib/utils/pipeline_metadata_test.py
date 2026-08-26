@@ -110,6 +110,24 @@ class TestPipelineMetadata(unittest.TestCase):
                                            source_filepath="gs://dummy")
         self.assertTrue(metadata_paused.is_paused())
 
+    def test_is_unversioned(self):
+        """Tests the is_unversioned method."""
+        # Unversioned (no manifest)
+        metadata_unversioned = PipelineMetadata(
+            pipeline_id=self.pipeline_id,
+            source_filepath="gs://dummy",
+        )
+        self.assertTrue(metadata_unversioned.is_unversioned())
+
+        # Versioned (with manifest)
+        metadata_versioned = PipelineMetadata(
+            pipeline_id=self.pipeline_id,
+            manifest=self.mock_manifest,
+            version_id=self.version_id,
+            source_filepath="gs://dummy",
+        )
+        self.assertFalse(metadata_versioned.is_unversioned())
+
     def test_tags_generation(self):
         """Test the generation of DAG tags."""
         metadata = PipelineMetadata(pipeline_id=self.pipeline_id,
@@ -212,6 +230,37 @@ class TestPipelineMetadata(unittest.TestCase):
         self.assertEqual(doc_md["op_pipeline"], self.pipeline_id)
         self.assertEqual(doc_md["op_origination"], "")
         self.assertEqual(doc_md["op_source_filepath"], "gs://dummy/path.yml")
+
+    def test_doc_md_generation_with_dataset_trigger(self):
+        """Test doc_md generation with dataset trigger."""
+        from orchestration_pipelines_lib.internal_models.triggers import (
+            DatasetTriggerModel,
+        )
+
+        metadata = PipelineMetadata(
+            pipeline_id=self.pipeline_id,
+            manifest=self.mock_manifest,
+            version_id=self.version_id,
+            source_filepath="gs://dummy/path.yml",
+        )
+        dataset_trigger = DatasetTriggerModel(
+            uris=["gs://bucket/data.parquet", "bq://p.d.t"],
+            condition="any",
+        )
+        doc_md_str = metadata.generate_doc_md(
+            owner=self.pipeline_model.metadata.owner,
+            schedule_trigger=None,
+            dataset_trigger=dataset_trigger,
+        )
+        doc_md = json.loads(doc_md_str)
+
+        self.assertIn("op_datasets", doc_md)
+        self.assertEqual(
+            doc_md["op_datasets"]["uris"],
+            ["gs://bucket/data.parquet", "bq://p.d.t"],
+        )
+        self.assertEqual(doc_md["op_datasets"]["condition"], "any")
+        self.assertNotIn("op_schedule", doc_md)
 
     def test_empty_and_none_values(self):
         """Test behavior with empty or None values for optional fields."""

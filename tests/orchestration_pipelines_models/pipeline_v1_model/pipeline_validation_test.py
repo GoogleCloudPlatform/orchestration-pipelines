@@ -45,6 +45,7 @@ from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipel
     PythonEngine,
     Query,
     ScheduleTrigger,
+    DatasetTrigger,
     SqlAction,
     SqlEngine,
     Trigger,
@@ -614,7 +615,141 @@ class TestPipelineValidator(unittest.TestCase):
             str(cm.exception),
         )
 
+    def test_valid_dataset_trigger_succeeds(self):
+        """Tests that valid dataset trigger passes validation."""
+        trigger = Trigger(
+            datasets=DatasetTrigger(
+                uris=["gs://bucket/data.parquet", "bq://project.dataset.table"],
+                condition="all",
+            )
+        )
+        self.pipeline.triggers.extend([trigger])
+        PipelineValidator.validate(self.pipeline)
+
+    def test_valid_dataset_trigger_any_condition_succeeds(self):
+        """Tests that valid dataset trigger with any condition passes validation."""
+        trigger = Trigger(
+            datasets=DatasetTrigger(
+                uris=["gs://bucket/file.csv"],
+                condition="any",
+            )
+        )
+        self.pipeline.triggers.extend([trigger])
+        PipelineValidator.validate(self.pipeline)
+
+    def test_dataset_trigger_empty_uris_fails(self):
+        """Tests failure when dataset trigger uris list is empty."""
+        trigger = Trigger(datasets=DatasetTrigger(uris=[]))
+        self.pipeline.triggers.extend([trigger])
+        with self.assertRaisesRegex(
+            ValueError,
+            r"Error for field 'triggers\[0\].datasets.uris': "
+            r"must have at least 1 items, but has 0\.",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_dataset_trigger_empty_uri_string_fails(self):
+        """Tests failure when a dataset uri is empty string."""
+        trigger = Trigger(datasets=DatasetTrigger(uris=[""]))
+        self.pipeline.triggers.extend([trigger])
+        with self.assertRaisesRegex(
+            ValueError,
+            r"Error for field 'triggers\[0\].datasets.uris\[0\]': "
+            r"field is required and cannot be an empty string.",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_dataset_trigger_invalid_uri_fails(self):
+        """Tests failure when a dataset uri format is invalid."""
+        trigger = Trigger(datasets=DatasetTrigger(uris=["gs:// invalid uri"]))
+        self.pipeline.triggers.extend([trigger])
+        with self.assertRaisesRegex(
+            ValueError,
+            r"Error for field 'triggers\[0\].datasets.uris\[0\]': "
+            r"value 'gs:// invalid uri' does not match valid dataset URI format.",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_dataset_trigger_invalid_condition_fails(self):
+        """Tests failure when condition is not 'all' or 'any'."""
+        trigger = Trigger(
+            datasets=DatasetTrigger(
+                uris=["gs://bucket/data.csv"],
+                condition="invalid_condition",
+            )
+        )
+        self.pipeline.triggers.extend([trigger])
+        with self.assertRaisesRegex(
+            ValueError,
+            r"Error for field 'triggers\[0\].datasets.condition': "
+            r"value 'invalid_condition' is not valid\. Allowed values are 'all' or 'any'\.",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_triggers_mutual_exclusivity_fails(self):
+        """Tests failure when both schedule and datasets triggers are configured."""
+        trigger1 = Trigger(
+            schedule=ScheduleTrigger(
+                interval="* * * * *", start_time="2025-01-01T00:00:00Z"
+            )
+        )
+        trigger2 = Trigger(
+            datasets=DatasetTrigger(
+                uris=["gs://bucket/data.csv"],
+            )
+        )
+        self.pipeline.triggers.extend([trigger1, trigger2])
+        with self.assertRaisesRegex(
+            ValueError,
+            r"A pipeline cannot configure both 'schedule' and 'datasets' triggers simultaneously\.",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_multiple_dataset_triggers_fails(self):
+        """Tests failure when multiple triggers are configured."""
+        trigger1 = Trigger(datasets=DatasetTrigger(uris=["gs://bucket/1"]))
+        trigger2 = Trigger(datasets=DatasetTrigger(uris=["gs://bucket/2"]))
+        self.pipeline.triggers.extend([trigger1, trigger2])
+        with self.assertRaisesRegex(
+            ValueError,
+            r"A pipeline can have at most one trigger configured\.",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_valid_action_outlets_succeeds(self):
+        """Tests that valid action outlets pass validation."""
+        self.pipeline.actions[0].python.outlets.extend([
+            "gs://bucket/data.parquet",
+            "bq://project.dataset.table",
+            "table_identifier",
+        ])
+        try:
+            PipelineValidator.validate(self.pipeline)
+        except ValueError as e:
+            self.fail(f"Validation failed unexpectedly: {e}")
+
+    def test_action_outlets_empty_string_fails(self):
+        """Tests failure when an action outlet is an empty string."""
+        self.pipeline.actions[0].python.outlets.append("")
+        with self.assertRaisesRegex(
+            ValueError,
+            r"Error for field 'actions\[0\].python.outlets\[0\]': "
+            r"field is required and cannot be an empty string\.",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_action_outlets_invalid_uri_fails(self):
+        """Tests failure when an action outlet has an invalid URI format."""
+        self.pipeline.actions[0].python.outlets.append("gs:// invalid uri")
+        with self.assertRaisesRegex(
+            ValueError,
+            r"Error for field 'actions\[0\].python.outlets\[0\]': "
+            r"value 'gs:// invalid uri' does not match valid dataset URI format\.",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

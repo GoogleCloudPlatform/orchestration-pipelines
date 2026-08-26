@@ -725,7 +725,367 @@ class TaskUtilsTest(unittest.TestCase):
         self.assertTrue(create_task.is_setup)
         self.assertTrue(delete_task.is_teardown)
 
+    def test_create_dataset_trigger_task_all_condition(self):
+        """Tests create_dataset_trigger_task with condition: all."""
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            create_dataset_trigger_task,
+        )
+        from orchestration_pipelines_lib.internal_models.triggers import (
+            DatasetTriggerModel,
+        )
+
+        dag_kwargs = {}
+        trigger = DatasetTriggerModel(
+            uris=["gs://bucket/data1.parquet", "gs://bucket/data2.parquet"],
+            condition="all",
+        )
+        create_dataset_trigger_task(dag_kwargs, trigger)
+
+        self.assertIn("schedule", dag_kwargs)
+        self.assertFalse(dag_kwargs["catchup"])
+        self.assertIsNone(dag_kwargs["end_date"])
+        self.assertIsNotNone(dag_kwargs["start_date"])
+        self.assertEqual(len(dag_kwargs["schedule"]), 2)
+
+    def test_create_dataset_trigger_task_any_condition(self):
+        """Tests create_dataset_trigger_task with condition: any."""
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            create_dataset_trigger_task,
+        )
+        from orchestration_pipelines_lib.internal_models.triggers import (
+            DatasetTriggerModel,
+        )
+
+        dag_kwargs = {}
+        trigger = DatasetTriggerModel(
+            uris=["gs://bucket/data1.parquet", "gs://bucket/data2.parquet"],
+            condition="any",
+        )
+        create_dataset_trigger_task(dag_kwargs, trigger)
+
+        self.assertIn("schedule", dag_kwargs)
+        self.assertFalse(dag_kwargs["catchup"])
+        self.assertIsNone(dag_kwargs["end_date"])
+        self.assertIsNotNone(dag_kwargs["start_date"])
+
+    def test_get_dataset_outlets_none_and_empty(self):
+        """Tests get_dataset_outlets returns None for empty or None outlets."""
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            get_dataset_outlets,
+        )
+
+        action_none = MagicMock()
+        action_none.outlets = None
+        self.assertIsNone(get_dataset_outlets(action_none))
+
+        action_empty = MagicMock()
+        action_empty.outlets = []
+        self.assertIsNone(get_dataset_outlets(action_empty))
+
+        action_no_attr = object()
+        self.assertIsNone(get_dataset_outlets(action_no_attr))
+
+    def test_get_dataset_outlets_populated(self):
+        """Tests get_dataset_outlets returns list of Dataset/Asset objects."""
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            get_dataset_outlets,
+        )
+
+        action = MagicMock()
+        action.outlets = [
+            "gs://bucket/data.parquet",
+            "bq://project.dataset.table",
+        ]
+        outlets = get_dataset_outlets(action)
+        self.assertIsNotNone(outlets)
+        self.assertEqual(len(outlets), 2)
+        uris = [getattr(o, "uri", str(o)).rstrip("/") for o in outlets]
+        self.assertEqual(
+            uris, ["gs://bucket/data.parquet", "bq://project.dataset.table"]
+        )
+
+    def test_create_bq_operation_task_with_outlets(self):
+        """Tests create_bq_operation_task sets outlets on BigQuery operator."""
+        import pendulum
+        from airflow.models import DAG
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            create_bq_operation_task,
+        )
+
+        action = MagicMock()
+        action.name = "bq_outlets_action"
+        action.type = "operation"
+        action.query = "SELECT 1;"
+        action.filename = None
+        action.labels = None
+        action.params = None
+        action.config.destinationTable = None
+        action.config.location = "US"
+        action.executionTimeout = None
+        action.impersonationChain = None
+        action.triggerRule = "all_success"
+        action.outlets = ["bq://my-project.my_dataset.my_table"]
+
+        pipeline = MagicMock()
+        pipeline.defaults.cloudDefault.project = "my-project"
+
+        dag = DAG(
+            dag_id="test_bq_outlets_dag",
+            start_date=pendulum.today("UTC"),
+        )
+
+        task = create_bq_operation_task(action, pipeline, dag)
+        self.assertIsNotNone(task.outlets)
+        uris = [getattr(o, "uri", str(o)).rstrip("/") for o in task.outlets]
+        self.assertEqual(uris, ["bq://my-project.my_dataset.my_table"])
+
+    def test_create_dataproc_batch_operator_with_outlets(self):
+        """Tests create_dataproc_create_batch_operator_task sets outlets on batch operator."""
+        import pendulum
+        from airflow.models import DAG
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            create_dataproc_create_batch_operator_task,
+        )
+
+        action = MagicMock()
+        action.type = "sql"
+        action.name = "dataproc_batch_outlets"
+        action.query = "SELECT 1;"
+        action.filename = None
+        action.depsBucket = None
+        action.region = "us-central1"
+        action.executionTimeout = None
+        action.impersonationChain = None
+        action.labels = {}
+        action.triggerRule = "all_success"
+        action.config.resourceProfile.runtimeConfig = {}
+        action.config.resourceProfile.environmentConfig = {}
+        action.params = None
+        action.outlets = ["gs://bucket/batch_output.parquet"]
+
+        pipeline = MagicMock()
+        pipeline.defaults.cloudDefault.project = "my-project"
+
+        dag = DAG(
+            dag_id="test_dataproc_batch_dag",
+            start_date=pendulum.today("UTC"),
+        )
+
+        with patch.dict(os.environ, {"GCS_BUCKET": "env-bucket"}):
+            operator = create_dataproc_create_batch_operator_task(
+                action, pipeline, dag
+            )
+            self.assertIsNotNone(operator.outlets)
+            uris = [getattr(o, "uri", str(o)).rstrip("/") for o in operator.outlets]
+            self.assertEqual(uris, ["gs://bucket/batch_output.parquet"])
+
+    @patch("orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils.gcs_utils.upload_run_notebook_if_needed")
+    @patch("orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils.gcs_utils.get_run_notebook_gcs_path", return_value="gs://fake/runner.py")
+    def test_dataproc_ephemeral_task_outlets_on_submit_job_only(
+        self, mock_get_path, mock_upload
+    ):
+        """Tests that ephemeral Dataproc task group attaches outlets only to submit_job."""
+        import pendulum
+        from airflow.models import DAG
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            dataproc_ephemeral_task,
+        )
+
+        action = MagicMock()
+        action.name = "ephemeral_outlets_action"
+        action.type = "pyspark"
+        action.config.cluster_config = {"master_config": {}}
+        action.config.project_id = "test-project"
+        action.config.region = "us-central1"
+        action.config.cluster_name = "test-cluster"
+        action.config.properties = {}
+        action.depsBucket = None
+        action.pyFiles = None
+        action.impersonationChain = None
+        action.triggerRule = "all_success"
+        action.labels = {"key": "val"}
+        action.executionTimeout = None
+        action.outlets = ["gs://bucket/ephemeral_output.parquet"]
+
+        dag = DAG(
+            dag_id="test_dag_ephemeral_outlets",
+            start_date=pendulum.today("UTC"),
+        )
+
+        dataproc_ephemeral_task(action, dag)
+
+        create_task = dag.get_task(f"{action.name}.{action.name}_create_cluster")
+        submit_task = dag.get_task(f"{action.name}.{action.name}_submit_job")
+        delete_task = dag.get_task(f"{action.name}.{action.name}_delete_cluster")
+
+        self.assertFalse(create_task.outlets)
+        self.assertFalse(delete_task.outlets)
+        self.assertIsNotNone(submit_task.outlets)
+        uris = [getattr(o, "uri", str(o)).rstrip("/") for o in submit_task.outlets]
+        self.assertEqual(uris, ["gs://bucket/ephemeral_output.parquet"])
+
+    def test_create_service_dataform_task_with_outlets(self):
+        """Tests create_service_dataform_task sets outlets on Dataform operator."""
+        import pendulum
+        from airflow.models import DAG
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            create_service_dataform_task,
+        )
+
+        action = MagicMock()
+        action.name = "service_dataform_action"
+        action.type = "dataform_pipeline"
+        action.dataformServiceConfig.project_id = "my-proj"
+        action.dataformServiceConfig.region = "us-central1"
+        action.dataformServiceConfig.repository_id = "my-repo"
+        action.dataformServiceConfig.workflow_invocation = {"compilation_result": "cr1"}
+        action.executionTimeout = None
+        action.triggerRule = "all_success"
+        action.outlets = ["bq://my-proj.dataform_dataset.dataform_table"]
+
+        pipeline = MagicMock()
+        dag = DAG(
+            dag_id="test_service_dataform_dag",
+            start_date=pendulum.today("UTC"),
+        )
+
+        task = create_service_dataform_task(action, pipeline, dag)
+        self.assertIsNotNone(task.outlets)
+        uris = [getattr(o, "uri", str(o)).rstrip("/") for o in task.outlets]
+        self.assertEqual(uris, ["bq://my-proj.dataform_dataset.dataform_table"])
+
+    def test_create_bq_dts_task_with_outlets(self):
+        """Tests create_bq_dts_task sets outlets on start_task."""
+        import pendulum
+        from airflow.models import DAG
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            create_bq_dts_task,
+        )
+
+        action = MagicMock()
+        action.name = "dts_outlets_action"
+        action.type = "data_ingestion"
+        action.config.projectId = "dts-proj"
+        action.config.location = "dts-loc"
+        action.config.transferConfigId = "config-123"
+        action.config.runtimeParams = None
+        action.config.requestedRunTime = "2026-06-23T00:00:00Z"
+        action.config.requestedTimeRange = None
+        action.config.impersonationChain = None
+        action.executionTimeout = None
+        action.triggerRule = "all_success"
+        action.outlets = ["bq://dts-proj.dts_dataset.dts_table"]
+
+        pipeline = MagicMock()
+        pipeline.defaults.cloudDefault.project = "default-proj"
+        pipeline.defaults.cloudDefault.region = "default-reg"
+
+        dag = DAG(
+            dag_id="test_dts_outlets_dag",
+            start_date=pendulum.today("UTC"),
+        )
+
+        task_group = create_bq_dts_task(action, pipeline, dag)
+        sensor_task = task_group.children[f"{action.name}.{action.name}_sensor"]
+        self.assertIsNotNone(sensor_task.outlets)
+        uris = [getattr(o, "uri", str(o)).rstrip("/") for o in sensor_task.outlets]
+        self.assertEqual(uris, ["bq://dts-proj.dts_dataset.dts_table"])
+
+    def test_create_ai_task_with_outlets(self):
+        """Tests create_ai_task sets outlets on AI operators."""
+        import pendulum
+        from airflow.models import DAG
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            create_ai_task,
+        )
+
+        action = MagicMock()
+        action.name = "upload_model_outlets"
+        action.type = "ai"
+        action.provider = "agent_platform"
+        action.ai_action_type = "model_upload"
+        action.executionTimeout = None
+        action.triggerRule = "all_success"
+        action.config.model_name = "ModelName"
+        action.config.description = None
+        action.config.model_artifact_uri = "gs://bucket/model"
+        action.config.serving_container_image_uri = "gcr.io/img"
+        action.config.project_id = "custom-project"
+        action.config.location = "us-central1"
+        action.labels = None
+        action.outlets = ["gs://bucket/uploaded_model"]
+
+        pipeline = MagicMock()
+        dag = DAG(
+            dag_id="test_ai_outlets_dag",
+            start_date=pendulum.today("UTC"),
+        )
+
+        task = create_ai_task(action, pipeline, dag)
+        self.assertIsNotNone(task.outlets)
+        uris = [getattr(o, "uri", str(o)).rstrip("/") for o in task.outlets]
+        self.assertEqual(uris, ["gs://bucket/uploaded_model"])
+
+    def test_airflow_2_python_script_task_with_outlets(self):
+        """Tests Airflow 2 create_python_script_task with outlets."""
+        import pendulum
+        from airflow.models import DAG
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.airflow_2 import (
+            task_factory as af2_task_factory,
+        )
+
+        action = MagicMock()
+        action.name = "af2_py_action"
+        action.type = "script"
+        action.filename = "my_script.py"
+        action.config.pythonCallable = "main"
+        action.config.opKwargs = {}
+        action.executionTimeout = None
+        action.triggerRule = "all_success"
+        action.outlets = ["gs://bucket/python_output.csv"]
+
+        dag = DAG(
+            dag_id="test_af2_py_dag",
+            start_date=pendulum.today("UTC"),
+        )
+
+        with patch("orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.utils.import_callable", return_value=lambda: None):
+            task = af2_task_factory.create_python_script_task(action, {}, dag)
+            self.assertIsNotNone(task.outlets)
+            uris = [getattr(o, "uri", str(o)).rstrip("/") for o in task.outlets]
+            self.assertEqual(uris, ["gs://bucket/python_output.csv"])
+
+    def test_airflow_3_python_script_task_with_outlets(self):
+        """Tests Airflow 3 create_python_script_task with outlets."""
+        import pendulum
+        from airflow.models import DAG
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.airflow_3 import (
+            task_factory as af3_task_factory,
+        )
+
+        action = MagicMock()
+        action.name = "af3_py_action"
+        action.type = "script"
+        action.filename = "my_script.py"
+        action.config.pythonCallable = "main"
+        action.config.opKwargs = {}
+        action.executionTimeout = None
+        action.triggerRule = "all_success"
+        action.outlets = ["gs://bucket/af3_output.csv"]
+
+        dag = DAG(
+            dag_id="test_af3_py_dag",
+            start_date=pendulum.today("UTC"),
+        )
+
+        with patch("orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.utils.import_callable", return_value=lambda: None):
+            task = af3_task_factory.create_python_script_task(action, {}, dag)
+            self.assertIsNotNone(task.outlets)
+            uris = [getattr(o, "uri", str(o)).rstrip("/") for o in task.outlets]
+            self.assertEqual(uris, ["gs://bucket/af3_output.csv"])
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

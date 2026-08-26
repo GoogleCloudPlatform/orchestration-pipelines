@@ -359,6 +359,13 @@ class ConverterV1ToInternal:
                 catchup=schedule.catchup,
                 timezone=schedule.timezone,
             )
+        if trigger_type == "datasets":
+            datasets = trigger.datasets
+            return internal_triggers.DatasetTriggerModel(
+                type="datasets",
+                uris=list(datasets.uris),
+                condition=datasets.condition or "all",
+            )
         raise TypeError(f"Unknown trigger type: {trigger_type}")
 
     def convert_action(
@@ -427,6 +434,7 @@ class ConverterV1ToInternal:
                 executionTimeout=action.execution_timeout or None,
                 dependsOn=list(action.depends_on),
                 triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                outlets=list(action.outlets),
                 config=internal_actions.PythonVirtualenvConfigurationModel(
                     pythonCallable=action.python_callable,
                     opKwargs=op_kwargs,
@@ -443,6 +451,7 @@ class ConverterV1ToInternal:
                 executionTimeout=action.execution_timeout or None,
                 dependsOn=list(action.depends_on),
                 triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                outlets=list(action.outlets),
                 config=internal_actions.PythonScriptConfigurationModel(
                     pythonCallable=action.python_callable,
                     opKwargs=op_kwargs,
@@ -531,6 +540,7 @@ class ConverterV1ToInternal:
             executionTimeout=action.execution_timeout or None,
             dependsOn=list(action.depends_on),
             triggerRule=self._convert_trigger_rule(action.trigger_rule),
+            outlets=list(action.outlets),
             region=region,
             labels=merged_labels,
             params=params,
@@ -585,6 +595,7 @@ class ConverterV1ToInternal:
                 executionTimeout=action.execution_timeout or None,
                 dependsOn=list(action.depends_on),
                 triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                outlets=list(action.outlets),
                 impersonationChain=list(bq_engine.impersonation_chain),
                 params=params,
                 config=internal_actions.BqOperationConfigurationModel(
@@ -618,6 +629,7 @@ class ConverterV1ToInternal:
                 executionTimeout=action.execution_timeout or None,
                 dependsOn=list(action.depends_on),
                 triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                outlets=list(action.outlets),
                 region=region,
                 impersonationChain=impersonation_chain,
                 engine=internal_engine,
@@ -675,6 +687,7 @@ class ConverterV1ToInternal:
                 executionTimeout=action.execution_timeout or None,
                 dependsOn=list(action.depends_on),
                 triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                outlets=list(action.outlets),
                 region=region,
                 impersonationChain=impersonation_chain,
                 engine=internal_engine,
@@ -707,6 +720,7 @@ class ConverterV1ToInternal:
                     executionTimeout=action.execution_timeout or None,
                     dependsOn=list(action.depends_on),
                     triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                    outlets=list(action.outlets),
                     type="dbt_pipeline",
                     engine="dbt",
                     executionMode="local",
@@ -733,6 +747,7 @@ class ConverterV1ToInternal:
                     executionTimeout=action.execution_timeout or None,
                     dependsOn=list(action.depends_on),
                     triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                    outlets=list(action.outlets),
                     type="dataform_pipeline",
                     executionMode="local",
                     dataform_project_path=self.file_manager.get_blob_reference(
@@ -763,6 +778,7 @@ class ConverterV1ToInternal:
                     executionTimeout=action.execution_timeout or None,
                     dependsOn=list(action.depends_on),
                     triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                    outlets=list(action.outlets),
                     type="dataform_pipeline",
                     executionMode="service",
                     dataformServiceConfig=internal_actions.DataformServiceModel(
@@ -825,6 +841,7 @@ class ConverterV1ToInternal:
                 executionTimeout=action.execution_timeout or None,
                 dependsOn=list(action.depends_on),
                 triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                outlets=list(action.outlets),
                 labels=shared_labels,
                 config=spec_model,
             )
@@ -843,6 +860,7 @@ class ConverterV1ToInternal:
             executionTimeout=action.execution_timeout or None,
             dependsOn=list(action.depends_on),
             triggerRule=self._convert_trigger_rule(action.trigger_rule),
+            outlets=list(action.outlets),
             pipeline_id=action.pipeline_id,
             bundle_id=action.bundle_id,
             wait_for_completion=action.wait_for_completion,
@@ -883,6 +901,7 @@ class ConverterV1ToInternal:
                     executionTimeout=action.execution_timeout or None,
                     dependsOn=list(action.depends_on),
                     triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                    outlets=list(action.outlets),
                     labels=merged_labels,
                     config=spec_model,
                 )
@@ -926,6 +945,7 @@ class ConverterV1ToInternal:
                     executionTimeout=action.execution_timeout or None,
                     dependsOn=list(action.depends_on),
                     triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                    outlets=list(action.outlets),
                     labels=merged_labels,
                     config=spec_model,
                 )

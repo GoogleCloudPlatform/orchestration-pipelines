@@ -18,6 +18,7 @@ import json
 from typing import List, Optional
 
 from orchestration_pipelines_lib.internal_models.triggers import (
+    DatasetTriggerModel,
     ScheduleTriggerModel,
 )
 from orchestration_pipelines_models.manifest.manifest import Manifest
@@ -110,6 +111,14 @@ class PipelineMetadata:
         """
         return self._is_current
 
+    def is_unversioned(self):
+        """Checks if the pipeline is unversioned.
+
+        Returns:
+            True if the pipeline is unversioned, False otherwise.
+        """
+        return self._unversioned
+
     def generate_tags(
         self, owner: Optional[str], customer_tags: Optional[List[str]]
     ) -> List[str]:
@@ -168,7 +177,8 @@ class PipelineMetadata:
     def generate_doc_md(
         self,
         owner: Optional[str],
-        schedule_trigger: Optional[ScheduleTriggerModel],
+        schedule_trigger: Optional[ScheduleTriggerModel] = None,
+        dataset_trigger: Optional[DatasetTriggerModel] = None,
     ) -> str:
         """Generates a JSON string for the DAG's doc_md.
 
@@ -176,6 +186,8 @@ class PipelineMetadata:
             owner: The owner of the pipeline.
             schedule_trigger: The schedule trigger model containing schedule
                 details.
+            dataset_trigger: The dataset trigger model containing dataset
+                trigger details.
 
         Returns:
             A JSON-formatted string representing the DAG documentation metadata.
@@ -218,6 +230,12 @@ class PipelineMetadata:
                 "endTime": schedule_trigger.endTime,
                 "catchup": schedule_trigger.catchup,
                 "timezone": schedule_trigger.timezone,
+            }
+
+        if dataset_trigger:
+            doc_data["op_datasets"] = {
+                "uris": dataset_trigger.uris,
+                "condition": dataset_trigger.condition,
             }
 
         return json.dumps(doc_data)

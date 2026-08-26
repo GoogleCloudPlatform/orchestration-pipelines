@@ -25,14 +25,20 @@ Python >= 3.9
 ## Features
 
 - **Declarative DAGs**: Define your pipeline structure, triggers, and actions in YAML.
+- **Flexible Scheduling**:
+  - **Time-Based (Cron)**: Schedule recurring runs with customizable intervals, timezones, and catchup policies.
+  - **Dataset-Aware (Event-Driven)**: Trigger pipelines reactively upon upstream dataset updates across BigQuery, Cloud Storage, Dataproc, and AI jobs with `all` (AND) or `any` (OR) conditions.
 - **Rich Actions Support**: Built-in support for:
   - Python Scripts
   - Google Cloud BigQuery
   - Google Cloud Dataproc (Serverless, Ephemeral and existing clusters)
   - Google Cloud Dataform
   - DBT
+  - Google Cloud BigQuery DTS
+  - Vertex AI (Model Upload & Batch Inference)
+- **Dataset Outlets**: Declare output datasets directly on actions to register Airflow dataset events and link multi-pipeline dependencies.
 - **Automatic Generation**: A simple Python call generates the full Airflow DAG.
-- **Versioning**: Supports versioning of pipelines via a manifest file(as of Preview, on Google Cloud Composer).
+- **Versioning**: Supports versioning of pipelines via a manifest file (as of Preview, on Google Cloud Composer).
 
 ## Installation
 
@@ -98,6 +104,15 @@ generate("dataform-pipeline-local.yml")
 Airflow will parse this Python file and automatically generate the DAG based on your YAML definition.
 
 ## Advanced Features
+
+### Dataset-Aware (Event-Driven) Scheduling
+
+Define event-driven workflows where downstream pipelines trigger reactively whenever upstream actions produce new data:
+
+- **Producers**: Declare `outlets` on any action (e.g. `bq://project.dataset.table`, `gs://bucket/data.parquet`).
+- **Consumers**: Configure `triggers.datasets` with a list of `uris` and condition (`all` or `any`).
+
+See [`examples/pipeline-dataset-producer.yml`](examples/pipeline-dataset-producer.yml) and [`examples/pipeline-dataset-consumer.yml`](examples/pipeline-dataset-consumer.yml) for full examples.
 
 ### Versioning and Manifests
 

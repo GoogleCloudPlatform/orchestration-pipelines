@@ -102,9 +102,15 @@ message ScheduleTrigger {
   string timezone = 5 [(pipeline_models.validation.is_iana_timezone) = true]; // Defaults to "UTC" if not provided.
 }
 
+message DatasetTrigger {
+  repeated string uris = 1 [(pipeline_models.validation.min_items) = 1];
+  string condition = 2; // "all" (default) or "any"
+}
+
 message Trigger {
   oneof trigger {
     ScheduleTrigger schedule = 1;
+    DatasetTrigger datasets = 2;
   }
 }
 
@@ -222,6 +228,7 @@ message PythonAction {
   PythonEnvironment environment = 7;
   PythonEngine engine = 8 [(pipeline_models.validation.is_required) = true];
   TriggerRule trigger_rule = 9; // Default: all_success.
+  repeated string outlets = 10;
 }
 
 message PythonEnvironment {
@@ -269,6 +276,7 @@ message PysparkAction {
     (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$"
   ];
   map<string, string> labels = 12;
+  repeated string outlets = 13;
 }
 
 message PysparkEngine {
@@ -314,6 +322,7 @@ message NotebookAction {
     (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$"
   ];
   map<string, string> labels = 11;
+  repeated string outlets = 12;
 }
 
 message NotebookEngine {
@@ -356,6 +365,7 @@ message SqlAction {
     (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$"
   ];
   map<string, string> labels = 8;
+  repeated string outlets = 9;
 }
 
 message Query {
@@ -395,6 +405,7 @@ message PipelineAction {
   ];
   // Note: 'labels' is currently not supported when executing DBT or Dataform using Dataform Service.
   map<string, string> labels = 7;
+  repeated string outlets = 8;
 }
 
 message PipelineFramework {
@@ -461,6 +472,7 @@ message DataIngestionAction {
     BigQueryDtsSpec bigquery_dts = 4;
   }
   TriggerRule trigger_rule = 5; // Default: all_success.
+  repeated string outlets = 6;
 }
 
 message BigQueryDtsSpec {
@@ -506,6 +518,7 @@ message OrchestrationPipelineAction {
   string bundle_id = 5;
   bool wait_for_completion = 6; // Default: false.
   TriggerRule trigger_rule = 7; // Default: all_success.
+  repeated string outlets = 8;
 }
 
 /////////////////////////
@@ -527,6 +540,7 @@ message AIAction {
   }
 
   map<string, string> labels = 6;
+  repeated string outlets = 7;
 }
 
 

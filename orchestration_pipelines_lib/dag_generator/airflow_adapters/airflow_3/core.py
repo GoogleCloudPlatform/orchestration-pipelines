@@ -27,6 +27,7 @@ from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.uti
 )
 from orchestration_pipelines_lib.internal_models.pipeline import PipelineModel
 from orchestration_pipelines_lib.internal_models.triggers import (
+    DatasetTriggerModel,
     ScheduleTriggerModel,
 )
 
@@ -210,6 +211,10 @@ def generate(
         (t for t in pipeline.triggers if isinstance(t, ScheduleTriggerModel)),
         None,
     )
+    dataset_trigger = next(
+        (t for t in pipeline.triggers if isinstance(t, DatasetTriggerModel)),
+        None,
+    )
 
     finish_callback = pipeline_run_callback(bundle_id, pipeline_id)
     on_failure_callbacks = [finish_callback]
@@ -239,6 +244,8 @@ def generate(
 
     if schedule_trigger:
         task_factory.create_schedule_trigger_task(dag_kwargs, schedule_trigger)
+    elif dataset_trigger:
+        task_factory.create_dataset_trigger_task(dag_kwargs, dataset_trigger)
     else:
         dag_kwargs["schedule"] = None
 

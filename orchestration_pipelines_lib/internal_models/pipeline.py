@@ -32,6 +32,7 @@ from orchestration_pipelines_lib.internal_models.actions import (
     PythonVirtualenvActionModel,
 )
 from orchestration_pipelines_lib.internal_models.triggers import (
+    DatasetTriggerModel,
     ScheduleTriggerModel,
 )
 
@@ -49,7 +50,7 @@ AnyAction = Union[
     OrchestrationPipelineActionModel,
     AIActionModel,
 ]
-AnyScheduleTrigger = Union[ScheduleTriggerModel]
+AnyScheduleTrigger = Union[ScheduleTriggerModel, DatasetTriggerModel]
 
 
 class RunnerType(str, Enum):
