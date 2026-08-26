@@ -44,6 +44,7 @@ class ActionBaseModel:
     dependsOn: list[str] | None
     executionTimeout: str | None
     triggerRule: str | None
+    outlets: list[str] | None = None
     retryPolicy: RetryPolicyModel | None = None
 
 
