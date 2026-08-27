@@ -172,6 +172,37 @@ class TestConverterV1ToInternal(unittest.TestCase):
         self.assertEqual(internal_trigger.scheduleInterval, "* * * * *")
         self.assertEqual(internal_trigger.timezone, "America/New_York")
 
+    def test_convert_dataset_trigger(self):
+        """Tests conversion of dataset trigger settings."""
+        v1_trigger = v1_protos.Trigger(
+            datasets=v1_protos.DatasetTrigger(
+                uris=["gs://bucket/data.parquet", "bq://p.d.t"],
+                condition="any",
+            )
+        )
+        internal_trigger = self.converter.convert_trigger(v1_trigger)
+        self.assertIsInstance(
+            internal_trigger, internal_triggers.DatasetTriggerModel
+        )
+        self.assertEqual(
+            internal_trigger.uris, ["gs://bucket/data.parquet", "bq://p.d.t"]
+        )
+        self.assertEqual(internal_trigger.condition, "any")
+        self.assertEqual(internal_trigger.type, "datasets")
+
+    def test_convert_dataset_trigger_default_condition(self):
+        """Tests conversion of dataset trigger with default condition."""
+        v1_trigger = v1_protos.Trigger(
+            datasets=v1_protos.DatasetTrigger(
+                uris=["gs://bucket/data.parquet"],
+            )
+        )
+        internal_trigger = self.converter.convert_trigger(v1_trigger)
+        self.assertIsInstance(
+            internal_trigger, internal_triggers.DatasetTriggerModel
+        )
+        self.assertEqual(internal_trigger.condition, "all")
+
     def test_convert_trigger_unknown_type(self):
         """Tests that an unknown trigger type raises a TypeError."""
         v1_trigger = v1_protos.Trigger()  # Empty trigger
@@ -1384,6 +1415,7 @@ class TestConverterV1ToInternal(unittest.TestCase):
         v1_action.ai.agent_platform.model_upload.model_name = "model1"
         v1_action.ai.agent_platform.model_upload.model_artifact_uri = "gs://b/m"
         v1_action.ai.agent_platform.model_upload.serving_container_image_uri = "gcr.io/img"
+        v1_action.ai.outlets.extend(["gs://bucket/model_output"])
 
         internal_action = self.converter.convert_action(
             v1_action, self.defaults, self.labels
@@ -1391,8 +1423,105 @@ class TestConverterV1ToInternal(unittest.TestCase):
 
         self.assertIsInstance(internal_action, internal_actions.AIActionModel)
         self.assertEqual(internal_action.name, "test-ai-dispatch")
+        self.assertEqual(internal_action.outlets, ["gs://bucket/model_output"])
+
+    def test_convert_python_action_outlets(self):
+        """Tests that outlets are preserved when converting Python actions."""
+        v1_action = v1_protos.PythonAction(
+            name="test-python",
+            main_file_path="script.py",
+            python_callable="main",
+            engine=v1_protos.PythonEngine(local=v1_protos.LocalEngine()),
+            outlets=["gs://bucket/output.csv", "bq://proj.dataset.table"],
+        )
+        internal_action = self.converter._convert_python_action(v1_action)
+        self.assertEqual(
+            internal_action.outlets,
+            ["gs://bucket/output.csv", "bq://proj.dataset.table"],
+        )
+
+    def test_convert_dataproc_action_outlets(self):
+        """Tests that outlets are preserved when converting Dataproc actions."""
+        v1_action = v1_protos.PysparkAction(
+            name="test-pyspark",
+            main_file_path="job.py",
+            engine=v1_protos.PysparkEngine(
+                dataproc_serverless=v1_protos.DataprocServerlessBatchEngine(
+                    resource_profile=v1_protos.DataprocBatchResourceProfile(
+                        inline=v1_protos.DataprocBatchResourceProfile.InlineConfig()
+                    )
+                )
+            ),
+            outlets=["gs://bucket/dataproc_output"],
+        )
+        internal_action = self.converter._convert_dataproc_action(
+            v1_action, "pyspark", self.defaults, self.labels
+        )
+        self.assertEqual(internal_action.outlets, ["gs://bucket/dataproc_output"])
+
+    def test_convert_sql_action_outlets(self):
+        """Tests that outlets are preserved when converting SQL actions."""
+        v1_action = v1_protos.SqlAction(
+            name="test-sql",
+            query=v1_protos.Query(inline="SELECT 1"),
+            engine=v1_protos.SqlEngine(
+                bigquery=v1_protos.BigQueryEngine(location="US")
+            ),
+            outlets=["bq://proj.dataset.dest_table"],
+        )
+        internal_action = self.converter._convert_sql_action(
+            v1_action, self.defaults, self.labels
+        )
+        self.assertEqual(internal_action.outlets, ["bq://proj.dataset.dest_table"])
+
+    def test_convert_pipeline_action_outlets(self):
+        """Tests that outlets are preserved when converting Pipeline actions."""
+        v1_dbt = v1_protos.PipelineAction(
+            name="test-dbt",
+            framework=v1_protos.PipelineFramework(
+                dbt=v1_protos.DbtFrameworkSpec(
+                    airflow_worker=v1_protos.DbtAirflowExecution(
+                        project_directory_path="dbt_proj"
+                    )
+                )
+            ),
+            outlets=["bq://proj.dataset.dbt_table"],
+        )
+        internal_dbt = self.converter._convert_pipeline_action(
+            v1_dbt, self.defaults, self.labels
+        )
+        self.assertEqual(internal_dbt.outlets, ["bq://proj.dataset.dbt_table"])
+
+    def test_convert_data_ingestion_action_outlets(self):
+        """Tests that outlets are preserved when converting Data Ingestion actions."""
+        v1_action = v1_protos.DataIngestionAction(
+            name="test-dts",
+            bigquery_dts=v1_protos.BigQueryDtsSpec(
+                transfer_config_id="config-123"
+            ),
+            outlets=["bq://proj.dataset.transferred_table"],
+        )
+        internal_action = self.converter._convert_data_ingestion_action(
+            v1_action, self.defaults, self.labels
+        )
+        self.assertEqual(
+            internal_action.outlets, ["bq://proj.dataset.transferred_table"]
+        )
+
+    def test_convert_orchestration_pipeline_action_outlets(self):
+        """Tests that outlets are preserved when converting OrchestrationPipeline actions."""
+        v1_action = v1_protos.OrchestrationPipelineAction(
+            name="test-subpipe",
+            pipeline_id="child-pipeline",
+            outlets=["gs://bucket/child_output"],
+        )
+        internal_action = self.converter._convert_orchestration_pipeline_action(
+            v1_action, self.defaults
+        )
+        self.assertEqual(internal_action.outlets, ["gs://bucket/child_output"])
 
 
 if __name__ == "__main__":
     unittest.main()
+
 

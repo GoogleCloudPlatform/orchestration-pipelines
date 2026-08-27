@@ -1,0 +1,55 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+modelVersion: "1.0"
+pipelineId: "pipeline-dataset-consumer"
+description: "Example downstream consumer pipeline scheduled reactively on multiple upstream dataset events."
+runner: "airflow"
+owner: "analytics-ml-team"
+tags: ["dataset-aware", "consumer", "example"]
+
+defaults:
+  projectId: "your-gcp-project-id"
+  location: "us-central1"
+  executionConfig:
+    retries: 1
+
+triggers:
+  - datasets:
+      uris:
+        - "bq://my-project.my_dataset.daily_sales"
+        - "gs://my-bucket/sales/daily.csv"
+      condition: "all"
+
+actions:
+  - sql:
+      name: "run_downstream_sales_summary"
+      query:
+        inline: "CREATE OR REPLACE TABLE `your-gcp-project-id.my_dataset.daily_sales_summary` AS SELECT DATE(processed_at) AS report_date, COUNT(customer_id) AS total_customers, SUM(total_amount) AS total_revenue FROM `your-gcp-project-id.my_dataset.daily_sales` GROUP BY 1;"
+      engine:
+        bigquery:
+          location: "US"
+
+  - ai:
+      name: "run_sales_forecast_inference"
+      agentPlatform:
+        batchInference:
+          jobDisplayName: "daily_sales_forecast"
+          modelName: "projects/your-gcp-project-id/locations/us-central1/models/sales_forecast_model"
+          instancesFormat: "bigquery"
+          predictionsFormat: "bigquery"
+          bigquerySource: "bq://your-gcp-project-id.my_dataset.daily_sales"
+          bigqueryDestinationPrefix: "bq://your-gcp-project-id.my_dataset"
+      dependsOn:
+        - "run_downstream_sales_summary"

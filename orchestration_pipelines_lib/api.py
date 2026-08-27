@@ -230,6 +230,7 @@ def _generate_dag(
     """
     from orchestration_pipelines_lib.dag_generator import core
     from orchestration_pipelines_lib.internal_models.triggers import (
+        DatasetTriggerModel,
         ScheduleTriggerModel,
     )
     from orchestration_pipelines_lib.utils.dummy_dag import (
@@ -276,8 +277,18 @@ def _generate_dag(
             ),
             None,
         )
+        dataset_trigger = next(
+            (
+                t
+                for t in internal_pipeline.triggers
+                if isinstance(t, DatasetTriggerModel)
+            ),
+            None,
+        )
 
-        if metadata.is_paused() or not metadata.is_current():
+        if metadata.is_paused() or (
+            not metadata.is_unversioned() and not metadata.is_current()
+        ):
             internal_pipeline.triggers = []
 
         tags = metadata.generate_tags(
@@ -287,6 +298,7 @@ def _generate_dag(
         doc_md = metadata.generate_doc_md(
             owner=internal_pipeline.metadata.owner,
             schedule_trigger=schedule_trigger,
+            dataset_trigger=dataset_trigger,
         )
 
         # Step 3: Generate DAG

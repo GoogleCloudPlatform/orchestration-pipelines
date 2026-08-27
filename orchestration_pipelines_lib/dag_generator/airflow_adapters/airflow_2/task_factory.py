@@ -132,6 +132,7 @@ def create_python_script_task(
                 else None
             ),
             trigger_rule=action.triggerRule,
+            outlets=task_utils.get_dataset_outlets(action),
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
         )
@@ -184,6 +185,7 @@ def create_python_virtualenv_task(
                 else None
             ),
             trigger_rule=action.triggerRule,
+            outlets=task_utils.get_dataset_outlets(action),
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
         )
@@ -205,6 +207,11 @@ def create_bq_operation_task(
 def create_schedule_trigger_task(dag_kwargs, schedule_trigger):
     """Converts trigger config into params for Airflow pipeline."""
     return task_utils.create_schedule_trigger_task(dag_kwargs, schedule_trigger)
+
+
+def create_dataset_trigger_task(dag_kwargs, dataset_trigger):
+    """Converts dataset trigger config into params for Airflow pipeline."""
+    return task_utils.create_dataset_trigger_task(dag_kwargs, dataset_trigger)
 
 
 def create_dataproc_operator_task(
@@ -247,6 +254,7 @@ def create_dbt_task(
                 else None
             ),
             trigger_rule=action.triggerRule,
+            outlets=task_utils.get_dataset_outlets(action),
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
         )
@@ -314,6 +322,7 @@ def create_orchestration_pipeline_trigger_task(
                 else None
             ),
             trigger_rule=action.triggerRule,
+            outlets=task_utils.get_dataset_outlets(action),
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
         )

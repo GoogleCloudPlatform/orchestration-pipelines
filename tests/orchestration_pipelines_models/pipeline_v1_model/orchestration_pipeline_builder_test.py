@@ -142,6 +142,28 @@ class TestOrchestrationPipelineBuilder(unittest.TestCase):
         self.assertFalse(schedule.catchup)
         self.assertEqual(schedule.timezone, "UTC")
 
+    def test_build_sets_dataset_triggers(self):
+        """Tests that dataset triggers are set correctly."""
+        pipeline_def = self._get_valid_pipeline_def(
+            triggers=[
+                {
+                    "datasets": {
+                        "uris": ["gs://bucket/data.parquet", "bq://p.d.t"],
+                        "condition": "any",
+                    }
+                }
+            ]
+        )
+
+        pipeline = OrchestrationPipelineBuilder.build(pipeline_def)
+
+        self.assertEqual(len(pipeline.triggers), 1)
+        trigger = pipeline.triggers[0]
+        self.assertTrue(trigger.HasField("datasets"))
+        datasets = trigger.datasets
+        self.assertEqual(list(datasets.uris), ["gs://bucket/data.parquet", "bq://p.d.t"])
+        self.assertEqual(datasets.condition, "any")
+
     def test_build_action_bq_create(self):
         """Tests BQ inline action."""
         pipeline_def = self._get_valid_pipeline_def(

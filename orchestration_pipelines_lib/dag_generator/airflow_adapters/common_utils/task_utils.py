@@ -16,10 +16,12 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
+import operator
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 import pytz
@@ -292,6 +294,7 @@ def create_dataproc_create_batch_operator_task(
             ),
             impersonation_chain=action.impersonationChain,
             trigger_rule=action.triggerRule,
+            outlets=get_dataset_outlets(action),
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
             **extra_kwargs,
@@ -387,6 +390,7 @@ def create_bq_operation_task(
             gcp_conn_id="google_cloud_default",
             impersonation_chain=action.impersonationChain,
             trigger_rule=action.triggerRule,
+            outlets=get_dataset_outlets(action),
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
         )
@@ -494,6 +498,7 @@ def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
                 region=action.config.region,
                 project_id=action.config.project_id,
                 impersonation_chain=action.impersonationChain,
+                outlets=get_dataset_outlets(action),
                 doc_md=json.dumps({"op_action_name": action.name}),
                 dag=dag,
                 **extra_kwargs,
@@ -595,6 +600,7 @@ def dataproc_existing_cluster(
             project_id=pipeline.defaults.cloudDefault.project,
             impersonation_chain=action.impersonationChain,
             trigger_rule=action.triggerRule,
+            outlets=get_dataset_outlets(action),
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
             **extra_kwargs,
@@ -623,6 +629,52 @@ def create_schedule_trigger_task(dag_kwargs, schedule_trigger):
     dag_kwargs["end_date"] = timezone.localize(end_time) if end_time else None
     dag_kwargs["schedule"] = schedule_trigger.scheduleInterval
     dag_kwargs["catchup"] = schedule_trigger.catchup
+
+
+def _get_dataset_class():
+    """Returns Asset for Airflow 3 or Dataset for Airflow 2."""
+    try:
+        from airflow.sdk import Asset
+        return Asset
+    except ImportError:
+        from airflow.datasets import Dataset
+        return Dataset
+
+
+def create_dataset_trigger_task(dag_kwargs, dataset_trigger):
+    """Converts the input dataset trigger config into schedule parameters for the
+    DAG.
+
+    Args:
+        dag_kwargs: A dictionary of DAG keyword arguments to update.
+        dataset_trigger: The dataset trigger configuration object.
+    """
+    dataset_cls = _get_dataset_class()
+    uris = dataset_trigger.uris
+    condition = (dataset_trigger.condition or "all").lower()
+
+    if condition == "any":
+        if len(uris) == 1:
+            dag_kwargs["schedule"] = dataset_cls(uris[0])
+        else:
+            dag_kwargs["schedule"] = functools.reduce(
+                operator.or_, [dataset_cls(u) for u in uris]
+            )
+    else:
+        dag_kwargs["schedule"] = [dataset_cls(u) for u in uris]
+
+    dag_kwargs["catchup"] = False
+    dag_kwargs["start_date"] = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    dag_kwargs["end_date"] = None
+
+
+def get_dataset_outlets(action: Any) -> list[Any] | None:
+    """Converts action outlets URIs into a list of Airflow Dataset/Asset objects."""
+    outlets = getattr(action, "outlets", None)
+    if not outlets:
+        return None
+    dataset_cls = _get_dataset_class()
+    return [dataset_cls(u) for u in outlets]
 
 
 def create_dataproc_operator_task(
@@ -720,6 +772,7 @@ def create_service_dataform_task(
         repository_id=action.dataformServiceConfig.repository_id,
         workflow_invocation=action.dataformServiceConfig.workflow_invocation,
         trigger_rule=action.triggerRule,
+        outlets=get_dataset_outlets(action),
         doc_md=json.dumps({"op_action_name": action.name}),
         dag=dag,
     )
@@ -796,6 +849,7 @@ def create_local_dataform_task(
             else None
         ),
         trigger_rule=action.triggerRule,
+        outlets=get_dataset_outlets(action),
         doc_md=json.dumps({"op_action_name": action.name}),
         dag=dag,
     )
@@ -906,6 +960,7 @@ def create_bq_dts_task(
                     project_id=project_id,
                     location=location,
                     impersonation_chain=action.config.impersonationChain,
+                    outlets=get_dataset_outlets(action),
                     doc_md=json.dumps({"op_action_name": action.name}),
                     dag=dag,
                 )
@@ -971,6 +1026,7 @@ def create_vertex_upload_model_task(
                 else None
             ),
             trigger_rule=action.triggerRule,
+            outlets=get_dataset_outlets(action),
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
         )
@@ -1048,6 +1104,7 @@ def create_vertex_batch_inference_task(
                 else None
             ),
             trigger_rule=action.triggerRule,
+            outlets=get_dataset_outlets(action),
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
             **extra_kwargs,

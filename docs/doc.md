@@ -72,10 +72,11 @@ This is the entry point for a pipeline definition.
 
 ### 3.3. Triggers
 
-A pipeline can be triggered by external events or schedules.
+A pipeline can be triggered by external events or schedules. A pipeline may specify at most one trigger type (`schedule` or `datasets`).
 
-* **`Trigger`**: A wrapper message using `oneof` to support different trigger
-  types. Currently supports `ScheduleTrigger`.
+* **`Trigger`**: A wrapper message using `oneof` supporting:
+  * `schedule`: Time-based recurring schedule (`ScheduleTrigger`).
+  * `datasets`: Event-driven dataset trigger (`DatasetTrigger`).
 * **`ScheduleTrigger`**:
   * `interval` (string, **Required**): Cron expression defining the schedule.
   * `start_time` (string, **Required**): ISO 8601 timestamp when the schedule starts.
@@ -83,6 +84,22 @@ A pipeline can be triggered by external events or schedules.
   * `catchup` (bool): If true, backfills missed runs. Default is `false`.
   * `timezone` (string): IANA Timezone (e.g., `America/New_York`). Defaults to
     `UTC`.
+* **`DatasetTrigger`**:
+  * `uris` (`repeated string`, **Required**, `min_items: 1`): List of dataset URI strings (e.g. `bq://project.dataset.table`, `gs://bucket/path/data.parquet`).
+  * `condition` (string, optional): Evaluation condition when multiple URIs are specified. Allowed values are:
+    * `"all"` (default): Triggers the pipeline only after **all** listed datasets have updated (logical AND).
+    * `"any"`: Triggers the pipeline when **any** of the listed datasets has updated (logical OR).
+* **Examples**:
+  * [pipeline-dataset-consumer.yml](../examples/pipeline-dataset-consumer.yml) (Dataset-Aware Consumer)
+
+```yaml
+triggers:
+  - datasets:
+      uris:
+        - "bq://my-project.my_dataset.daily_sales"
+        - "gs://my-bucket/sales/daily.csv"
+      condition: "all"
+```
 
 ### 3.4. Notifications
 
@@ -103,15 +120,31 @@ Actions are the building blocks of the pipeline. Every action has a `name`
 (unique within the pipeline), optional `depends_on` list (for ordering), and an
 `execution_timeout` (ISO 8601 duration).
 
-All actions support a `trigger_rule` (enum `TriggerRule`, defaults to
-`all_success`):
+All actions support:
+* `trigger_rule` (enum `TriggerRule`, defaults to `all_success`):
+  * `all_success`: All direct parent tasks must have succeeded.
+  * `all_failed`: All direct parent tasks must be in a failed state.
+  * `all_done`: All direct parent tasks are done (regardless of success/failure).
+  * `one_failed`: At least one parent task has failed.
+  * `one_success`: At least one parent task has succeeded.
+  * `always`: The task runs regardless of parent states.
+* `outlets` (`repeated string`, optional): A list of dataset URI strings (e.g. `bq://project.dataset.table`, `gs://bucket/data.parquet`) emitted upon successful completion of the action. This registers dataset update events in Airflow to trigger downstream dataset-aware pipelines.
 
-* `all_success`: All direct parent tasks must have succeeded.
-* `all_failed`: All direct parent tasks must be in a failed state.
-* `all_done`: All direct parent tasks are done (regardless of success/failure).
-* `one_failed`: At least one parent task has failed.
-* `one_success`: At least one parent task has succeeded.
-* `always`: The task runs regardless of parent states.
+**Producer Example**:
+* [pipeline-dataset-producer.yml](../examples/pipeline-dataset-producer.yml) (Dataset-Aware Producer)
+
+```yaml
+actions:
+  - sql:
+      name: "transform_daily_sales"
+      query:
+        inline: "CREATE OR REPLACE TABLE `my-project.my_dataset.daily_sales` AS SELECT ...;"
+      engine:
+        bigquery:
+          location: "US"
+      outlets:
+        - "bq://my-project.my_dataset.daily_sales"
+```
 
 ### 4.1. PythonAction
 

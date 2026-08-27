@@ -35,6 +35,10 @@ class PipelineValidator:
     options defined in validation.proto.
     """
 
+    _DATASET_URI_REGEX = re.compile(
+        r"^[a-zA-Z][a-zA-Z0-9+.-]*://\S+$|^[a-zA-Z0-9_.-]+$"
+    )
+
     @classmethod
     def validate(cls, message: Message):
         """Validates a protobuf message.
@@ -68,6 +72,12 @@ class PipelineValidator:
         # doesn't conform to the validation schema.
         if descriptor.full_name == "google.protobuf.Struct":
             return
+
+        if descriptor.full_name == "pipeline_models.DatasetTrigger":
+            cls._validate_dataset_trigger(message, path_prefix)
+
+        if "outlets" in descriptor.fields_by_name:
+            cls._validate_action_outlets(message, path_prefix)
 
         # 1. Loop over all defined fields to check for presence, count, and
         # default-value-based validations. These checks need to run even if
@@ -380,8 +390,56 @@ class PipelineValidator:
                 raise ValueError(f"Error for field '{path}': {e}") from e
 
     @classmethod
+    def _validate_dataset_uri(cls, uri: str, field_path: str):
+        """Validates a single dataset URI string."""
+        if not uri or not isinstance(uri, str) or not uri.strip():
+            raise ValueError(
+                f"Error for field '{field_path}': field is required and cannot be an empty string."
+            )
+        if not cls._DATASET_URI_REGEX.match(uri):
+            raise ValueError(
+                f"Error for field '{field_path}': value '{uri}' does not match valid dataset URI format."
+            )
+
+    @classmethod
+    def _validate_dataset_trigger(cls, dataset_trigger: Message, path: str):
+        """Validates DatasetTrigger fields."""
+        for i, uri in enumerate(dataset_trigger.uris):
+            cls._validate_dataset_uri(uri, f"{path}.uris[{i}]")
+
+        if dataset_trigger.condition:
+            if dataset_trigger.condition.lower() not in ("all", "any"):
+                raise ValueError(
+                    f"Error for field '{path}.condition': value '{dataset_trigger.condition}' is not valid. "
+                    "Allowed values are 'all' or 'any'."
+                )
+
+    @classmethod
+    def _validate_action_outlets(cls, action_msg: Message, path: str):
+        """Validates outlets on an action."""
+        for i, outlet in enumerate(action_msg.outlets):
+            outlet_path = f"{path}.outlets[{i}]" if path else f"outlets[{i}]"
+            cls._validate_dataset_uri(outlet, outlet_path)
+
+    @classmethod
     def _validate_pipeline_level_rules(cls, pipeline: Message):
-        """Performs pipeline-level validation for action uniqueness and dependencies."""
+        """Performs pipeline-level validation for triggers, action uniqueness and dependencies."""
+        # 1. Check triggers mutual exclusivity
+        if pipeline.triggers:
+            trigger_types = set()
+            for trigger in pipeline.triggers:
+                ttype = trigger.WhichOneof("trigger")
+                if ttype:
+                    trigger_types.add(ttype)
+            if "schedule" in trigger_types and "datasets" in trigger_types:
+                raise ValueError(
+                    "A pipeline cannot configure both 'schedule' and 'datasets' triggers simultaneously."
+                )
+            if len(pipeline.triggers) > 1:
+                raise ValueError(
+                    "A pipeline can have at most one trigger configured."
+                )
+
         if not pipeline.actions:
             return
 
