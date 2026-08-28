@@ -277,7 +277,7 @@ def _generate_dag(
             None,
         )
 
-        if metadata.is_paused() or not metadata.is_current():
+        if metadata.prevent_auto_executions():
             internal_pipeline.triggers = []
 
         tags = metadata.generate_tags(

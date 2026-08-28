@@ -657,6 +657,19 @@ class TestApi(unittest.TestCase):
         self.assertNotIn(f"op:version:{_TEST_DEFAULT_VERSION_ID}", dag.tags)
         self.assertNotIn("op:origination:GIT_CI_CD", dag.tags)
 
+        # Assert schedule properties are populated for unversioned pipeline
+        self.assertEqual(dag.schedule_interval, "0 5 * * *")
+        self.assertEqual(
+            dag.start_date,
+            datetime(2025, 10, 1, 0, 0, tzinfo=pytz.timezone("UTC")),
+        )
+        self.assertEqual(
+            dag.end_date,
+            datetime(2026, 10, 1, 0, 0, tzinfo=pytz.timezone("UTC")),
+        )
+        self.assertFalse(dag.catchup)
+        self.assertEqual(dag.timezone.name, "UTC")
+
 
 
     def test_generate_vertex_ai_batch_inference_pipeline(self):

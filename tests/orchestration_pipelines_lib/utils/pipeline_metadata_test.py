@@ -110,6 +110,51 @@ class TestPipelineMetadata(unittest.TestCase):
                                            source_filepath="gs://dummy")
         self.assertTrue(metadata_paused.is_paused())
 
+    def test_prevent_auto_executions(self):
+        """Tests the prevent_auto_executions method."""
+        # Case 1: Versioned, current, not paused -> auto executions should NOT be prevented
+        self.mock_manifest.is_current.return_value = True
+        self.mock_manifest.is_paused.return_value = False
+        metadata = PipelineMetadata(pipeline_id=self.pipeline_id,
+                                    manifest=self.mock_manifest,
+                                    version_id=self.version_id,
+                                    source_filepath="gs://dummy")
+        self.assertFalse(metadata.prevent_auto_executions())
+        self.assertFalse(metadata.is_unversioned())
+
+        # Case 2: Versioned, not current, not paused -> auto executions SHOULD be prevented
+        self.mock_manifest.is_current.return_value = False
+        self.mock_manifest.is_paused.return_value = False
+        metadata = PipelineMetadata(pipeline_id=self.pipeline_id,
+                                    manifest=self.mock_manifest,
+                                    version_id=self.version_id,
+                                    source_filepath="gs://dummy")
+        self.assertTrue(metadata.prevent_auto_executions())
+
+        # Case 3: Versioned, current, paused -> auto executions SHOULD be prevented
+        self.mock_manifest.is_current.return_value = True
+        self.mock_manifest.is_paused.return_value = True
+        metadata = PipelineMetadata(pipeline_id=self.pipeline_id,
+                                    manifest=self.mock_manifest,
+                                    version_id=self.version_id,
+                                    source_filepath="gs://dummy")
+        self.assertTrue(metadata.prevent_auto_executions())
+
+        # Case 4: Versioned, not current, paused -> auto executions SHOULD be prevented
+        self.mock_manifest.is_current.return_value = False
+        self.mock_manifest.is_paused.return_value = True
+        metadata = PipelineMetadata(pipeline_id=self.pipeline_id,
+                                    manifest=self.mock_manifest,
+                                    version_id=self.version_id,
+                                    source_filepath="gs://dummy")
+        self.assertTrue(metadata.prevent_auto_executions())
+
+        # Case 5: Unversioned -> auto executions should NOT be prevented
+        metadata_unversioned = PipelineMetadata(pipeline_id=self.pipeline_id,
+                                                source_filepath="gs://dummy")
+        self.assertFalse(metadata_unversioned.prevent_auto_executions())
+        self.assertTrue(metadata_unversioned.is_unversioned())
+
     def test_tags_generation(self):
         """Test the generation of DAG tags."""
         metadata = PipelineMetadata(pipeline_id=self.pipeline_id,
@@ -254,6 +299,8 @@ class TestPipelineMetadata(unittest.TestCase):
         self.assertEqual(metadata._source_filepath, "gs://dummy/path.yml")
         self.assertFalse(metadata.is_paused())
         self.assertFalse(metadata.is_current())
+        self.assertTrue(metadata.is_unversioned())
+        self.assertFalse(metadata.prevent_auto_executions())
         self.assertEqual(metadata._origination, "")
         self.assertEqual(metadata._repo, "")
         self.assertEqual(metadata._branch, "")

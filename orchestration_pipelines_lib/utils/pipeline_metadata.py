@@ -110,6 +110,28 @@ class PipelineMetadata:
         """
         return self._is_current
 
+    def is_unversioned(self):
+        """Checks if the pipeline is unversioned.
+
+        Returns:
+            True if the pipeline is unversioned, False otherwise.
+        """
+        return self._unversioned
+
+    def prevent_auto_executions(self):
+        """Determines if automated executions (schedules/triggers) should be prevented.
+
+        Automated executions are prevented if the pipeline is versioned and not current,
+        or if it is versioned, current, and paused. For unversioned pipelines,
+        automated executions are not prevented.
+
+        Returns:
+            True if automated executions should be prevented, False otherwise.
+        """
+        if self._unversioned:
+            return False
+        return not self._is_current or self._is_paused
+
     def generate_tags(
         self, owner: Optional[str], customer_tags: Optional[List[str]]
     ) -> List[str]:
