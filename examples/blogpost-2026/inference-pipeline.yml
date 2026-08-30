@@ -1,0 +1,34 @@
+modelVersion: "1.0"
+pipelineId: "inference-pipeline"
+runner: airflow
+owner: "mlops"
+tags:
+  - "job:datacloud:antigravity"
+defaults:
+  projectId: "your-project-id"
+  location: "us-central1"
+  executionConfig:
+    retries: 0
+
+actions:
+  - sql:
+      name: "extract_inference_data"
+      engine:
+        bigquery:
+          location: "US"
+          destinationTable: "your-project-id.mlops.inference_dataset"
+      query:
+        path: "blogpostdemo/inference_query.sql"
+
+  - ai:
+      name: "run_vertex_batch_prediction"
+      dependsOn:
+        - "extract_inference_data"
+      agentPlatform:
+        projectId: "your-project-id"
+        location: "us-central1"
+        batchInference:
+          jobDisplayName: "inference_job"
+          modelName: "projects/your-project-id/locations/us-central1/models/your-model-id"
+          bigquerySource: "bq://your-project-id.mlops.inference_dataset"
+          bigqueryDestinationPrefix: "bq://your-project-id.mlops"

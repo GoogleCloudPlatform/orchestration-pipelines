@@ -1,0 +1,15 @@
+environments:
+  dev:
+    project: your-project-id
+    region: us-central1
+    composer_environment: your-composer-environment
+    artifact_storage:
+      bucket: your-composer-bucket
+      path_prefix: pipelines
+    pipelines:
+      - source: training-pipeline.yml
+      - source: inference-pipeline.yml
+      - source: evaluation-pipeline.yml
+    variables:
+      service_account: your-project-number-compute@developer.gserviceaccount.com
+      network_uri: projects/your-project-id/global/networks/default

@@ -1,0 +1,57 @@
+modelVersion: "1.0"
+pipelineId: "training-pipeline"
+runner: airflow
+owner: "mlops"
+tags:
+  - "job:datacloud:antigravity"
+defaults:
+  projectId: "your-project-id"
+  location: "us-central1"
+  executionConfig:
+    retries: 0
+
+actions:
+  - sql:
+      name: "extract_training_data"
+      engine:
+        bigquery:
+          location: "US"
+          destinationTable: "your-project-id.mlops.training_dataset"
+      query:
+        path: "blogpostdemo/training_query.sql"
+
+  - pyspark:
+      name: "train_model_dataproc"
+      dependsOn:
+        - "extract_training_data"
+      engine:
+        dataprocServerless:
+          location: "us-central1"
+          resourceProfile:
+            inline:
+              runtimeConfig:
+                version: "2.3"
+                properties:
+                  "spark.dataproc.driverEnv.PYTHONPATH": "./libs/lib/python3.11/site-packages"
+                  "spark.executorEnv.PYTHONPATH": "./libs/lib/python3.11/site-packages"
+      mainFilePath: "blogpostdemo/train_model.py"
+      environment:
+        requirements:
+          inline:
+            list:
+              - "tensorflow==2.14.1"
+              - "numpy<2.0.0"
+              - "protobuf<5.0.0dev"
+              - "google-cloud-storage"
+
+  - ai:
+      name: "upload_model_vertex"
+      dependsOn:
+        - "train_model_dataproc"
+      agentPlatform:
+        projectId: "your-project-id"
+        location: "us-central1"
+        modelUpload:
+          modelName: "transit_days_predictor"
+          modelArtifactUri: "gs://your-bucket-name/models/tf_transit_days_model"
+          servingContainerImageUri: "us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-14:latest"

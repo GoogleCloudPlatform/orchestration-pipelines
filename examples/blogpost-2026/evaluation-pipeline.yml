@@ -1,0 +1,36 @@
+modelVersion: "1.0"
+pipelineId: "evaluation-pipeline"
+runner: airflow
+owner: "mlops"
+tags:
+  - "job:datacloud:antigravity"
+defaults:
+  projectId: "your-project-id"
+  location: "us-central1"
+  executionConfig:
+    retries: 0
+
+actions:
+  - pipeline:
+      name: "run_dbt_models"
+      framework:
+        dbt:
+          airflowWorker:
+            projectDirectoryPath: "blogpostdemo/dbt_project"
+
+  - python:
+      name: "check_retraining_condition"
+      dependsOn:
+        - "run_dbt_models"
+      mainFilePath: "blogpostdemo/evaluate_drift.py"
+      pythonCallable: "check_drift"
+      engine:
+        local: {}
+
+  - orchestrationPipeline:
+      name: "trigger_retraining_pipeline"
+      dependsOn:
+        - "check_retraining_condition"
+      pipelineId: "training-pipeline"
+      bundleId: "my-first-bundle"
+      waitForCompletion: false

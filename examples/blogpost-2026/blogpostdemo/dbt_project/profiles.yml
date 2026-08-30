@@ -1,0 +1,8 @@
+dbt_project:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      project: your-project-id
+      dataset: mlops
