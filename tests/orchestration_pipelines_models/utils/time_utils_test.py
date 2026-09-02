@@ -131,7 +131,9 @@ class UtilTest(unittest.TestCase):
             'gibberish': 'abc',
             'unsupported combined': '1h 30z',
             'empty string': '',
-            'only spaces': '   '
+            'only spaces': '   ',
+            'zero seconds': '0s',
+            'zero combined': '0h 0m',
         }
 
         for name, dur in invalid_durations.items():

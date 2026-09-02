@@ -37,6 +37,7 @@ from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipel
     AgentPlatformModelUpload,
     Defaults,
     ExecutionConfig,
+    FixedDelayStrategy,
     LocalEngine,
     OrchestrationPipeline,
     PipelineRunner,
@@ -44,6 +45,7 @@ from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipel
     PythonAction,
     PythonEngine,
     Query,
+    RetryPolicy,
     ScheduleTrigger,
     SqlAction,
     SqlEngine,
@@ -612,6 +614,137 @@ class TestPipelineValidator(unittest.TestCase):
         self.assertIn(
             "Error for field 'actions[1].ai.name': value 'invalid name with spaces' does not match regex pattern",
             str(cm.exception),
+        )
+
+    def test_defaults_valid_retry_policy(self):
+        """Tests that a valid retry policy in defaults passes validation."""
+        self.pipeline.defaults.retry_policy.CopyFrom(
+            RetryPolicy(
+                max_retries=3,
+                fixed_delay=FixedDelayStrategy(retry_delay="2m"),
+            )
+        )
+        PipelineValidator.validate(self.pipeline)
+
+    def test_defaults_retry_policy_negative_max_retries_fails(self):
+        """Tests that negative max_retries in defaults retry policy fails validation."""
+        self.pipeline.defaults.retry_policy.CopyFrom(
+            RetryPolicy(
+                max_retries=-1,
+                fixed_delay=FixedDelayStrategy(retry_delay="2m"),
+            )
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "Error for field 'defaults\\.retry_policy\\.max_retries': value -1 must be at least 0\\.0\\.",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_defaults_retry_policy_invalid_duration_fails(self):
+        """Tests that an invalid retry_delay duration in defaults fails validation."""
+        self.pipeline.defaults.retry_policy.CopyFrom(
+            RetryPolicy(
+                max_retries=2,
+                fixed_delay=FixedDelayStrategy(retry_delay="not-a-duration"),
+            )
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "Error for field 'defaults\\.retry_policy\\.fixed_delay\\.retry_delay': Invalid duration format",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_action_valid_retry_policy(self):
+        """Tests that a valid retry policy on an action passes validation."""
+        self.pipeline.actions[0].python.retry_policy.CopyFrom(
+            RetryPolicy(
+                max_retries=5,
+                fixed_delay=FixedDelayStrategy(retry_delay="30s"),
+            )
+        )
+        PipelineValidator.validate(self.pipeline)
+
+    def test_action_retry_policy_negative_max_retries_fails(self):
+        """Tests that negative max_retries on an action retry policy fails validation."""
+        self.pipeline.actions[0].python.retry_policy.CopyFrom(
+            RetryPolicy(
+                max_retries=-2,
+                fixed_delay=FixedDelayStrategy(retry_delay="10s"),
+            )
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "Error for field 'actions\\[0\\]\\.python\\.retry_policy\\.max_retries': value -2 must be at least 0\\.0\\.",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_defaults_retry_policy_missing_max_retries_fails(self):
+        """Tests that omitting max_retries in RetryPolicy fails validation."""
+        self.pipeline.defaults.retry_policy.CopyFrom(
+            RetryPolicy(
+                fixed_delay=FixedDelayStrategy(retry_delay="2m"),
+            )
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "Error for field 'defaults\\.retry_policy\\.max_retries': field is required\\.",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_defaults_retry_policy_zero_max_retries_passes(self):
+        """Tests that explicitly setting max_retries=0 passes validation."""
+        self.pipeline.defaults.retry_policy.CopyFrom(
+            RetryPolicy(max_retries=0)
+        )
+        PipelineValidator.validate(self.pipeline)
+
+    def test_defaults_retry_policy_missing_retry_delay_fails(self):
+        """Tests that omitting retry_delay in FixedDelayStrategy fails validation."""
+        self.pipeline.defaults.retry_policy.CopyFrom(
+            RetryPolicy(
+                max_retries=3,
+                fixed_delay=FixedDelayStrategy(),
+            )
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "Error for field 'defaults\\.retry_policy\\.fixed_delay\\.retry_delay': field is required and cannot be an empty string\\.",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_defaults_retry_policy_zero_duration_fails(self):
+        """Tests that a zero retry_delay duration ('0s') fails validation."""
+        self.pipeline.defaults.retry_policy.CopyFrom(
+            RetryPolicy(
+                max_retries=2,
+                fixed_delay=FixedDelayStrategy(retry_delay="0s"),
+            )
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "Error for field 'defaults\\.retry_policy\\.fixed_delay\\.retry_delay': Invalid duration: '0s'\\. Duration must be strictly positive",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_defaults_deprecated_execution_config_emits_warning(self):
+        """Tests that using deprecated execution_config emits a non-blocking DeprecationWarning."""
+        import warnings
+
+        self.pipeline.defaults.execution_config.retries = 2
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always", DeprecationWarning)
+            PipelineValidator.validate(self.pipeline)
+
+        deprecation_messages = [
+            str(w.message)
+            for w in recorded
+            if issubclass(w.category, DeprecationWarning)
+        ]
+        self.assertTrue(
+            any(
+                "defaults.execution_config" in msg and "deprecated" in msg
+                for msg in deprecation_messages
+            )
         )
 
 

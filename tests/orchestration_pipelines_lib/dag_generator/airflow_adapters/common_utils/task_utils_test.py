@@ -20,6 +20,7 @@ from unittest.mock import MagicMock, patch
 
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
     create_dataproc_create_batch_operator_task,
+    get_action_retry_kwargs,
     get_dataproc_create_batch_inline_sql_operator_class,
     get_dataproc_submit_job_inline_sql_operator_class,
     get_pipeline_metadata,
@@ -724,6 +725,73 @@ class TaskUtilsTest(unittest.TestCase):
         self.assertIsInstance(delete_task, DataprocDeleteClusterOperator)
         self.assertTrue(create_task.is_setup)
         self.assertTrue(delete_task.is_teardown)
+
+    def test_get_action_retry_kwargs_none(self):
+        """Tests get_action_retry_kwargs when action has no retryPolicy."""
+        action = MagicMock(retryPolicy=None)
+        self.assertEqual(get_action_retry_kwargs(action), {})
+
+    def test_get_action_retry_kwargs_max_retries_only(self):
+        """Tests get_action_retry_kwargs with maxRetries only."""
+        action = MagicMock()
+        action.retryPolicy.maxRetries = 3
+        action.retryPolicy.fixedDelay = None
+        self.assertEqual(
+            get_action_retry_kwargs(action),
+            {
+                "retries": 3,
+                "_op_custom_retry_policy": action.retryPolicy,
+            },
+        )
+
+    def test_get_action_retry_kwargs_with_fixed_delay(self):
+        """Tests get_action_retry_kwargs with maxRetries and fixedDelay."""
+        from datetime import timedelta
+        action = MagicMock()
+        action.retryPolicy.maxRetries = 2
+        action.retryPolicy.fixedDelay.retryDelay = "30s"
+        self.assertEqual(
+            get_action_retry_kwargs(action),
+            {
+                "retries": 2,
+                "retry_delay": timedelta(seconds=30),
+                "_op_custom_retry_policy": action.retryPolicy,
+            },
+        )
+
+    def test_create_bq_operation_task_with_retry_policy(self):
+        """Tests that create_bq_operation_task sets retries and retry_delay."""
+        from datetime import timedelta
+        import pendulum
+        from airflow.models import DAG
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (
+            create_bq_operation_task,
+        )
+
+        action = MagicMock()
+        action.name = "test_bq_retry"
+        action.query = "SELECT 1"
+        action.filename = None
+        action.params = None
+        action.labels = None
+        action.config.destinationTable = None
+        action.config.location = "US"
+        action.executionTimeout = None
+        action.impersonationChain = None
+        action.triggerRule = "all_success"
+        action.type = "sql"
+        action.retryPolicy.maxRetries = 4
+        action.retryPolicy.fixedDelay.retryDelay = "1m"
+
+        pipeline = MagicMock()
+        pipeline.defaults.cloudDefault.project = "test-project"
+
+        dag = DAG(dag_id="test_dag_bq_retry", start_date=pendulum.today("UTC"))
+        task = create_bq_operation_task(action, pipeline, dag=dag)
+
+        self.assertEqual(task.retries, 4)
+        self.assertEqual(task.retry_delay, timedelta(minutes=1))
+        self.assertEqual(task._op_custom_retry_policy, action.retryPolicy)
 
 
 if __name__ == "__main__":

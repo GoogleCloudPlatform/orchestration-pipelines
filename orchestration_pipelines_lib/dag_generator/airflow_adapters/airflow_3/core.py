@@ -21,6 +21,9 @@ from typing import Any
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
     action_handler_registry,
 )
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.retry_resolver import (  # noqa: E501
+    RetryResolver,
+)
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.utils import (  # noqa: E501
     init_context_callback,
     pipeline_run_callback,
@@ -230,17 +233,21 @@ def generate(
             )
             on_success_callbacks.append(on_success_callback)
 
+    default_args = {
+        "owner": pipeline.metadata.owner,
+        **RetryResolver.resolve_default_args(pipeline.defaults),
+    }
+
     dag_kwargs = {
         "dag_id": pipeline.metadata.pipelineId,
         "description": pipeline.metadata.description,
-        "default_args": {
-            "owner": pipeline.metadata.owner,
-            "retries": pipeline.defaults.executionConfigDefault.retries,
-        },
+        "default_args": default_args,
         "tags": tags,
         "template_searchpath": template_searchpath,
         "user_defined_macros": {
-            "resolve_latest_pipeline_dag_id": task_factory._resolve_latest_pipeline_dag_id,
+            "resolve_latest_pipeline_dag_id": (
+                task_factory._resolve_latest_pipeline_dag_id
+            ),
         },
         "on_failure_callback": on_failure_callbacks,
         "on_success_callback": on_success_callbacks,

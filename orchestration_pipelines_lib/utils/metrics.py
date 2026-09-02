@@ -3,8 +3,9 @@
 import logging
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
+from datetime import timedelta
 from enum import Enum
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from airflow.models import BaseOperator
 from airflow.stats import Stats
@@ -240,34 +241,130 @@ def report_init_context(
 T = TypeVar("T", bound=BaseOperator)
 
 
-def wrap_observability_operator(
+class RetryMixin:
+    """Mixin for pipeline operators that manages custom retry policies."""
+
+    _op_custom_retry_policy: Any = None
+
+    def __init__(
+        self, *args: Any, _op_custom_retry_policy: Any = None, **kwargs: Any
+    ) -> None:
+        """Initializes RetryMixin and resolves retry policy kwargs."""
+        if _op_custom_retry_policy is None:
+            dag = kwargs.get("dag")
+            if (
+                dag
+                and hasattr(dag, "default_args")
+                and isinstance(dag.default_args, dict)
+            ):
+                _op_custom_retry_policy = dag.default_args.get(
+                    "_op_custom_retry_policy"
+                )
+
+        if _op_custom_retry_policy:
+            from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.retry_resolver import (  # noqa: E501
+                CUSTOM_RETRY_POLICY_KEY,
+                RetryResolver,
+            )
+
+            for k, v in RetryResolver.resolve_policy_kwargs(
+                _op_custom_retry_policy
+            ).items():
+                if k != CUSTOM_RETRY_POLICY_KEY:
+                    kwargs.setdefault(k, v)
+
+        kwargs.pop("_op_custom_retry_policy", None)
+        super().__init__(*args, **kwargs)
+        self._op_custom_retry_policy = _op_custom_retry_policy
+
+    def _calculate_retry_delay(self, context: Any) -> timedelta:
+        """Dynamically calculates retry delay based on ti.try_number."""
+        policy = getattr(self, "_op_custom_retry_policy", None)
+        if not policy:
+            return getattr(self, "retry_delay", timedelta(seconds=0))
+
+        from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.retry_resolver import (  # noqa: E501
+            RetryResolver,
+        )
+
+        delay_fn = RetryResolver.get_retry_delay_callable(policy)
+        return delay_fn(context)
+
+    def execute(self, context: Any, **kwargs: Any) -> Any:
+        """Executes operator and updates retry_delay dynamically."""
+        if getattr(self, "_op_custom_retry_policy", None):
+            self.retry_delay = self._calculate_retry_delay(context)
+        try:
+            return super().execute(context, **kwargs)  # type: ignore[misc]
+        except Exception:
+            if getattr(self, "_op_custom_retry_policy", None):
+                self.retry_delay = self._calculate_retry_delay(context)
+            raise
+
+
+class MetricsMixin:
+    """Mixin for pipeline operators that emits execution metrics."""
+
+    _op_action_type: ActionExecutionType
+    _op_engine: ActionExecutionEngine
+    _op_get_pipeline_metadata: Callable[["DAG"], tuple[str, str, str]]
+
+    def execute(self, context: Any, **kwargs: Any) -> Any:
+        """Executes operator within the action observability context."""
+        with _action_observability_context(
+            cast(BaseOperator, self),
+            context,
+            self._op_action_type,
+            self._op_engine,
+            self._op_get_pipeline_metadata,
+        ):
+            return super().execute(context, **kwargs)  # type: ignore[misc]
+
+
+def wrap_operator(
     base_operator_class: type[T],
     action_type: ActionExecutionType,
     engine: ActionExecutionEngine,
     get_pipeline_metadata: Callable[["DAG"], tuple[str, str, str]],
 ) -> type[T]:
-    """Factory function to create a custom observability operator that inherits
-    from the base Airflow operator and injects metric-emitting logic.
-    """
+    """Creates a composite wrapper operator class using mixins."""
     if not issubclass(base_operator_class, BaseOperator):
         return base_operator_class
 
-    class ActionObservabilityOperator(base_operator_class):
-        """Wrapper operator for pipeline actions
-        that emits OP execution metrics.
-        """
+    cls_name = f"Orchestration{base_operator_class.__name__}"
+    cls_qualname = f"Orchestration{base_operator_class.__qualname__}"
 
-        def execute(self, context):
-            with _action_observability_context(
-                self, context, action_type, engine, get_pipeline_metadata
-            ):
-                return super().execute(context)
+    def __init__(
+        self: Any,
+        *args: Any,
+        _op_custom_retry_policy: Any = None,
+        **kwargs: Any,
+    ) -> None:
+        super(orchestration_cls, self).__init__(
+            *args,
+            _op_custom_retry_policy=_op_custom_retry_policy,
+            **kwargs,
+        )
 
-    _rename_observability_class(
-        ActionObservabilityOperator, base_operator_class
+    namespace = {
+        "__init__": __init__,
+        "__qualname__": cls_qualname,
+        "__module__": base_operator_class.__module__,
+        "_op_action_type": action_type,
+        "_op_engine": engine,
+        "_op_get_pipeline_metadata": staticmethod(get_pipeline_metadata),
+    }
+
+    orchestration_cls = type(
+        cls_name,
+        (RetryMixin, MetricsMixin, base_operator_class),
+        namespace,
     )
 
-    return cast(type[T], ActionObservabilityOperator)
+    return cast(type[T], orchestration_cls)
+
+
+wrap_observability_operator = wrap_operator
 
 
 def _incr_callback(topic: str, tags: dict[str, str] | None = None):

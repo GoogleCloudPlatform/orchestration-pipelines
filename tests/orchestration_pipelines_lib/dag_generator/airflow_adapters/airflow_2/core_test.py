@@ -685,6 +685,36 @@ def test_build_dag_kwargs_without_data_root_returns_kwargs_without_template_sear
     assert result.get("template_searchpath") == []
 
 
+def test_build_dag_kwargs_with_retry_policy_sets_default_args_and_custom_key(
+    pipeline_setup,
+):
+    """Test that dag_kwargs default_args includes retries, retry_delay, and _op_custom_retry_policy."""
+    from datetime import timedelta
+    from orchestration_pipelines_lib.internal_models.actions import (
+        FixedDelayStrategyModel,
+        RetryPolicyModel,
+    )
+
+    policy = RetryPolicyModel(
+        maxRetries=5,
+        fixedDelay=FixedDelayStrategyModel(retryDelay="2m"),
+    )
+    pipeline_setup["pipeline"].defaults.retryPolicy = policy
+
+    result = _build_dag_kwargs(
+        pipeline_setup["pipeline"],
+        [],
+        "Notes",
+        "",
+        pipeline_setup["bundle_id"],
+        pipeline_setup["pipeline_id"],
+    )
+
+    assert result["default_args"]["retries"] == 5
+    assert result["default_args"]["retry_delay"] == timedelta(minutes=2)
+    assert result["default_args"]["_op_custom_retry_policy"] == policy
+
+
 @pytest.fixture
 def schedule_setup():
     """Sets up empty DAG kwargs and mock objects for schedule and non-schedule

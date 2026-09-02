@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING
 
 import yaml
 
@@ -81,7 +81,30 @@ class ConverterV1ToInternal:
     """Converts v1 pipeline models (protobufs) to internal models."""
 
     def __init__(self, file_manager: FileManager):
+        """Initializes ConverterV1ToInternal with a file manager."""
         self.file_manager = file_manager
+
+    def _convert_retry_policy(
+        self,
+        retry_policy_proto: v1_pipeline_protos.RetryPolicy | None,
+    ) -> internal_actions.RetryPolicyModel | None:
+        """Converts a RetryPolicy protobuf message to internal model."""
+        if not retry_policy_proto or not retry_policy_proto.HasField(
+            "max_retries"
+        ):
+            return None
+
+        strategy_name = retry_policy_proto.WhichOneof("strategy")
+        fixed_delay_model = None
+        if strategy_name == "fixed_delay":
+            fixed_delay_model = internal_actions.FixedDelayStrategyModel(
+                retryDelay=retry_policy_proto.fixed_delay.retry_delay
+            )
+
+        return internal_actions.RetryPolicyModel(
+            maxRetries=retry_policy_proto.max_retries,
+            fixedDelay=fixed_delay_model,
+        )
 
     def _convert_trigger_rule(self, trigger_rule_val: int) -> str:
         if (
@@ -128,7 +151,7 @@ class ConverterV1ToInternal:
 
         return normalize_struct(workflow_invocation_msg, WorkflowInvocation)
 
-    def _get_gce_cluster_config(self, resource_profile_msg: Message) -> Dict:
+    def _get_gce_cluster_config(self, resource_profile_msg: Message) -> dict:
         """Parses a resource profile message for Dataproc on GCE.
 
         Args:
@@ -296,15 +319,23 @@ class ConverterV1ToInternal:
             project=v1_defaults.project_id, region=v1_defaults.location
         )
 
-        internal_exec_config_defaults = (
-            internal_pipeline.ExecutionConfigDefaultsModel(
-                retries=v1_defaults.execution_config.retries
+        if v1_defaults.HasField("retry_policy"):
+            internal_retry_policy = self._convert_retry_policy(
+                v1_defaults.retry_policy
             )
-        )
+        elif v1_defaults.HasField("execution_config"):
+            internal_retry_policy = internal_actions.RetryPolicyModel(
+                maxRetries=v1_defaults.execution_config.retries,
+            )
+        else:
+            internal_retry_policy = internal_actions.RetryPolicyModel(
+                maxRetries=0,
+            )
 
         internal_defaults = internal_pipeline.DefaultsModel(
             cloudDefault=internal_cloud_defaults,
-            executionConfigDefault=internal_exec_config_defaults,
+            executionConfigDefault=None,
+            retryPolicy=internal_retry_policy,
         )
 
         internal_metadata = internal_pipeline.MetaDataModel(
@@ -334,6 +365,7 @@ class ConverterV1ToInternal:
     def convert_notifications(
         self, notifications: v1_pipeline_protos.Notification
     ) -> internal_pipeline.NotificationModel:
+        """Converts Notification protobuf to internal NotificationModel."""
         if not notifications:
             return None
         on_pipeline_failure = None
@@ -354,6 +386,7 @@ class ConverterV1ToInternal:
     def convert_trigger(
         self, trigger: v1_pipeline_protos.Trigger
     ) -> internal_pipeline.AnyScheduleTrigger:
+        """Converts Trigger protobuf to internal ScheduleTriggerModel."""
         trigger_type = trigger.WhichOneof("trigger")
         if trigger_type == "schedule":
             schedule = trigger.schedule
@@ -373,6 +406,7 @@ class ConverterV1ToInternal:
         defaults: v1_pipeline_protos.Defaults,
         shared_labels: dict[str, str],
     ) -> internal_pipeline.AnyAction:
+        """Converts Action protobuf to internal action model."""
         action_type = action.WhichOneof("action")
 
         if action_type == "python":
@@ -411,6 +445,11 @@ class ConverterV1ToInternal:
             if action.HasField("op_kwargs") and action.op_kwargs
             else None
         )
+        retry_policy = (
+            self._convert_retry_policy(action.retry_policy)
+            if action.HasField("retry_policy")
+            else None
+        )
 
         if action.HasField("environment"):
             env = action.environment
@@ -440,6 +479,7 @@ class ConverterV1ToInternal:
                     requirements=requirements,
                     systemSitePackages=env.system_site_packages,
                 ),
+                retryPolicy=retry_policy,
             )
         else:
             return internal_actions.PythonScriptActionModel(
@@ -453,6 +493,7 @@ class ConverterV1ToInternal:
                     pythonCallable=action.python_callable,
                     opKwargs=op_kwargs,
                 ),
+                retryPolicy=retry_policy,
             )
 
     def _convert_dataproc_action(
@@ -460,7 +501,7 @@ class ConverterV1ToInternal:
         action,
         action_type: str,
         defaults: v1_pipeline_protos.Defaults,
-        shared_labels: Dict[str, str],
+        shared_labels: dict[str, str],
     ) -> internal_actions.DataprocOperatorActionModel:
         engine_type = action.engine.WhichOneof("engine")
         internal_engine = None
@@ -504,14 +545,14 @@ class ConverterV1ToInternal:
                     )
                 )
         elif engine_type == "dataproc_serverless":
-            config = action.engine.dataproc_serverless
-            region = config.location or defaults.location
-            impersonation_chain = list(config.impersonation_chain)
+            serverless_engine = action.engine.dataproc_serverless
+            region = serverless_engine.location or defaults.location
+            impersonation_chain = list(serverless_engine.impersonation_chain)
             internal_engine = internal_actions.EngineModel(
                 engineType="dataproc-serverless"
             )
             resource_profile = self._get_serverless_resource_profile(
-                config.resource_profile
+                serverless_engine.resource_profile
             )
 
             internal_config = (
@@ -544,6 +585,12 @@ class ConverterV1ToInternal:
             for uri in getattr(action, "archive_uris", [])
         ]
 
+        retry_policy = (
+            self._convert_retry_policy(action.retry_policy)
+            if action.HasField("retry_policy")
+            else None
+        )
+
         return internal_actions.DataprocOperatorActionModel(
             name=action.name,
             type=action_type,
@@ -561,6 +608,7 @@ class ConverterV1ToInternal:
             depsBucket=action.staging_bucket,
             engine=internal_engine,
             config=internal_config,
+            retryPolicy=retry_policy,
         )
 
     def _resolve_archive_uri(self, archive_uri: str) -> str:
@@ -578,7 +626,7 @@ class ConverterV1ToInternal:
         self,
         action: v1_pipeline_protos.SqlAction,
         defaults: v1_pipeline_protos.Defaults,
-        shared_labels: Dict[str, str],
+        shared_labels: dict[str, str],
     ) -> internal_pipeline.AnyAction:
         engine_type = action.engine.WhichOneof("engine")
         query_type = action.query.WhichOneof("query")
@@ -604,6 +652,11 @@ class ConverterV1ToInternal:
             merged_labels.update(dict(action.labels))
 
         params = dict(action.params) if action.params else None
+        retry_policy = (
+            self._convert_retry_policy(action.retry_policy)
+            if action.HasField("retry_policy")
+            else None
+        )
 
         if engine_type == "bigquery":
             bq_engine = action.engine.bigquery
@@ -624,6 +677,7 @@ class ConverterV1ToInternal:
                     location=bq_engine.location or defaults.location,
                     destinationTable=bq_engine.destination_table,
                 ),
+                retryPolicy=retry_policy,
             )
 
         if engine_type == "dataproc_serverless":
@@ -656,6 +710,7 @@ class ConverterV1ToInternal:
                 engine=internal_engine,
                 params=params,
                 config=internal_config,
+                retryPolicy=retry_policy,
             )
 
         if engine_type == "dataproc_on_gce":
@@ -713,6 +768,7 @@ class ConverterV1ToInternal:
                 engine=internal_engine,
                 params=params,
                 config=internal_config,
+                retryPolicy=retry_policy,
             )
 
         raise TypeError(f"Unknown SQL engine type: {engine_type}")
@@ -721,15 +777,23 @@ class ConverterV1ToInternal:
         self,
         action: v1_pipeline_protos.PipelineAction,
         defaults: v1_pipeline_protos.Defaults,
-        shared_labels: Optional[Dict[str, str]] = None,
+        shared_labels: dict[str, str] | None = None,
     ) -> internal_pipeline.AnyAction:
+        retry_policy = (
+            self._convert_retry_policy(action.retry_policy)
+            if action.HasField("retry_policy")
+            else None
+        )
         framework_type = action.framework.WhichOneof("framework")
         if framework_type == "dbt":
             dbt = action.framework.dbt
             if action.labels:
                 logging.warning(
-                    f"Action {action.name}: 'labels' field is not supported for DBT action. "
-                    f"Found labels: {action.labels}. These will be ignored."
+                    "Action %s: 'labels' field is not supported "
+                    "for DBT action. Found labels: %s. "
+                    "These will be ignored.",
+                    action.name,
+                    action.labels,
                 )
             execution_type = dbt.WhichOneof("execution")
             if execution_type == "airflow_worker":
@@ -750,6 +814,7 @@ class ConverterV1ToInternal:
                     ),
                     select_models=list(airflow_worker.select_models),
                     params=params,
+                    retryPolicy=retry_policy,
                 )
         elif framework_type == "dataform":
             dataform = action.framework.dataform
@@ -775,17 +840,22 @@ class ConverterV1ToInternal:
                     ),
                     labels=merged_labels,
                     params=params,
+                    retryPolicy=retry_policy,
                 )
             if execution_type == "dataform_service":
                 if action.params:
                     raise ValueError(
-                        f"Action {action.name}: `params` are not supported when executing Dataform using Dataform Service. "
+                        f"Action {action.name}: `params` are not supported "
+                        "when executing Dataform using Dataform Service. "
                         "Please remove `params` or use local execution."
                     )
                 if action.labels:
                     logging.warning(
-                        f"Action {action.name}: 'labels' field is not supported for Dataform using Dataform Service. "
-                        f"Found labels: {action.labels}. These will be ignored."
+                        "Action %s: 'labels' field is not supported "
+                        "for Dataform using Dataform Service. Found labels: "
+                        "%s. These will be ignored.",
+                        action.name,
+                        action.labels,
                     )
                 service = dataform.dataform_service
                 workflow_invocation = self._normalize_workflow_invocation(
@@ -807,6 +877,7 @@ class ConverterV1ToInternal:
                         ),
                     ),
                     labels=shared_labels,
+                    retryPolicy=retry_policy,
                 )
         raise TypeError(f"Unknown pipeline framework: {framework_type}")
 
@@ -852,6 +923,12 @@ class ConverterV1ToInternal:
                 location=dts_spec.location or defaults.location,
             )
 
+            retry_policy = (
+                self._convert_retry_policy(action.retry_policy)
+                if action.HasField("retry_policy")
+                else None
+            )
+
             return internal_actions.DataIngestionActionModel(
                 name=action.name,
                 type="data_ingestion",
@@ -860,6 +937,7 @@ class ConverterV1ToInternal:
                 triggerRule=self._convert_trigger_rule(action.trigger_rule),
                 labels=shared_labels,
                 config=spec_model,
+                retryPolicy=retry_policy,
             )
         raise TypeError(
             f"Unknown DataIngestionAction config type: {config_type}"
@@ -870,6 +948,11 @@ class ConverterV1ToInternal:
         action: v1_pipeline_protos.OrchestrationPipelineAction,
         defaults: v1_pipeline_protos.Defaults,
     ) -> internal_pipeline.AnyAction:
+        retry_policy = (
+            self._convert_retry_policy(action.retry_policy)
+            if action.HasField("retry_policy")
+            else None
+        )
         return internal_actions.OrchestrationPipelineActionModel(
             name=action.name,
             type="orchestration_pipeline",
@@ -879,6 +962,7 @@ class ConverterV1ToInternal:
             pipeline_id=action.pipeline_id,
             bundle_id=action.bundle_id,
             wait_for_completion=action.wait_for_completion,
+            retryPolicy=retry_policy,
         )
 
     def _convert_ai_action(
@@ -887,6 +971,11 @@ class ConverterV1ToInternal:
         defaults: v1_pipeline_protos.Defaults,
         shared_labels: dict[str, str],
     ) -> internal_pipeline.AnyAction:
+        retry_policy = (
+            self._convert_retry_policy(action.retry_policy)
+            if action.HasField("retry_policy")
+            else None
+        )
         provider_type = action.WhichOneof("provider")
         if provider_type == "agent_platform":
             agent_platform = action.agent_platform
@@ -918,12 +1007,15 @@ class ConverterV1ToInternal:
                     triggerRule=self._convert_trigger_rule(action.trigger_rule),
                     labels=merged_labels,
                     config=spec_model,
+                    retryPolicy=retry_policy,
                 )
             elif platform_type == "batch_inference":
                 inference_spec = agent_platform.batch_inference
                 impersonation_chain = None
                 if inference_spec.impersonation_chain:
-                    impersonation_chain = list(inference_spec.impersonation_chain)
+                    impersonation_chain = list(
+                        inference_spec.impersonation_chain
+                    )
 
                 gcs_source = None
                 if inference_spec.gcs_source:
@@ -933,7 +1025,8 @@ class ConverterV1ToInternal:
                     internal_actions.AgentPlatformBatchInferenceSpecModel(
                         job_display_name=inference_spec.job_display_name,
                         model_name=inference_spec.model_name,
-                        instances_format=inference_spec.instances_format or None,
+                        instances_format=inference_spec.instances_format
+                        or None,
                         predictions_format=inference_spec.predictions_format
                         or None,
                         bigquery_source=inference_spec.bigquery_source or None,
@@ -961,6 +1054,7 @@ class ConverterV1ToInternal:
                     triggerRule=self._convert_trigger_rule(action.trigger_rule),
                     labels=merged_labels,
                     config=spec_model,
+                    retryPolicy=retry_policy,
                 )
             raise TypeError(f"Unknown AgentPlatform type: {platform_type}")
         raise TypeError(f"Unknown AIAction provider type: {provider_type}")

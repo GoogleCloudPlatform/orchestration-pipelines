@@ -18,25 +18,47 @@
 # pylint: disable=invalid-name,missing-class-docstring
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Literal
 
 
 @dataclass
+class FixedDelayStrategyModel:
+    """Configuration model for Fixed Delay retry strategy."""
+
+    retryDelay: str
+
+
+@dataclass
+class RetryPolicyModel:
+    """Model representing retry policy configuration."""
+
+    maxRetries: int
+    fixedDelay: FixedDelayStrategyModel | None = None
+
+
+@dataclass(kw_only=True)
 class ActionBaseModel:
+    """Base model for all action configurations."""
+
     name: str
-    dependsOn: Optional[List[str]]
-    executionTimeout: Optional[str]
-    triggerRule: Optional[str]
+    dependsOn: list[str] | None
+    executionTimeout: str | None
+    triggerRule: str | None
+    retryPolicy: RetryPolicyModel | None = None
 
 
 @dataclass
 class PythonScriptConfigurationModel:
+    """Configuration for Python script actions."""
+
     pythonCallable: str
-    opKwargs: Optional[Dict[str, Any]] = None
+    opKwargs: dict[str, Any] | None = None
 
 
 @dataclass
 class PythonScriptActionModel(ActionBaseModel):
+    """Action model for executing Python scripts."""
+
     type: Literal["script"]
     filename: str
     config: PythonScriptConfigurationModel
@@ -44,13 +66,17 @@ class PythonScriptActionModel(ActionBaseModel):
 
 @dataclass
 class PythonVirtualenvConfigurationModel(PythonScriptConfigurationModel):
-    requirementsPath: Optional[str] = None
-    requirements: Optional[List[str]] = None
-    systemSitePackages: Optional[bool] = None
+    """Configuration for Python virtualenv actions."""
+
+    requirementsPath: str | None = None
+    requirements: list[str] | None = None
+    systemSitePackages: bool | None = None
 
 
 @dataclass
 class PythonVirtualenvActionModel(ActionBaseModel):
+    """Action model for executing Python in a virtualenv."""
+
     type: Literal["python-virtual-env"]
     filename: str
     config: PythonVirtualenvConfigurationModel
@@ -58,97 +84,119 @@ class PythonVirtualenvActionModel(ActionBaseModel):
 
 @dataclass
 class ResourceProfile:
-    runtimeConfig: Optional[Dict[str, Any]] = None
-    environmentConfig: Optional[Dict[str, Any]] = None
+    """Resource profile settings for runtime and environment."""
+
+    runtimeConfig: dict[str, Any] | None = None
+    environmentConfig: dict[str, Any] | None = None
 
 
 @dataclass
 class DataprocCreateBatchOperatorConfigurationModel:
+    """Configuration for Dataproc Create Batch operator."""
+
     resourceProfile: ResourceProfile
 
 
 @dataclass
 class BqOperationConfigurationModel:
+    """Configuration for BigQuery operation actions."""
+
     location: str
-    destinationTable: Optional[str] = None
+    destinationTable: str | None = None
 
 
 @dataclass
 class BqOperationActionModel(ActionBaseModel):
+    """Action model for BigQuery operations."""
+
     type: Literal["operation"]
     engine: Literal["bq"]
     config: BqOperationConfigurationModel
-    query: Optional[str] = None
-    filename: Optional[str] = None
-    labels: Optional[Dict[str, str]] = None
-    impersonationChain: Optional[Union[str, list[str]]] = None
-    params: Optional[Dict[str, str]] = None
+    query: str | None = None
+    filename: str | None = None
+    labels: dict[str, str] | None = None
+    impersonationChain: str | list[str] | None = None
+    params: dict[str, str] | None = None
 
 
 @dataclass
 class DataprocEphemeralConfigurationModel:
+    """Configuration for ephemeral Dataproc clusters."""
+
     region: str
     project_id: str
     cluster_name: str
-    cluster_config: Optional[Dict[str, Any]] = None
-    properties: Optional[Dict[str, str]] = None
+    cluster_config: dict[str, Any] | None = None
+    properties: dict[str, str] | None = None
 
 
 @dataclass
 class DataprocGceExistingClusterConfigurationModel:
+    """Configuration for existing Dataproc on GCE clusters."""
+
     cluster_name: str
-    project_id: Optional[str] = None
-    properties: Optional[Dict[str, str]] = None
+    project_id: str | None = None
+    properties: dict[str, str] | None = None
 
 
 @dataclass
 class EngineModel:
+    """Execution engine model for Dataproc actions."""
+
     engineType: Literal["dataproc-gce", "dataproc-serverless"]
-    clusterMode: Optional[Literal["existing", "ephemeral"]] = None
+    clusterMode: Literal["existing", "ephemeral"] | None = None
 
 
 @dataclass
 class DataprocOperatorActionModel(ActionBaseModel):
+    """Action model for Dataproc operations."""
+
     type: Literal["notebook", "pyspark", "sql"]
     region: str
     engine: EngineModel
-    filename: Optional[str] = None
-    pyFiles: Optional[List[str]] = None
-    query: Optional[str] = None
-    archives: Optional[List[str]] = None
-    depsBucket: Optional[str] = None
-    labels: Optional[Dict[str, str]] = None
-    params: Optional[Dict[str, str]] = None
-    impersonationChain: Optional[Union[str, list[str]]] = None
-    config: Union[
-        DataprocGceExistingClusterConfigurationModel,
-        DataprocEphemeralConfigurationModel,
-        DataprocCreateBatchOperatorConfigurationModel,
-        None,
-    ] = None
+    filename: str | None = None
+    pyFiles: list[str] | None = None
+    query: str | None = None
+    archives: list[str] | None = None
+    depsBucket: str | None = None
+    labels: dict[str, str] | None = None
+    params: dict[str, str] | None = None
+    impersonationChain: str | list[str] | None = None
+    config: (
+        DataprocGceExistingClusterConfigurationModel
+        | DataprocEphemeralConfigurationModel
+        | DataprocCreateBatchOperatorConfigurationModel
+        | None
+    ) = None
 
 
 @dataclass
 class DbtLocalExecutionModel:
+    """Configuration for local DBT execution."""
+
     path: str
 
 
 @dataclass
 class DBTActionModel(ActionBaseModel):
+    """Action model for DBT pipelines."""
+
     type: Literal["dbt_pipeline"]
     engine: Literal["dbt"]
     executionMode: Literal["local"]
     source: DbtLocalExecutionModel
-    select_models: Optional[List[str]] = None
-    params: Optional[Dict[str, str]] = None
+    select_models: list[str] | None = None
+    params: dict[str, str] | None = None
 
 
 @dataclass
 class DataformServiceModel:
-    workflow_invocation: Dict[str, Any]
-    project_id: Optional[str] = None
-    region: Optional[str] = None
-    repository_id: Optional[str] = None
+    """Configuration for executing on Dataform Service."""
+
+    workflow_invocation: dict[str, Any]
+    project_id: str | None = None
+    region: str | None = None
+    repository_id: str | None = None
 
 
 @dataclass
@@ -157,10 +205,10 @@ class DataformActionModel(ActionBaseModel):
 
     type: Literal["dataform_pipeline"]
     executionMode: Literal["local", "service"]
-    dataform_project_path: Optional[str] = None
-    dataformServiceConfig: Optional[DataformServiceModel] = None
-    labels: Optional[Dict[str, str]] = None
-    params: Optional[Dict[str, str]] = None
+    dataform_project_path: str | None = None
+    dataformServiceConfig: DataformServiceModel | None = None
+    labels: dict[str, str] | None = None
+    params: dict[str, str] | None = None
 
 
 @dataclass
@@ -168,12 +216,12 @@ class BigQueryDtsSpecModel:
     """BigQuery DTS spec model."""
 
     transferConfigId: str
-    runtimeParams: Optional[Dict[str, Any]] = None
-    requestedRunTime: Optional[str] = None
-    requestedTimeRange: Optional[Dict[str, str]] = None
-    impersonationChain: Optional[Union[str, List[str]]] = None
-    projectId: Optional[str] = None
-    location: Optional[str] = None
+    runtimeParams: dict[str, Any] | None = None
+    requestedRunTime: str | None = None
+    requestedTimeRange: dict[str, str] | None = None
+    impersonationChain: str | list[str] | None = None
+    projectId: str | None = None
+    location: str | None = None
 
 
 @dataclass
@@ -182,17 +230,17 @@ class DataIngestionActionModel(ActionBaseModel):
 
     type: Literal["data_ingestion"]
     config: BigQueryDtsSpecModel
-    labels: Optional[Dict[str, str]] = None
+    labels: dict[str, str] | None = None
 
 
 @dataclass
 class OrchestrationPipelineActionModel(ActionBaseModel):
-    """Internal model representing an action that triggers another orchestration pipeline."""
+    """Internal model for triggering another orchestration pipeline."""
 
     type: Literal["orchestration_pipeline"]
     pipeline_id: str
-    bundle_id: Optional[str] = None
-    wait_for_completion: Optional[bool] = None
+    bundle_id: str | None = None
+    wait_for_completion: bool | None = None
 
 
 @dataclass
@@ -202,9 +250,9 @@ class AgentPlatformModelUploadSpecModel:
     model_name: str
     model_artifact_uri: str
     serving_container_image_uri: str
-    description: Optional[str] = None
-    project_id: Optional[str] = None
-    location: Optional[str] = None
+    description: str | None = None
+    project_id: str | None = None
+    location: str | None = None
 
 
 @dataclass
@@ -213,15 +261,15 @@ class AgentPlatformBatchInferenceSpecModel:
 
     job_display_name: str
     model_name: str
-    instances_format: Optional[str] = None
-    predictions_format: Optional[str] = None
-    bigquery_source: Optional[str] = None
-    gcs_source: Optional[Union[str, List[str]]] = None
-    bigquery_destination_prefix: Optional[str] = None
-    gcs_destination_prefix: Optional[str] = None
-    project_id: Optional[str] = None
-    location: Optional[str] = None
-    impersonation_chain: Optional[Union[str, List[str]]] = None
+    instances_format: str | None = None
+    predictions_format: str | None = None
+    bigquery_source: str | None = None
+    gcs_source: str | list[str] | None = None
+    bigquery_destination_prefix: str | None = None
+    gcs_destination_prefix: str | None = None
+    project_id: str | None = None
+    location: str | None = None
+    impersonation_chain: str | list[str] | None = None
 
 
 @dataclass
@@ -234,8 +282,7 @@ class AIActionModel(ActionBaseModel):
         "model_upload",
         "batch_inference",
     ]
-    config: Union[
-        AgentPlatformModelUploadSpecModel,
-        AgentPlatformBatchInferenceSpecModel
-    ]
-    labels: Optional[Dict[str, str]] = None
+    config: (
+        AgentPlatformModelUploadSpecModel | AgentPlatformBatchInferenceSpecModel
+    )
+    labels: dict[str, str] | None = None

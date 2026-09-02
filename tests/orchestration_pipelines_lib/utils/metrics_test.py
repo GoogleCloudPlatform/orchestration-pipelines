@@ -13,8 +13,10 @@ from orchestration_pipelines_lib.utils.metrics import (
     ActionExecutionEngine,
     ActionExecutionType,
     BasicStatus,
+    MetricsMixin,
     ParsingStatus,
     PipelineRunTriggerType,
+    RetryMixin,
     _action_observability_context,
     _emit_metric,
     _incr_callback,
@@ -25,6 +27,7 @@ from orchestration_pipelines_lib.utils.metrics import (
     report_parsing,
     report_pipeline_run,
     wrap_observability_operator,
+    wrap_operator,
 )
 
 TARGET_MODULE = "orchestration_pipelines_lib.utils.metrics"
@@ -450,6 +453,10 @@ def test_pipeline_run_trigger_type_from_dag_run_type(
 class DummyBaseOperator:
     """A dummy base class simulating Airflow's BaseOperator."""
 
+    def __init__(self, *args, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
     def execute(self, context):  # noqa: D102
         return "base_execute_result"
 
@@ -566,9 +573,9 @@ def test_wrap_operator_creates_wrapper_and_executes(
     get_pipeline_metadata,
     context_dict,
 ):
-    """Tests that a valid base class is wrapped and uses the context manager on execute."""  # noqa: E501
+    """Tests that a valid base class is wrapped and uses mixins on execute."""
     mock_context_manager.return_value.__enter__.return_value = None
-    WrappedClass = wrap_observability_operator(
+    WrappedClass = wrap_operator(
         DummyOperator,  # type: ignore
         action_type,
         engine,
@@ -579,8 +586,152 @@ def test_wrap_operator_creates_wrapper_and_executes(
     result = instance.execute(context_dict)
 
     assert result == "base_execute_result"
-    assert WrappedClass.__name__ == "DummyOperatorObservability"
+    assert WrappedClass.__name__ == "OrchestrationDummyOperator"
     assert issubclass(WrappedClass, DummyOperator)
+    assert issubclass(WrappedClass, RetryMixin)
+    assert issubclass(WrappedClass, MetricsMixin)
     mock_context_manager.assert_called_once_with(
         instance, context_dict, action_type, engine, get_pipeline_metadata
     )
+
+
+@patch(MOCK_BASE_OPERATOR, DummyBaseOperator)
+def test_wrap_operator_inherits_custom_retry_policy_from_dag_default_args(
+    action_type,
+    engine,
+    get_pipeline_metadata,
+):
+    """Tests that wrapper inherits _op_custom_retry_policy from default_args."""
+    from datetime import timedelta
+    from orchestration_pipelines_lib.internal_models.actions import (
+        FixedDelayStrategyModel,
+        RetryPolicyModel,
+    )
+
+    policy = RetryPolicyModel(
+        maxRetries=4,
+        fixedDelay=FixedDelayStrategyModel(retryDelay="20s"),
+    )
+    mock_dag = MagicMock()
+    mock_dag.default_args = {"_op_custom_retry_policy": policy}
+
+    WrappedClass = wrap_observability_operator(
+        DummyOperator,  # type: ignore
+        action_type,
+        engine,
+        get_pipeline_metadata,
+    )
+    instance = WrappedClass(dag=mock_dag)  # type: ignore
+    assert instance._op_custom_retry_policy == policy
+    assert instance.retries == 4
+    assert instance.retry_delay == timedelta(seconds=20)
+
+
+@patch(MOCK_BASE_OPERATOR, DummyBaseOperator)
+def test_wrap_operator_overrides_custom_retry_policy(
+    action_type,
+    engine,
+    get_pipeline_metadata,
+):
+    """Tests that explicit _op_custom_retry_policy overrides default_args."""
+    from datetime import timedelta
+    from orchestration_pipelines_lib.internal_models.actions import (
+        FixedDelayStrategyModel,
+        RetryPolicyModel,
+    )
+
+    dag_policy = RetryPolicyModel(
+        maxRetries=2,
+        fixedDelay=FixedDelayStrategyModel(retryDelay="10s"),
+    )
+    task_policy = RetryPolicyModel(
+        maxRetries=5,
+        fixedDelay=FixedDelayStrategyModel(retryDelay="1m"),
+    )
+    mock_dag = MagicMock()
+    mock_dag.default_args = {"_op_custom_retry_policy": dag_policy}
+
+    WrappedClass = wrap_observability_operator(
+        DummyOperator,  # type: ignore
+        action_type,
+        engine,
+        get_pipeline_metadata,
+    )
+    instance = WrappedClass(
+        dag=mock_dag,
+        _op_custom_retry_policy=task_policy,
+    )  # type: ignore
+    assert instance._op_custom_retry_policy == task_policy
+    assert instance.retries == 5
+    assert instance.retry_delay == timedelta(minutes=1)
+
+
+@patch(MOCK_OBSERVABILITY_CONTEXT)
+@patch(MOCK_BASE_OPERATOR, DummyBaseOperator)
+def test_wrap_operator_calculates_dynamic_retry_delay_on_execute(
+    mock_context_manager,
+    action_type,
+    engine,
+    get_pipeline_metadata,
+):
+    """Tests dynamic retry_delay calculation based on ti.try_number."""
+    from datetime import timedelta
+
+    from orchestration_pipelines_lib.internal_models.actions import (
+        FixedDelayStrategyModel,
+        RetryPolicyModel,
+    )
+
+    mock_context_manager.return_value.__enter__.return_value = None
+    policy = RetryPolicyModel(
+        maxRetries=3,
+        fixedDelay=FixedDelayStrategyModel(retryDelay="25s"),
+    )
+
+    WrappedClass = wrap_operator(
+        DummyOperator,  # type: ignore
+        action_type,
+        engine,
+        get_pipeline_metadata,
+    )
+    instance = WrappedClass(_op_custom_retry_policy=policy)  # type: ignore
+    assert instance.retry_delay == timedelta(seconds=25)
+
+    context = {"dag": MagicMock(), "ti": MagicMock(try_number=3)}
+    instance.execute(context)
+    assert instance.retry_delay == timedelta(seconds=25)
+
+
+@patch(MOCK_OBSERVABILITY_CONTEXT)
+@patch(MOCK_BASE_OPERATOR, DummyBaseOperator)
+def test_wrap_operator_forwards_sentinel_kwargs_on_execute(
+    mock_context_manager,
+    action_type,
+    engine,
+    get_pipeline_metadata,
+    context_dict,
+):
+    """Tests that execute forwards Airflow ExecutorSafeguard sentinel kwargs."""
+    mock_context_manager.return_value.__enter__.return_value = None
+    received_kwargs = {}
+
+    class SentinelOperator(DummyBaseOperator):
+        def execute(self, context, **kwargs):
+            received_kwargs.update(kwargs)
+            return "sentinel_ok"
+
+    WrappedClass = wrap_operator(
+        SentinelOperator,  # type: ignore
+        action_type,
+        engine,
+        get_pipeline_metadata,
+    )
+    instance = WrappedClass()
+    result = instance.execute(
+        context_dict,
+        OrchestrationSentinelOperator__sentinel="sentinel_val",
+    )
+    assert result == "sentinel_ok"
+    assert received_kwargs == {
+        "OrchestrationSentinelOperator__sentinel": "sentinel_val"
+    }

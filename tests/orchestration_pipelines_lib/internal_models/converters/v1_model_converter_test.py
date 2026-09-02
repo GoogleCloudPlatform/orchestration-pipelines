@@ -1593,6 +1593,141 @@ class TestConverterV1ToInternal(unittest.TestCase):
         self.assertIsInstance(internal_action, internal_actions.AIActionModel)
         self.assertEqual(internal_action.name, "test-ai-dispatch")
 
+    def test_convert_retry_policy_with_fixed_delay(self):
+        """Tests converting a RetryPolicy with FixedDelayStrategy."""
+        proto = v1_protos.RetryPolicy(
+            max_retries=3,
+            fixed_delay=v1_protos.FixedDelayStrategy(retry_delay="2m"),
+        )
+        model = self.converter._convert_retry_policy(proto)
+        self.assertIsNotNone(model)
+        self.assertEqual(model.maxRetries, 3)
+        self.assertIsNotNone(model.fixedDelay)
+        self.assertEqual(model.fixedDelay.retryDelay, "2m")
+
+    def test_convert_retry_policy_without_strategy(self):
+        """Tests converting a RetryPolicy without any strategy set."""
+        proto = v1_protos.RetryPolicy(
+            max_retries=2,
+        )
+        model = self.converter._convert_retry_policy(proto)
+        self.assertIsNotNone(model)
+        self.assertEqual(model.maxRetries, 2)
+        self.assertIsNone(model.fixedDelay)
+
+    def test_convert_retry_policy_none_or_empty(self):
+        """Tests converting None or empty RetryPolicy returns None."""
+        self.assertIsNone(self.converter._convert_retry_policy(None))
+        self.assertIsNone(
+            self.converter._convert_retry_policy(v1_protos.RetryPolicy())
+        )
+
+    def test_convert_defaults_with_retry_policy(self):
+        """Tests that defaults.retry_policy is converted."""
+        pipeline_proto = v1_protos.OrchestrationPipeline(
+            model_version="1.0",
+            pipeline_id="test-retry-pipe",
+            runner=v1_protos.PipelineRunner.airflow,
+            defaults=v1_protos.Defaults(
+                project_id="test-proj",
+                location="us-central1",
+                retry_policy=v1_protos.RetryPolicy(
+                    max_retries=4,
+                    fixed_delay=v1_protos.FixedDelayStrategy(retry_delay="10m"),
+                ),
+            ),
+        )
+        internal = self.converter.convert_to_internal_model(pipeline_proto)
+        self.assertIsNotNone(internal.defaults.retryPolicy)
+        self.assertEqual(internal.defaults.retryPolicy.maxRetries, 4)
+        self.assertEqual(
+            internal.defaults.retryPolicy.fixedDelay.retryDelay, "10m"
+        )
+        self.assertIsNone(internal.defaults.executionConfigDefault)
+
+    def test_convert_defaults_fallback_execution_config(self):
+        """Tests backwards compatibility fallback from execution_config.retries."""
+        pipeline_proto = v1_protos.OrchestrationPipeline(
+            model_version="1.0",
+            pipeline_id="test-fallback-pipe",
+            runner=v1_protos.PipelineRunner.airflow,
+            defaults=v1_protos.Defaults(
+                project_id="test-proj",
+                location="us-central1",
+                execution_config=v1_protos.ExecutionConfig(retries=3),
+            ),
+        )
+        internal = self.converter.convert_to_internal_model(pipeline_proto)
+        self.assertIsNotNone(internal.defaults.retryPolicy)
+        self.assertEqual(internal.defaults.retryPolicy.maxRetries, 3)
+        self.assertIsNone(internal.defaults.retryPolicy.fixedDelay)
+        self.assertIsNone(internal.defaults.executionConfigDefault)
+
+    def test_convert_defaults_no_retry_policy_defaults_to_zero(self):
+        """Tests that when neither retry_policy nor execution_config is provided, defaults to max_retries=0."""
+        pipeline_proto = v1_protos.OrchestrationPipeline(
+            model_version="1.0",
+            pipeline_id="test-zero-pipe",
+            runner=v1_protos.PipelineRunner.airflow,
+            defaults=v1_protos.Defaults(
+                project_id="test-proj",
+                location="us-central1",
+            ),
+        )
+        internal = self.converter.convert_to_internal_model(pipeline_proto)
+        self.assertIsNotNone(internal.defaults.retryPolicy)
+        self.assertEqual(internal.defaults.retryPolicy.maxRetries, 0)
+        self.assertIsNone(internal.defaults.retryPolicy.fixedDelay)
+        self.assertIsNone(internal.defaults.executionConfigDefault)
+
+    def test_convert_action_with_retry_policy(self):
+        """Tests that per-action retryPolicy is properly converted."""
+        action_proto = v1_protos.Action()
+        action_proto.python.name = "retry-python"
+        action_proto.python.main_file_path = "script.py"
+        action_proto.python.python_callable = "main"
+        action_proto.python.engine.local.SetInParent()
+        action_proto.python.retry_policy.CopyFrom(
+            v1_protos.RetryPolicy(
+                max_retries=5,
+                fixed_delay=v1_protos.FixedDelayStrategy(retry_delay="45s"),
+            )
+        )
+        internal_action = self.converter.convert_action(
+            action_proto, self.defaults, self.labels
+        )
+        self.assertIsNotNone(internal_action.retryPolicy)
+        self.assertEqual(internal_action.retryPolicy.maxRetries, 5)
+        self.assertEqual(
+            internal_action.retryPolicy.fixedDelay.retryDelay, "45s"
+        )
+
+    def test_convert_defaults_both_retry_policy_and_execution_config_prefers_retry_policy(
+        self,
+    ):
+        """Tests that retry_policy takes precedence when both retry_policy and execution_config are set."""
+        pipeline_proto = v1_protos.OrchestrationPipeline(
+            model_version="1.0",
+            pipeline_id="test-both-pipe",
+            runner=v1_protos.PipelineRunner.airflow,
+            defaults=v1_protos.Defaults(
+                project_id="test-proj",
+                location="us-central1",
+                execution_config=v1_protos.ExecutionConfig(retries=9),
+                retry_policy=v1_protos.RetryPolicy(
+                    max_retries=2,
+                    fixed_delay=v1_protos.FixedDelayStrategy(retry_delay="1m"),
+                ),
+            ),
+        )
+        internal = self.converter.convert_to_internal_model(pipeline_proto)
+        self.assertIsNotNone(internal.defaults.retryPolicy)
+        self.assertEqual(internal.defaults.retryPolicy.maxRetries, 2)
+        self.assertEqual(
+            internal.defaults.retryPolicy.fixedDelay.retryDelay, "1m"
+        )
+        self.assertIsNone(internal.defaults.executionConfigDefault)
+
 
 if __name__ == "__main__":
     unittest.main()

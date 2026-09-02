@@ -18,9 +18,9 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
-from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
     task_utils,
     utils,
 )
@@ -31,7 +31,7 @@ from orchestration_pipelines_lib.utils.duration_utils import (
 from orchestration_pipelines_lib.utils.metrics import (
     ActionExecutionEngine,
     ActionExecutionType,
-    wrap_observability_operator,
+    wrap_operator,
 )
 
 if TYPE_CHECKING:
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 def _resolve_latest_pipeline_dag_id(
     current_dag_id: str,
     target_pipeline_id: str,
-    bundle_id: Optional[str] = None,
+    bundle_id: str | None = None,
 ) -> str:
     """Resolves the trigger DAG ID against the latest version.
 
@@ -98,7 +98,7 @@ def _resolve_latest_pipeline_dag_id(
 
 
 def create_python_script_task(
-    action: Dict[str, Any], _: Dict[str, Any], dag
+    action: dict[str, Any], _: dict[str, Any], dag
 ) -> PythonOperator:
     """Converts an action into a PythonOperator."""
     from airflow.operators.python import PythonOperator
@@ -115,14 +115,14 @@ def create_python_script_task(
             }
             return python_callable(**filtered_kwargs)
 
-        ObservablePythonOperator = wrap_observability_operator(
+        OrchestrationPythonOperator = wrap_operator(
             PythonOperator,
             ActionExecutionType.from_action_type(action.type),
             ActionExecutionEngine.LOCAL,
             task_utils.get_pipeline_metadata,
         )
 
-        return ObservablePythonOperator(
+        return OrchestrationPythonOperator(
             task_id=action.name,
             python_callable=runtime_wrapper,
             op_kwargs=action.config.opKwargs or {},
@@ -134,6 +134,7 @@ def create_python_script_task(
             trigger_rule=action.triggerRule,
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
+            **task_utils.get_action_retry_kwargs(action),
         )
     except Exception as e:
         logging.error(
@@ -144,7 +145,7 @@ def create_python_script_task(
 
 
 def create_python_virtualenv_task(
-    action: Dict[str, Any], _: Dict[str, Any], dag
+    action: dict[str, Any], _: dict[str, Any], dag
 ) -> PythonVirtualenvOperator:
     """Converts an action into a PythonVirtualenvOperator."""
     from airflow.operators.python import PythonVirtualenvOperator
@@ -165,14 +166,14 @@ def create_python_virtualenv_task(
             else action.config.requirements
         )
 
-        ObservablePythonVirtualenvOperator = wrap_observability_operator(
+        OrchestrationPythonVirtualenvOperator = wrap_operator(
             PythonVirtualenvOperator,
             ActionExecutionType.from_action_type(action.type),
             ActionExecutionEngine.LOCAL,
             task_utils.get_pipeline_metadata,
         )
 
-        return ObservablePythonVirtualenvOperator(
+        return OrchestrationPythonVirtualenvOperator(
             task_id=action.name,
             python_callable=python_callable,
             op_kwargs=action.config.opKwargs or {},
@@ -186,6 +187,7 @@ def create_python_virtualenv_task(
             trigger_rule=action.triggerRule,
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
+            **task_utils.get_action_retry_kwargs(action),
         )
     except Exception as e:
         logging.error(
@@ -196,7 +198,7 @@ def create_python_virtualenv_task(
 
 
 def create_bq_operation_task(
-    action: Dict[str, Any], pipeline: Dict[str, Any], dag
+    action: dict[str, Any], pipeline: dict[str, Any], dag
 ):
     """Converts action to SQL job running on BigQuery or Dataproc."""
     return task_utils.create_bq_operation_task(action, pipeline, dag=dag)
@@ -208,14 +210,14 @@ def create_schedule_trigger_task(dag_kwargs, schedule_trigger):
 
 
 def create_dataproc_operator_task(
-    action: Dict[str, Any], pipeline: Dict[str, Any], dag
+    action: dict[str, Any], pipeline: dict[str, Any], dag
 ):
     """Converts an action into a Dataproc Operator."""
     return task_utils.create_dataproc_operator_task(action, pipeline, dag=dag)
 
 
 def create_dbt_task(
-    action: Dict[str, Any], _: Dict[str, Any], dag
+    action: dict[str, Any], _: dict[str, Any], dag
 ) -> PythonOperator:
     """Converts an action into a PythonOperator for dbt."""
     from airflow.operators.python import PythonOperator
@@ -230,14 +232,14 @@ def create_dbt_task(
         if action.params:
             op_kwargs["params"] = action.params
 
-        ObservablePythonOperator = wrap_observability_operator(
+        OrchestrationPythonOperator = wrap_operator(
             PythonOperator,
             ActionExecutionType.from_action_type(action.type),
             ActionExecutionEngine.LOCAL,
             task_utils.get_pipeline_metadata,
         )
 
-        return ObservablePythonOperator(
+        return OrchestrationPythonOperator(
             task_id=action.name,
             python_callable=invoke_dbt_run,
             op_kwargs=op_kwargs,
@@ -249,13 +251,14 @@ def create_dbt_task(
             trigger_rule=action.triggerRule,
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
+            **task_utils.get_action_retry_kwargs(action),
         )
     except Exception as e:
         logging.error(f"Error creating task for action '{action.name}': {e}")
         raise
 
 
-def create_dataform_task(action: Dict[str, Any], pipeline: Dict[str, Any], dag):
+def create_dataform_task(action: dict[str, Any], pipeline: dict[str, Any], dag):
     """Converts an action into a Dataform operator.
 
     Depending on the execution mode, it either runs a local
@@ -277,13 +280,13 @@ def create_dataform_task(action: Dict[str, Any], pipeline: Dict[str, Any], dag):
         )
 
 
-def create_bq_dts_task(action: Dict[str, Any], pipeline: Dict[str, Any], dag):
+def create_bq_dts_task(action: dict[str, Any], pipeline: dict[str, Any], dag):
     """Converts action to BigQuery DTS task group."""
     return task_utils.create_bq_dts_task(action, pipeline, dag=dag)
 
 
 def create_orchestration_pipeline_trigger_task(
-    action: Dict[str, Any], pipeline: Dict[str, Any], dag
+    action: dict[str, Any], pipeline: dict[str, Any], dag
 ) -> TriggerDagRunOperator:
     """Converts an action into a TriggerDagRunOperator."""
     from airflow.operators.trigger_dagrun import TriggerDagRunOperator
@@ -291,18 +294,24 @@ def create_orchestration_pipeline_trigger_task(
     try:
         wait_for_completion = action.wait_for_completion or False
 
-        ObservableTriggerDagRunOperator = wrap_observability_operator(
+        OrchestrationTriggerDagRunOperator = wrap_operator(
             TriggerDagRunOperator,
             ActionExecutionType.from_action_type(action.type),
             ActionExecutionEngine.LOCAL,
             task_utils.get_pipeline_metadata,
         )
 
-        return ObservableTriggerDagRunOperator(
+        return OrchestrationTriggerDagRunOperator(
             task_id=action.name,
-            trigger_dag_id="{{ params.resolve_latest_pipeline_dag_id(params.current_dag_id, params.target_pipeline_id, params.bundle_id) }}",
+            trigger_dag_id=(
+                "{{ params.resolve_latest_pipeline_dag_id("
+                "params.current_dag_id, params.target_pipeline_id, "
+                "params.bundle_id) }}"
+            ),
             params={
-                "resolve_latest_pipeline_dag_id": _resolve_latest_pipeline_dag_id,
+                "resolve_latest_pipeline_dag_id": (
+                    _resolve_latest_pipeline_dag_id
+                ),
                 "current_dag_id": dag.dag_id,
                 "target_pipeline_id": action.pipeline_id,
                 "bundle_id": action.bundle_id,
@@ -316,13 +325,13 @@ def create_orchestration_pipeline_trigger_task(
             trigger_rule=action.triggerRule,
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
+            **task_utils.get_action_retry_kwargs(action),
         )
     except Exception as e:
         logging.error(f"Error creating task for action '{action.name}': {e}")
         raise
 
 
-def create_ai_task(action: Dict[str, Any], pipeline: Dict[str, Any], dag):
+def create_ai_task(action: dict[str, Any], pipeline: dict[str, Any], dag):
     """Converts AI action to the appropriate Airflow AI operator."""
     return task_utils.create_ai_task(action, pipeline, dag=dag)
-

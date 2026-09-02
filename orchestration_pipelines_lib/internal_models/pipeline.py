@@ -18,7 +18,6 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Union
 
 from orchestration_pipelines_lib.internal_models.actions import (
     AIActionModel,
@@ -30,6 +29,7 @@ from orchestration_pipelines_lib.internal_models.actions import (
     OrchestrationPipelineActionModel,
     PythonScriptActionModel,
     PythonVirtualenvActionModel,
+    RetryPolicyModel,
 )
 from orchestration_pipelines_lib.internal_models.triggers import (
     ScheduleTriggerModel,
@@ -38,18 +38,18 @@ from orchestration_pipelines_lib.internal_models.triggers import (
 # Define a Union of all possible action models for this version.
 # In the future, if you add a NewActionModel, just add it to this Union.
 # e.g., AnyAction = Union[PapermillActionModel, NewActionModel]
-AnyAction = Union[
-    PythonScriptActionModel,
-    DataprocOperatorActionModel,
-    BqOperationActionModel,
-    PythonVirtualenvActionModel,
-    DBTActionModel,
-    DataformActionModel,
-    DataIngestionActionModel,
-    OrchestrationPipelineActionModel,
-    AIActionModel,
-]
-AnyScheduleTrigger = Union[ScheduleTriggerModel]
+AnyAction = (
+    PythonScriptActionModel
+    | DataprocOperatorActionModel
+    | BqOperationActionModel
+    | PythonVirtualenvActionModel
+    | DBTActionModel
+    | DataformActionModel
+    | DataIngestionActionModel
+    | OrchestrationPipelineActionModel
+    | AIActionModel
+)
+AnyScheduleTrigger = ScheduleTriggerModel
 
 
 class RunnerType(str, Enum):
@@ -79,7 +79,8 @@ class DefaultsModel:
     """Encapsulates all default settings for the pipeline."""
 
     cloudDefault: CloudDefaultsModel
-    executionConfigDefault: ExecutionConfigDefaultsModel
+    executionConfigDefault: ExecutionConfigDefaultsModel | None = None
+    retryPolicy: RetryPolicyModel | None = None
 
 
 @dataclass
@@ -89,23 +90,23 @@ class MetaDataModel:
     pipelineId: str
     description: str
     owner: str
-    tags: Optional[List[str]] = None
+    tags: list[str] | None = None
 
 
 @dataclass
 class EmailNotificationModel:
     """Model for email notifications."""
 
-    email: List[str]
+    email: list[str]
 
 
 @dataclass
 class NotificationModel:
     """Model containing various notification configurations."""
 
-    onPipelineFailure: Optional[EmailNotificationModel] = None
-    onPipelineSuccess: Optional[EmailNotificationModel] = None
-    onPipelineComplete: Optional[EmailNotificationModel] = None
+    onPipelineFailure: EmailNotificationModel | None = None
+    onPipelineSuccess: EmailNotificationModel | None = None
+    onPipelineComplete: EmailNotificationModel | None = None
 
 
 @dataclass
@@ -115,6 +116,6 @@ class PipelineModel:
     defaults: DefaultsModel
     metadata: MetaDataModel
     runner: RunnerType
-    triggers: List[AnyScheduleTrigger]
-    actions: List[AnyAction]
-    notifications: Optional[NotificationModel] = None
+    triggers: list[AnyScheduleTrigger]
+    actions: list[AnyAction]
+    notifications: NotificationModel | None = None

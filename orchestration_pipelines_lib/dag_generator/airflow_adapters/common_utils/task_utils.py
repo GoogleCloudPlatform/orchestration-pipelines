@@ -35,6 +35,7 @@ from orchestration_pipelines_lib.utils.metrics import (
 )
 
 from . import dataproc_utils, gcs_utils
+from .retry_resolver import RetryResolver
 
 if TYPE_CHECKING:
     try:
@@ -77,6 +78,19 @@ def get_pipeline_metadata(dag: DAG) -> tuple[str, str, str]:
             )
 
     return bundle_id, version_id, pipeline_id
+
+
+def get_action_retry_kwargs(action: Any) -> dict[str, Any]:
+    """Extracts Airflow retry kwargs from an action's retryPolicy.
+
+    Args:
+        action: The action configuration object.
+
+    Returns:
+        A dict containing resolved retry kwargs if defined in the action's
+        retryPolicy.
+    """
+    return RetryResolver.resolve_action_kwargs(action)
 
 
 def _upload_inline_query_to_gcs(
@@ -295,6 +309,7 @@ def create_dataproc_create_batch_operator_task(
             trigger_rule=action.triggerRule,
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
+            **get_action_retry_kwargs(action),
             **extra_kwargs,
         )
     except Exception:
@@ -390,6 +405,7 @@ def create_bq_operation_task(
             trigger_rule=action.triggerRule,
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
+            **get_action_retry_kwargs(action),
         )
     except Exception:
         logging.exception("Error creating task for action '%s'", action.name)
@@ -497,6 +513,7 @@ def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
                 impersonation_chain=action.impersonationChain,
                 doc_md=json.dumps({"op_action_name": action.name}),
                 dag=dag,
+                **get_action_retry_kwargs(action),
                 **extra_kwargs,
             )
 
@@ -598,6 +615,7 @@ def dataproc_existing_cluster(
             trigger_rule=action.triggerRule,
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
+            **get_action_retry_kwargs(action),
             **extra_kwargs,
         )
     except Exception:
@@ -723,6 +741,7 @@ def create_service_dataform_task(
         trigger_rule=action.triggerRule,
         doc_md=json.dumps({"op_action_name": action.name}),
         dag=dag,
+        **get_action_retry_kwargs(action),
     )
 
 
@@ -799,6 +818,7 @@ def create_local_dataform_task(
         trigger_rule=action.triggerRule,
         doc_md=json.dumps({"op_action_name": action.name}),
         dag=dag,
+        **get_action_retry_kwargs(action),
     )
 
 
@@ -885,6 +905,7 @@ def create_bq_dts_task(
                 trigger_rule=action.triggerRule,
                 doc_md=json.dumps({"op_action_name": action.name}),
                 dag=dag,
+                **get_action_retry_kwargs(action),
             )
 
             ObservableBigQueryDataTransferServiceTransferRunSensor = (
@@ -976,6 +997,7 @@ def create_vertex_upload_model_task(
             trigger_rule=action.triggerRule,
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
+            **get_action_retry_kwargs(action),
         )
     except Exception:
         logging.exception("Error creating task for action '%s'", action.name)
@@ -985,7 +1007,8 @@ def create_vertex_upload_model_task(
 def create_vertex_batch_inference_task(
     action: dict[str, Any], pipeline: dict[str, Any], dag
 ):
-    """Creates CreateBatchPredictionJobOperator for Vertex AI.
+    """Converts an AI action into a CreateBatchPredictionJobOperator
+    for Vertex AI.
 
     Args:
         action: The action configuration object.
@@ -1053,6 +1076,7 @@ def create_vertex_batch_inference_task(
             trigger_rule=action.triggerRule,
             doc_md=json.dumps({"op_action_name": action.name}),
             dag=dag,
+            **get_action_retry_kwargs(action),
             **extra_kwargs,
         )
     except Exception:

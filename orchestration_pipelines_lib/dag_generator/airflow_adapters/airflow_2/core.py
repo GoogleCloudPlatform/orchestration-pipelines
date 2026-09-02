@@ -21,6 +21,9 @@ from typing import TYPE_CHECKING, Any, TypedDict
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
     action_handler_registry,
 )
+from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.retry_resolver import (  # noqa: E501
+    RetryResolver,
+)
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.utils import (  # noqa: E501
     init_context_callback,
     pipeline_run_callback,
@@ -310,19 +313,22 @@ def _build_dag_kwargs(
             on_success_callback = partial(send_notification_email, emails, True)
             on_success_callbacks.append(on_success_callback)
 
-    return {
+    default_args = {
+        "owner": pipeline.metadata.owner,
+        **RetryResolver.resolve_default_args(pipeline.defaults),
+    }
+
+    dag_kwargs = {
         "dag_id": pipeline.metadata.pipelineId,
         "description": pipeline.metadata.description,
-        "default_args": {
-            "owner": pipeline.metadata.owner,
-            "retries": pipeline.defaults.executionConfigDefault.retries,
-        },
+        "default_args": default_args,
         "tags": tags,
         "template_searchpath": [data_root] if data_root else [],
         "doc_md": dag_notes,
         "on_failure_callback": on_failure_callbacks,
         "on_success_callback": on_success_callbacks,
     }
+    return dag_kwargs
 
 
 def _configure_dag_schedule(
@@ -483,7 +489,9 @@ def _get_tags(
 
     return (
         session.query(DagTag.dag_id, DagTag.name)
-        .filter(DagTag.dag_id.in_(subquery), DagTag.name.like("op:version:%"))  # pyright: ignore[reportOptionalCall]
+        .filter(
+            DagTag.dag_id.in_(subquery), DagTag.name.like("op:version:%")
+        )  # pyright: ignore[reportOptionalCall]
         .all()
     )
 
