@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ...
 
+## [1.1.0] - 2026-09-02
+
+### Added
+
+- Support for `@once` trigger schedule interval.
+
+### Fixed
+
+- Output overwriting on historical runs for Dataproc notebook actions by properly resolving template variables.
+- Schedule triggers population for unversioned pipelines.
+
 ## [1.0.0] - 2026-08-24
 
 ### Added
@@ -102,7 +113,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Auto-generated batch_id for actions using dataprocServerless is now resolved properly in both Airflow 2 and Airflow 3.
 
-[Unreleased]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.0.0...main
+[Unreleased]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.1.0...main
+[1.1.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.1...v1.0.0
 [0.4.1]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.3.0...v0.4.0
