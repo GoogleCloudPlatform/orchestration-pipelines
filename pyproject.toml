@@ -17,9 +17,10 @@ classifiers = [
     "Operating System :: OS Independent",
     "Framework :: Apache Airflow",
 ]
+
 dependencies = [
     "pytz",
-    "PyYAML",
+    "PyYAML>=6.0.1",
     "apache-airflow>=2.9.0",
     "google-cloud-storage",
     "dbt-core>=1.0.0",
@@ -30,10 +31,39 @@ dependencies = [
     "google-cloud-dataform>=0.9.0",
     "apache-airflow-providers-google>=19.0.0",
     "tenacity",
+    "litellm>=1.84.0",
+    "google-cloud-aiplatform>=1.163.0",
+    "apache-airflow-providers-cncf-kubernetes>=10.17.0",
+    "papermill",
 ]
 
 [project.license]
 text = "Apache-2.0"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov>=4.1.0",
+    "coverage>=7.3.1",
+    "pylint",
+    "pre-commit>=4.2.0",
+    "virtualenv",
+]
+airflow2 = [
+    "apache-airflow>=2.9.0,<3.0.0",
+]
+airflow3 = [
+    "apache-airflow>=3.0.0,<4.0.0",
+    "apache-airflow-client>=3.0.0,<4.0.0",
+]
+
+[tool.uv]
+conflicts = [
+    [
+        { group = "airflow2" },
+        { group = "airflow3" },
+    ],
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
