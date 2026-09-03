@@ -294,12 +294,7 @@ class RetryMixin:
         """Executes operator and updates retry_delay dynamically."""
         if getattr(self, "_op_custom_retry_policy", None):
             self.retry_delay = self._calculate_retry_delay(context)
-        try:
-            return super().execute(context, **kwargs)  # type: ignore[misc]
-        except Exception:
-            if getattr(self, "_op_custom_retry_policy", None):
-                self.retry_delay = self._calculate_retry_delay(context)
-            raise
+        return super().execute(context, **kwargs)  # type: ignore[misc]
 
 
 class MetricsMixin:

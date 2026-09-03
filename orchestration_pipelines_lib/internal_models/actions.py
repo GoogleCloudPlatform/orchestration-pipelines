@@ -29,11 +29,22 @@ class FixedDelayStrategyModel:
 
 
 @dataclass
+class ExponentialBackoffStrategyModel:
+    """Configuration model for Exponential Backoff retry strategy."""
+
+    initialDelay: str
+    maxDelay: str | None = None
+    multiplier: float = 2.0
+    randomizeJitter: bool = False
+
+
+@dataclass
 class RetryPolicyModel:
     """Model representing retry policy configuration."""
 
     maxRetries: int
     fixedDelay: FixedDelayStrategyModel | None = None
+    exponentialBackoff: ExponentialBackoffStrategyModel | None = None
 
 
 @dataclass(kw_only=True)

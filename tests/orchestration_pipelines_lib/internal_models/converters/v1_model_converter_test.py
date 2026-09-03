@@ -1622,6 +1622,43 @@ class TestConverterV1ToInternal(unittest.TestCase):
             self.converter._convert_retry_policy(v1_protos.RetryPolicy())
         )
 
+    def test_convert_retry_policy_with_exponential_backoff(self):
+        """Tests converting a RetryPolicy with ExponentialBackoffStrategy."""
+        proto = v1_protos.RetryPolicy(
+            max_retries=4,
+            exponential_backoff=v1_protos.ExponentialBackoffStrategy(
+                initial_delay="15s",
+                max_delay="10m",
+                multiplier=1.5,
+                randomize_jitter=True,
+            ),
+        )
+        model = self.converter._convert_retry_policy(proto)
+        self.assertIsNotNone(model)
+        self.assertEqual(model.maxRetries, 4)
+        self.assertIsNone(model.fixedDelay)
+        self.assertIsNotNone(model.exponentialBackoff)
+        self.assertEqual(model.exponentialBackoff.initialDelay, "15s")
+        self.assertEqual(model.exponentialBackoff.maxDelay, "10m")
+        self.assertEqual(model.exponentialBackoff.multiplier, 1.5)
+        self.assertTrue(model.exponentialBackoff.randomizeJitter)
+
+    def test_convert_retry_policy_exponential_backoff_defaults(self):
+        """Tests converting ExponentialBackoffStrategy defaults multiplier to 2.0."""
+        proto = v1_protos.RetryPolicy(
+            max_retries=3,
+            exponential_backoff=v1_protos.ExponentialBackoffStrategy(
+                initial_delay="10s",
+            ),
+        )
+        model = self.converter._convert_retry_policy(proto)
+        self.assertIsNotNone(model)
+        self.assertIsNotNone(model.exponentialBackoff)
+        self.assertEqual(model.exponentialBackoff.initialDelay, "10s")
+        self.assertIsNone(model.exponentialBackoff.maxDelay)
+        self.assertEqual(model.exponentialBackoff.multiplier, 2.0)
+        self.assertFalse(model.exponentialBackoff.randomizeJitter)
+
     def test_convert_defaults_with_retry_policy(self):
         """Tests that defaults.retry_policy is converted."""
         pipeline_proto = v1_protos.OrchestrationPipeline(

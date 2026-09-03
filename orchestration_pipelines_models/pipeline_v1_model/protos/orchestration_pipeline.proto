@@ -90,6 +90,18 @@ message FixedDelayStrategy {
   ];
 }
 
+message ExponentialBackoffStrategy {
+  string initial_delay = 1 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.is_iso8601_duration) = true
+  ];
+  string max_delay = 2 [
+    (pipeline_models.validation.is_iso8601_duration) = true
+  ];
+  double multiplier = 3;      // Default: 2.0
+  bool randomize_jitter = 4;  // Default: false
+}
+
 message RetryPolicy {
   // Hard ceiling on maximum retry attempts across all strategies.
   optional int32 max_retries = 1 [
@@ -99,6 +111,7 @@ message RetryPolicy {
 
   oneof strategy {
     FixedDelayStrategy fixed_delay = 2;
+    ExponentialBackoffStrategy exponential_backoff = 3;
   }
 }
 

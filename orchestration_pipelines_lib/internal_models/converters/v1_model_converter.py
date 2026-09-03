@@ -96,14 +96,26 @@ class ConverterV1ToInternal:
 
         strategy_name = retry_policy_proto.WhichOneof("strategy")
         fixed_delay_model = None
+        exponential_backoff_model = None
         if strategy_name == "fixed_delay":
             fixed_delay_model = internal_actions.FixedDelayStrategyModel(
                 retryDelay=retry_policy_proto.fixed_delay.retry_delay
+            )
+        elif strategy_name == "exponential_backoff":
+            eb = retry_policy_proto.exponential_backoff
+            exponential_backoff_model = (
+                internal_actions.ExponentialBackoffStrategyModel(
+                    initialDelay=eb.initial_delay,
+                    maxDelay=eb.max_delay or None,
+                    multiplier=eb.multiplier if eb.multiplier > 0 else 2.0,
+                    randomizeJitter=eb.randomize_jitter,
+                )
             )
 
         return internal_actions.RetryPolicyModel(
             maxRetries=retry_policy_proto.max_retries,
             fixedDelay=fixed_delay_model,
+            exponentialBackoff=exponential_backoff_model,
         )
 
     def _convert_trigger_rule(self, trigger_rule_val: int) -> str:

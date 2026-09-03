@@ -37,6 +37,7 @@ from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipel
     AgentPlatformModelUpload,
     Defaults,
     ExecutionConfig,
+    ExponentialBackoffStrategy,
     FixedDelayStrategy,
     LocalEngine,
     OrchestrationPipeline,
@@ -746,6 +747,53 @@ class TestPipelineValidator(unittest.TestCase):
                 for msg in deprecation_messages
             )
         )
+
+    def test_action_valid_exponential_backoff(self):
+        """Tests that a valid exponential backoff retry policy passes validation."""
+        self.pipeline.actions[0].python.retry_policy.CopyFrom(
+            RetryPolicy(
+                max_retries=4,
+                exponential_backoff=ExponentialBackoffStrategy(
+                    initial_delay="15s",
+                    max_delay="10m",
+                    multiplier=2.0,
+                    randomize_jitter=True,
+                ),
+            )
+        )
+        PipelineValidator.validate(self.pipeline)
+
+    def test_action_exponential_backoff_missing_initial_delay_fails(self):
+        """Tests that missing initial_delay in exponential backoff fails validation."""
+        self.pipeline.actions[0].python.retry_policy.CopyFrom(
+            RetryPolicy(
+                max_retries=4,
+                exponential_backoff=ExponentialBackoffStrategy(
+                    max_delay="10m",
+                ),
+            )
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "Error for field 'actions\\[0\\]\\.python\\.retry_policy\\.exponential_backoff\\.initial_delay': field is required",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_action_exponential_backoff_invalid_duration_fails(self):
+        """Tests that invalid initial_delay in exponential backoff fails validation."""
+        self.pipeline.actions[0].python.retry_policy.CopyFrom(
+            RetryPolicy(
+                max_retries=4,
+                exponential_backoff=ExponentialBackoffStrategy(
+                    initial_delay="invalid",
+                ),
+            )
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "Error for field 'actions\\[0\\]\\.python\\.retry_policy\\.exponential_backoff\\.initial_delay': Invalid duration format",
+        ):
+            PipelineValidator.validate(self.pipeline)
 
 
 if __name__ == "__main__":

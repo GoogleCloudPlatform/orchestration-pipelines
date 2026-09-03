@@ -603,6 +603,7 @@ def test_wrap_operator_inherits_custom_retry_policy_from_dag_default_args(
 ):
     """Tests that wrapper inherits _op_custom_retry_policy from default_args."""
     from datetime import timedelta
+
     from orchestration_pipelines_lib.internal_models.actions import (
         FixedDelayStrategyModel,
         RetryPolicyModel,
@@ -635,6 +636,7 @@ def test_wrap_operator_overrides_custom_retry_policy(
 ):
     """Tests that explicit _op_custom_retry_policy overrides default_args."""
     from datetime import timedelta
+
     from orchestration_pipelines_lib.internal_models.actions import (
         FixedDelayStrategyModel,
         RetryPolicyModel,
@@ -704,6 +706,47 @@ def test_wrap_operator_calculates_dynamic_retry_delay_on_execute(
 
 @patch(MOCK_OBSERVABILITY_CONTEXT)
 @patch(MOCK_BASE_OPERATOR, DummyBaseOperator)
+def test_wrap_operator_calculates_exponential_backoff_retry_delay_on_execute(
+    mock_context_manager,
+    action_type,
+    engine,
+    get_pipeline_metadata,
+):
+    """Tests exponential backoff retry_delay calculation based on ti.try_number."""
+    from datetime import timedelta
+
+    from orchestration_pipelines_lib.internal_models.actions import (
+        ExponentialBackoffStrategyModel,
+        RetryPolicyModel,
+    )
+
+    mock_context_manager.return_value.__enter__.return_value = None
+    policy = RetryPolicyModel(
+        maxRetries=3,
+        exponentialBackoff=ExponentialBackoffStrategyModel(
+            initialDelay="10s",
+            maxDelay="100s",
+            multiplier=2.0,
+            randomizeJitter=False,
+        ),
+    )
+
+    WrappedClass = wrap_operator(
+        DummyOperator,  # type: ignore
+        action_type,
+        engine,
+        get_pipeline_metadata,
+    )
+    instance = WrappedClass(_op_custom_retry_policy=policy)  # type: ignore
+    assert instance.retry_delay == timedelta(seconds=10)
+
+    context = {"dag": MagicMock(), "ti": MagicMock(try_number=3)}
+    instance.execute(context)
+    assert instance.retry_delay == timedelta(seconds=40)
+
+
+@patch(MOCK_OBSERVABILITY_CONTEXT)
+@patch(MOCK_BASE_OPERATOR, DummyBaseOperator)
 def test_wrap_operator_forwards_sentinel_kwargs_on_execute(
     mock_context_manager,
     action_type,
@@ -735,3 +778,4 @@ def test_wrap_operator_forwards_sentinel_kwargs_on_execute(
     assert received_kwargs == {
         "OrchestrationSentinelOperator__sentinel": "sentinel_val"
     }
+

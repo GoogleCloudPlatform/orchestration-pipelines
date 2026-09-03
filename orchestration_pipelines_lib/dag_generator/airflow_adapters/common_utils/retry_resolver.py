@@ -14,6 +14,7 @@
 #
 """Centralized utility for resolving retry policies into Airflow arguments."""
 
+import random
 from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
@@ -24,6 +25,7 @@ from orchestration_pipelines_lib.utils.duration_utils import (
 )
 
 CUSTOM_RETRY_POLICY_KEY = "_op_custom_retry_policy"
+DEFAULT_MAX_RETRY_DELAY_SECONDS = 86400.0  # 24 hours
 
 
 class RetryResolver:
@@ -40,7 +42,6 @@ class RetryResolver:
         Returns:
             Calculated retry delay as a timedelta object.
         """
-        del try_number
         if not retry_policy:
             return timedelta(seconds=0)
 
@@ -49,6 +50,45 @@ class RetryResolver:
             retry_delay = getattr(fixed_delay, "retryDelay", None)
             if isinstance(retry_delay, str) and retry_delay:
                 return duration_to_timedelta(retry_delay)
+
+        exp_backoff = getattr(retry_policy, "exponentialBackoff", None)
+        if exp_backoff:
+            initial_delay = getattr(exp_backoff, "initialDelay", None)
+            if isinstance(initial_delay, str) and initial_delay:
+                base_sec = duration_to_timedelta(initial_delay).total_seconds()
+                mult = getattr(exp_backoff, "multiplier", 2.0)
+                if not isinstance(mult, int | float) or mult <= 0:
+                    mult = 2.0
+
+                attempt = max(1, try_number)
+                try:
+                    delay_sec = base_sec * (mult ** (attempt - 1))
+                except OverflowError:
+                    delay_sec = DEFAULT_MAX_RETRY_DELAY_SECONDS
+
+                max_delay = getattr(exp_backoff, "maxDelay", None)
+                if isinstance(max_delay, str) and max_delay:
+                    max_sec = duration_to_timedelta(max_delay).total_seconds()
+                else:
+                    max_sec = DEFAULT_MAX_RETRY_DELAY_SECONDS
+                delay_sec = min(delay_sec, max_sec)
+
+                if getattr(exp_backoff, "randomizeJitter", False):
+                    # 10% to 30% of the calculated delay
+                    jitter_factor = random.uniform(0.10, 0.30)
+                    jitter_amount = delay_sec * jitter_factor
+
+                    # Apply +/- randomly
+                    sign = random.choice([-1, 1])
+                    delay_sec += sign * jitter_amount
+
+                    # Safety guardrails:
+                    # 1. Never drop below initial_delay (prevent negative or near-zero values)
+                    # 2. Never exceed max_sec (either defined or fallback)
+                    delay_sec = max(base_sec, delay_sec)
+                    delay_sec = min(delay_sec, max_sec)
+
+                return timedelta(seconds=max(0.0, delay_sec))
 
         return timedelta(seconds=0)
 
@@ -107,6 +147,12 @@ class RetryResolver:
             retry_delay = getattr(fixed_delay, "retryDelay", None)
             if isinstance(retry_delay, str) and retry_delay:
                 kwargs["retry_delay"] = duration_to_timedelta(retry_delay)
+
+        exp_backoff = getattr(retry_policy, "exponentialBackoff", None)
+        if exp_backoff:
+            initial_delay = getattr(exp_backoff, "initialDelay", None)
+            if isinstance(initial_delay, str) and initial_delay:
+                kwargs["retry_delay"] = duration_to_timedelta(initial_delay)
 
         if kwargs or isinstance(retry_policy, RetryPolicyModel):
             kwargs[CUSTOM_RETRY_POLICY_KEY] = retry_policy
