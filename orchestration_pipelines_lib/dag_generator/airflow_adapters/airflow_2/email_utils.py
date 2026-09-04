@@ -15,11 +15,13 @@
 """Email utilities for Airflow DAGs."""
 
 
-def send_failure_notification_email(emails, context):
-    """Sends an email when a DAG run fails.
+def send_notification_email(emails, is_success, context):
+    """Sends an email when a DAG run is completed.
 
     Args:
         emails: A list of email addresses to send the notification to.
+        is_success: A boolean representing if the DAG run has completed
+                    successfully or has failed.
         context: The Airflow context dictionary.
     """
     from airflow.utils.email import send_email
@@ -27,17 +29,28 @@ def send_failure_notification_email(emails, context):
     dag_run = context.get("dag_run")
     task_instances = dag_run.get_task_instances()
 
-    failed_tasks = [ti.task_id for ti in task_instances if ti.state == "failed"]
+    if is_success:
+        subject = f"DAG Success: {dag_run.dag_id}"
+        h3_topic = "DAG Success"
+        tasks_paragraph = ""
+    else:
+        subject = f"DAG Failed: {dag_run.dag_id}"
+        h3_topic = "DAG Failure"
+        failed_tasks = [
+            ti.task_id for ti in task_instances if ti.state == "failed"
+        ]
+        tasks_paragraph = (
+            f"<p><b>Failed Tasks:</b> {', '.join(failed_tasks)}</p>"
+        )
 
     log_url = task_instances[0].log_url if task_instances else "Not available"
 
-    subject = f"DAG Failed: {dag_run.dag_id}"
     html_content = f"""
-    <h3>DAG Failure Alert</h3>
+    <h3>{h3_topic}</h3>
     <p><b>DAG:</b> {dag_run.dag_id}</p>
     <p><b>Run ID:</b> {dag_run.run_id}</p>
     <p><b>Execution Date:</b> {context.get('execution_date')}</p>
-    <p><b>Failed Tasks:</b> {', '.join(failed_tasks)}</p>
+    {tasks_paragraph}
     <p><b>Log URL:</b> {log_url}</p>
     """
 

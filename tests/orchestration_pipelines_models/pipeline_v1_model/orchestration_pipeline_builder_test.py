@@ -101,6 +101,9 @@ class TestOrchestrationPipelineBuilder(unittest.TestCase):
             notifications={
                 "on_pipeline_failure": {
                     "email": ["user1@example.com", "user2@example.com"]
+                },
+                "on_pipeline_success": {
+                    "email": ["user1@example.com", "user2@example.com"]
                 }
             }
         )
@@ -109,8 +112,13 @@ class TestOrchestrationPipelineBuilder(unittest.TestCase):
 
         self.assertTrue(pipeline.HasField("notifications"))
         self.assertTrue(pipeline.notifications.HasField("on_pipeline_failure"))
+        self.assertTrue(pipeline.notifications.HasField("on_pipeline_success"))
         self.assertListEqual(
             list(pipeline.notifications.on_pipeline_failure.email),
+            ["user1@example.com", "user2@example.com"],
+        )
+        self.assertListEqual(
+            list(pipeline.notifications.on_pipeline_success.email),
             ["user1@example.com", "user2@example.com"],
         )
 

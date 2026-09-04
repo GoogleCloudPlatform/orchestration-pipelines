@@ -79,8 +79,13 @@ message OnPipelineFailure {
   repeated string email = 1;
 }
 
+message OnPipelineSuccess {
+  repeated string email = 1;
+}
+
 message Notification {
   OnPipelineFailure on_pipeline_failure = 1;
+  OnPipelineSuccess on_pipeline_success = 2;
 }
 
 /////////////////////////
@@ -529,7 +534,6 @@ message AIAction {
   map<string, string> labels = 6;
 }
 
-
 message AgentPlatform {
   string project_id = 1;
   string location = 2;
@@ -558,4 +562,3 @@ message AgentPlatformBatchInference {
   string gcs_destination_prefix = 8;
   repeated string impersonation_chain = 12;
 }
-

@@ -121,6 +121,8 @@ class TestConverterV1ToInternal(unittest.TestCase):
             ],
             notifications=v1_protos.Notification(
                 on_pipeline_failure=v1_protos.OnPipelineFailure(
+                    email=["test@example.com"]),
+                on_pipeline_success=v1_protos.OnPipelineSuccess(
                     email=["test@example.com"])),
         )
 
@@ -134,27 +136,45 @@ class TestConverterV1ToInternal(unittest.TestCase):
         self.assertEqual(len(internal_model.triggers), 1)
         self.assertEqual(len(internal_model.actions), 1)
         self.assertIsNotNone(internal_model.notifications.onPipelineFailure)
+        self.assertIsNotNone(internal_model.notifications.onPipelineSuccess)
         self.assertEqual(internal_model.actions[0].filename,
                          "resolved/path/to/script.py")
 
-    def test_convert_notifications(self):
-        """Tests conversion of notification settings."""
-        # Test with failure notification
+    def test_convert_notifications_on_pipeline_failure(self):
+        """Tests conversion of notification settings for failed dag."""
         v1_notification = v1_protos.Notification(
             on_pipeline_failure=v1_protos.OnPipelineFailure(
-                email=["test@example.com"]))
+                email=["test@example.com"])
+        )
+
         internal_notification = self.converter.convert_notifications(
             v1_notification)
-        self.assertEqual(internal_notification.onPipelineFailure.email,
-                         ["test@example.com"])
 
-        # Test with no failure notification
+        self.assertEqual(internal_notification.onPipelineFailure.email,
+                        ["test@example.com"])
+
+    def test_convert_notifications_on_pipeline_success(self):
+        """Tests conversion of notification settings for success dag."""
+        v1_notification = v1_protos.Notification(
+            on_pipeline_success=v1_protos.OnPipelineSuccess(
+                email=["test@example.com"])
+        )
+
+        internal_notification = self.converter.convert_notifications(
+            v1_notification)
+
+        self.assertEqual(internal_notification.onPipelineSuccess.email,
+                        ["test@example.com"])
+
+    def test_convert_notifications_on_empty_input(self):
+        """Tests conversion of notification on empty input."""
         v1_notification_empty = v1_protos.Notification()
+
         internal_notification_empty = (
             self.converter.convert_notifications(v1_notification_empty))
-        self.assertIsNone(internal_notification_empty.onPipelineFailure)
 
-        # Test with None input
+        self.assertIsNone(internal_notification_empty.onPipelineSuccess)
+        self.assertIsNone(internal_notification_empty.onPipelineFailure)
         self.assertIsNone(self.converter.convert_notifications(None))
 
     def test_convert_trigger(self):

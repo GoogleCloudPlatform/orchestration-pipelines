@@ -59,7 +59,7 @@ This is the entry point for a pipeline definition.
 | `triggers` | `repeated Trigger` | No | | List of triggers (runs manually if empty). |
 | `actions` | `repeated Action` | **Yes** | `min_items: 1` | The tasks that make up the pipeline. |
 | `tags` | `repeated string` | No | `regex: ^[a-zA-Z0-9_-]{1,32}$` (implicit) | Tags for metadata and filtering. |
-| `notifications`| `Notification` | No | | Notification settings for failures. |
+| `notifications`| `Notification` | No | | Notification settings for success or failures. |
 
 ### 3.2. Defaults & Execution Config
 
@@ -90,7 +90,10 @@ Configuration for pipeline notifications on failure.
 
 * **`Notification`**:
   * `on_pipeline_failure` (`OnPipelineFailure`): Settings for failure notifications.
+  * `on_pipeline_success` (`OnPipelineSuccess`): Settings for success notifications.
 * **`OnPipelineFailure`**:
+  * `email` (`repeated string`): List of email addresses to notify.
+* **`OnPipelineSuccess`**:
   * `email` (`repeated string`): List of email addresses to notify.
 * **Examples**:
   * [pipeline-email-notification.yml](../examples/pipeline-email-notification.yml)

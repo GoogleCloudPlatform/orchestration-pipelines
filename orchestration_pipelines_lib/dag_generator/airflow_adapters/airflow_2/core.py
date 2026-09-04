@@ -28,7 +28,7 @@ from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.uti
 
 # Airflow and SQLAlchemy imports moved inside functions to reduce import tax
 from . import task_factory
-from .email_utils import send_failure_notification_email
+from .email_utils import send_notification_email
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -295,11 +295,20 @@ def _build_dag_kwargs(
 ) -> DAGKwargs:
     finish_callback = pipeline_run_callback(bundle_id, pipeline_id)
     on_failure_callbacks = [finish_callback]
+    on_success_callbacks = [finish_callback]
 
-    if pipeline.notifications and pipeline.notifications.onPipelineFailure:
-        emails = pipeline.notifications.onPipelineFailure.email
-        on_failure_callback = partial(send_failure_notification_email, emails)
-        on_failure_callbacks.append(on_failure_callback)
+    if pipeline.notifications:
+        if pipeline.notifications.onPipelineFailure:
+            emails = pipeline.notifications.onPipelineFailure.email
+            on_failure_callback = partial(
+                send_notification_email, emails, False
+            )
+            on_failure_callbacks.append(on_failure_callback)
+
+        if pipeline.notifications.onPipelineSuccess:
+            emails = pipeline.notifications.onPipelineSuccess.email
+            on_success_callback = partial(send_notification_email, emails, True)
+            on_success_callbacks.append(on_success_callback)
 
     return {
         "dag_id": pipeline.metadata.pipelineId,
@@ -312,7 +321,7 @@ def _build_dag_kwargs(
         "template_searchpath": [data_root] if data_root else [],
         "doc_md": dag_notes,
         "on_failure_callback": on_failure_callbacks,
-        "on_success_callback": [finish_callback],
+        "on_success_callback": on_success_callbacks,
     }
 
 

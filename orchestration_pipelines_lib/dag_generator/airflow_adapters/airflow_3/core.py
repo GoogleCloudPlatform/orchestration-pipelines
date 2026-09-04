@@ -213,13 +213,22 @@ def generate(
 
     finish_callback = pipeline_run_callback(bundle_id, pipeline_id)
     on_failure_callbacks = [finish_callback]
+    on_success_callbacks = [finish_callback]
 
-    if pipeline.notifications and pipeline.notifications.onPipelineFailure:
-        emails = pipeline.notifications.onPipelineFailure.email
-        on_failure_callback = partial(
-            email_utils.send_failure_notification_email, emails
-        )
-        on_failure_callbacks.append(on_failure_callback)
+    if pipeline.notifications:
+        if pipeline.notifications.onPipelineFailure:
+            emails = pipeline.notifications.onPipelineFailure.email
+            on_failure_callback = partial(
+                email_utils.send_notification_email, emails, False
+            )
+            on_failure_callbacks.append(on_failure_callback)
+
+        if pipeline.notifications.onPipelineSuccess:
+            emails = pipeline.notifications.onPipelineSuccess.email
+            on_success_callback = partial(
+                email_utils.send_notification_email, emails, True
+            )
+            on_success_callbacks.append(on_success_callback)
 
     dag_kwargs = {
         "dag_id": pipeline.metadata.pipelineId,
@@ -234,7 +243,7 @@ def generate(
             "resolve_latest_pipeline_dag_id": task_factory._resolve_latest_pipeline_dag_id,
         },
         "on_failure_callback": on_failure_callbacks,
-        "on_success_callback": [finish_callback],
+        "on_success_callback": on_success_callbacks,
     }
 
     if schedule_trigger:

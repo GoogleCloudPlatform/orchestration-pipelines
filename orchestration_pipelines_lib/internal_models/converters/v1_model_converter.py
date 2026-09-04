@@ -337,12 +337,18 @@ class ConverterV1ToInternal:
         if not notifications:
             return None
         on_pipeline_failure = None
+        on_pipeline_success = None
         if notifications.HasField("on_pipeline_failure"):
             on_pipeline_failure = internal_pipeline.EmailNotificationModel(
                 email=list(notifications.on_pipeline_failure.email)
             )
+        if notifications.HasField("on_pipeline_success"):
+            on_pipeline_success = internal_pipeline.EmailNotificationModel(
+                email=list(notifications.on_pipeline_success.email)
+            )
         return internal_pipeline.NotificationModel(
-            onPipelineFailure=on_pipeline_failure
+            onPipelineFailure=on_pipeline_failure,
+            onPipelineSuccess=on_pipeline_success,
         )
 
     def convert_trigger(

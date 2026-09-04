@@ -71,8 +71,8 @@ MOCK_CONFIGURE_DAG_SCHEDULE = f"{TARGET_MODULE}._configure_dag_schedule"
 MOCK_CREATE_INIT_TASK = f"{TARGET_MODULE}._create_init_task"
 MOCK_CREATE_TASKS = f"{TARGET_MODULE}._create_tasks"
 MOCK_SET_DEPENDENCIES = f"{TARGET_MODULE}._set_dependencies"
-MOCK_SEND_FAILURE_NOTIFICATION_EMAIL = (
-    f"{TARGET_MODULE}.send_failure_notification_email"
+MOCK_SEND_NOTIFICATION_EMAIL = (
+    f"{TARGET_MODULE}.send_notification_email"
 )
 MOCK_TASK_FACTORY = f"{TARGET_MODULE}.task_factory"
 
@@ -648,7 +648,7 @@ def test_build_dag_kwargs_with_data_root_returns_kwargs_with_template_searchpath
         "template_searchpath": [data_root],
         "doc_md": dag_notes,
         "on_failure_callback": [ANY, ANY],
-        "on_success_callback": [ANY],
+        "on_success_callback": [ANY, ANY],
     }
 
     result = _build_dag_kwargs(
