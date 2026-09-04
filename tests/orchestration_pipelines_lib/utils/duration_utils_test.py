@@ -71,6 +71,9 @@ class TestDurationUtils(unittest.TestCase):
             ("invalid", 0.0),  # No matches
             ("10x", 0.0),  # Valid number, invalid unit
             ("h", 0.0),  # Unit only
+            ("-1m", -60.0),
+            ("-1h5m30s", -3930),
+            (" -2m15s", -135),
         ]
 
         for val, expected in cases:

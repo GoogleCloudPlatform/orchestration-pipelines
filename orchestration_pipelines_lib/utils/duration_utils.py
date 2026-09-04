@@ -32,10 +32,15 @@ def duration_to_timedelta(value: str) -> timedelta:
     """
     multipliers = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
 
-    pairs = re.findall(r"(\d*\.?\d+)([smhdw])", value.strip().lower())
+    value = value.strip().lower()
+
+    pairs = re.findall(r"(\d*\.?\d+)([smhdw])", value)
 
     total_seconds = 0.0
     for amount_str, unit in pairs:
         total_seconds += float(amount_str) * multipliers[unit]
+
+    if value.startswith("-"):
+        total_seconds = -total_seconds
 
     return timedelta(seconds=total_seconds)
