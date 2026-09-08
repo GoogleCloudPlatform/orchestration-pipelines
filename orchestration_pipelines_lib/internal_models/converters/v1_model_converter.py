@@ -118,6 +118,36 @@ class ConverterV1ToInternal:
             exponentialBackoff=exponential_backoff_model,
         )
 
+    def _convert_defaults_retry_policy(
+        self,
+        defaults: v1_pipeline_protos.Defaults | None = None,
+    ) -> internal_actions.RetryPolicyModel | None:
+        """Resolves retry policy from pipeline defaults."""
+        if defaults:
+            if defaults.HasField("retry_policy"):
+                return self._convert_retry_policy(defaults.retry_policy)
+            if defaults.HasField("execution_config"):
+                return internal_actions.RetryPolicyModel(
+                    maxRetries=defaults.execution_config.retries,
+                    fixedDelay=internal_actions.FixedDelayStrategyModel(
+                        retryDelay="5m"
+                    ),
+                )
+        return None
+
+    def _convert_action_retry_policy(
+        self,
+        action: Message,
+        defaults: v1_pipeline_protos.Defaults | None = None,
+    ) -> internal_actions.RetryPolicyModel | None:
+        """Resolves retry policy using hierarchy: action level first,
+        then defaults.
+        """
+        if action.HasField("retry_policy"):
+            return self._convert_retry_policy(action.retry_policy)
+
+        return self._convert_defaults_retry_policy(defaults)
+
     def _convert_trigger_rule(self, trigger_rule_val: int) -> str:
         if (
             trigger_rule_val
@@ -331,18 +361,11 @@ class ConverterV1ToInternal:
             project=v1_defaults.project_id, region=v1_defaults.location
         )
 
-        if v1_defaults.HasField("retry_policy"):
-            internal_retry_policy = self._convert_retry_policy(
-                v1_defaults.retry_policy
-            )
-        elif v1_defaults.HasField("execution_config"):
-            internal_retry_policy = internal_actions.RetryPolicyModel(
-                maxRetries=v1_defaults.execution_config.retries,
-            )
-        else:
-            internal_retry_policy = internal_actions.RetryPolicyModel(
-                maxRetries=0,
-            )
+        internal_retry_policy = self._convert_defaults_retry_policy(
+            v1_defaults
+        ) or internal_actions.RetryPolicyModel(
+            maxRetries=0,
+        )
 
         internal_defaults = internal_pipeline.DefaultsModel(
             cloudDefault=internal_cloud_defaults,
@@ -422,7 +445,7 @@ class ConverterV1ToInternal:
         action_type = action.WhichOneof("action")
 
         if action_type == "python":
-            return self._convert_python_action(action.python)
+            return self._convert_python_action(action.python, defaults)
         if action_type == "pyspark":
             return self._convert_dataproc_action(
                 action.pyspark, "pyspark", defaults, shared_labels
@@ -450,18 +473,16 @@ class ConverterV1ToInternal:
         raise TypeError(f"Unknown action type: {action_type}")
 
     def _convert_python_action(
-        self, action: v1_pipeline_protos.PythonAction
+        self,
+        action: v1_pipeline_protos.PythonAction,
+        defaults: v1_pipeline_protos.Defaults | None = None,
     ) -> internal_pipeline.AnyAction:
         op_kwargs = (
             struct_to_dict(action.op_kwargs)
             if action.HasField("op_kwargs") and action.op_kwargs
             else None
         )
-        retry_policy = (
-            self._convert_retry_policy(action.retry_policy)
-            if action.HasField("retry_policy")
-            else None
-        )
+        retry_policy = self._convert_action_retry_policy(action, defaults)
 
         if action.HasField("environment"):
             env = action.environment
@@ -597,11 +618,7 @@ class ConverterV1ToInternal:
             for uri in getattr(action, "archive_uris", [])
         ]
 
-        retry_policy = (
-            self._convert_retry_policy(action.retry_policy)
-            if action.HasField("retry_policy")
-            else None
-        )
+        retry_policy = self._convert_action_retry_policy(action, defaults)
 
         return internal_actions.DataprocOperatorActionModel(
             name=action.name,
@@ -664,11 +681,7 @@ class ConverterV1ToInternal:
             merged_labels.update(dict(action.labels))
 
         params = dict(action.params) if action.params else None
-        retry_policy = (
-            self._convert_retry_policy(action.retry_policy)
-            if action.HasField("retry_policy")
-            else None
-        )
+        retry_policy = self._convert_action_retry_policy(action, defaults)
 
         if engine_type == "bigquery":
             bq_engine = action.engine.bigquery
@@ -791,11 +804,7 @@ class ConverterV1ToInternal:
         defaults: v1_pipeline_protos.Defaults,
         shared_labels: dict[str, str] | None = None,
     ) -> internal_pipeline.AnyAction:
-        retry_policy = (
-            self._convert_retry_policy(action.retry_policy)
-            if action.HasField("retry_policy")
-            else None
-        )
+        retry_policy = self._convert_action_retry_policy(action, defaults)
         framework_type = action.framework.WhichOneof("framework")
         if framework_type == "dbt":
             dbt = action.framework.dbt
@@ -935,11 +944,7 @@ class ConverterV1ToInternal:
                 location=dts_spec.location or defaults.location,
             )
 
-            retry_policy = (
-                self._convert_retry_policy(action.retry_policy)
-                if action.HasField("retry_policy")
-                else None
-            )
+            retry_policy = self._convert_action_retry_policy(action, defaults)
 
             return internal_actions.DataIngestionActionModel(
                 name=action.name,
@@ -960,11 +965,7 @@ class ConverterV1ToInternal:
         action: v1_pipeline_protos.OrchestrationPipelineAction,
         defaults: v1_pipeline_protos.Defaults,
     ) -> internal_pipeline.AnyAction:
-        retry_policy = (
-            self._convert_retry_policy(action.retry_policy)
-            if action.HasField("retry_policy")
-            else None
-        )
+        retry_policy = self._convert_action_retry_policy(action, defaults)
         return internal_actions.OrchestrationPipelineActionModel(
             name=action.name,
             type="orchestration_pipeline",
@@ -983,11 +984,7 @@ class ConverterV1ToInternal:
         defaults: v1_pipeline_protos.Defaults,
         shared_labels: dict[str, str],
     ) -> internal_pipeline.AnyAction:
-        retry_policy = (
-            self._convert_retry_policy(action.retry_policy)
-            if action.HasField("retry_policy")
-            else None
-        )
+        retry_policy = self._convert_action_retry_policy(action, defaults)
         provider_type = action.WhichOneof("provider")
         if provider_type == "agent_platform":
             agent_platform = action.agent_platform

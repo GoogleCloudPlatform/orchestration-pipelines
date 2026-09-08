@@ -1697,7 +1697,10 @@ class TestConverterV1ToInternal(unittest.TestCase):
         internal = self.converter.convert_to_internal_model(pipeline_proto)
         self.assertIsNotNone(internal.defaults.retryPolicy)
         self.assertEqual(internal.defaults.retryPolicy.maxRetries, 3)
-        self.assertIsNone(internal.defaults.retryPolicy.fixedDelay)
+        self.assertIsNotNone(internal.defaults.retryPolicy.fixedDelay)
+        self.assertEqual(
+            internal.defaults.retryPolicy.fixedDelay.retryDelay, "5m"
+        )
         self.assertIsNone(internal.defaults.executionConfigDefault)
 
     def test_convert_defaults_no_retry_policy_defaults_to_zero(self):
@@ -1764,6 +1767,186 @@ class TestConverterV1ToInternal(unittest.TestCase):
             internal.defaults.retryPolicy.fixedDelay.retryDelay, "1m"
         )
         self.assertIsNone(internal.defaults.executionConfigDefault)
+
+    def test_convert_action_inherits_defaults_retry_policy_fixed_delay(self):
+        """Tests that action inherits fixed_delay retry policy from defaults."""
+        defaults = v1_protos.Defaults(
+            project_id="test-project",
+            location="us-central1",
+            retry_policy=v1_protos.RetryPolicy(
+                max_retries=3,
+                fixed_delay=v1_protos.FixedDelayStrategy(retry_delay="10s"),
+            ),
+        )
+        action_proto = v1_protos.Action()
+        action_proto.python.name = "default-retry-python"
+        action_proto.python.main_file_path = "script.py"
+        action_proto.python.python_callable = "main"
+        action_proto.python.engine.local.SetInParent()
+
+        internal_action = self.converter.convert_action(
+            action_proto, defaults, self.labels
+        )
+        self.assertIsNotNone(internal_action.retryPolicy)
+        self.assertEqual(internal_action.retryPolicy.maxRetries, 3)
+        self.assertEqual(
+            internal_action.retryPolicy.fixedDelay.retryDelay, "10s"
+        )
+
+    def test_convert_action_inherits_defaults_exponential_backoff(self):
+        """Tests that action inherits exponential backoff from defaults."""
+        defaults = v1_protos.Defaults(
+            project_id="test-project",
+            location="us-central1",
+            retry_policy=v1_protos.RetryPolicy(
+                max_retries=4,
+                exponential_backoff=v1_protos.ExponentialBackoffStrategy(
+                    initial_delay="2s",
+                    max_delay="1m",
+                    multiplier=1.5,
+                    randomize_jitter=True,
+                ),
+            ),
+        )
+        action_proto = v1_protos.Action()
+        action_proto.python.name = "eb-retry-python"
+        action_proto.python.main_file_path = "script.py"
+        action_proto.python.python_callable = "main"
+        action_proto.python.engine.local.SetInParent()
+
+        internal_action = self.converter.convert_action(
+            action_proto, defaults, self.labels
+        )
+        self.assertIsNotNone(internal_action.retryPolicy)
+        self.assertEqual(internal_action.retryPolicy.maxRetries, 4)
+        eb = internal_action.retryPolicy.exponentialBackoff
+        self.assertIsNotNone(eb)
+        self.assertEqual(eb.initialDelay, "2s")
+        self.assertEqual(eb.maxDelay, "1m")
+        self.assertEqual(eb.multiplier, 1.5)
+        self.assertTrue(eb.randomizeJitter)
+
+    def test_convert_action_overrides_defaults_retry_policy(self):
+        """Tests that action-level retry policy overrides pipeline defaults."""
+        defaults = v1_protos.Defaults(
+            project_id="test-project",
+            location="us-central1",
+            retry_policy=v1_protos.RetryPolicy(
+                max_retries=2,
+                fixed_delay=v1_protos.FixedDelayStrategy(retry_delay="1m"),
+            ),
+        )
+        action_proto = v1_protos.Action()
+        action_proto.python.name = "override-python"
+        action_proto.python.main_file_path = "script.py"
+        action_proto.python.python_callable = "main"
+        action_proto.python.engine.local.SetInParent()
+        action_proto.python.retry_policy.CopyFrom(
+            v1_protos.RetryPolicy(
+                max_retries=7,
+                fixed_delay=v1_protos.FixedDelayStrategy(retry_delay="15s"),
+            )
+        )
+
+        internal_action = self.converter.convert_action(
+            action_proto, defaults, self.labels
+        )
+        self.assertIsNotNone(internal_action.retryPolicy)
+        self.assertEqual(internal_action.retryPolicy.maxRetries, 7)
+        self.assertEqual(
+            internal_action.retryPolicy.fixedDelay.retryDelay, "15s"
+        )
+
+    def test_convert_action_inherits_defaults_execution_config(self):
+        """Tests that action inherits deprecated execution_config retries."""
+        defaults = v1_protos.Defaults(
+            project_id="test-project",
+            location="us-central1",
+            execution_config=v1_protos.ExecutionConfig(retries=5),
+        )
+        action_proto = v1_protos.Action()
+        action_proto.python.name = "exec-config-python"
+        action_proto.python.main_file_path = "script.py"
+        action_proto.python.python_callable = "main"
+        action_proto.python.engine.local.SetInParent()
+
+        internal_action = self.converter.convert_action(
+            action_proto, defaults, self.labels
+        )
+        self.assertIsNotNone(internal_action.retryPolicy)
+        self.assertEqual(internal_action.retryPolicy.maxRetries, 5)
+        self.assertEqual(
+            internal_action.retryPolicy.fixedDelay.retryDelay, "5m"
+        )
+
+    def test_convert_action_no_retry_policy_and_no_defaults(self):
+        """Tests that action retryPolicy is None when neither defines it."""
+        defaults = v1_protos.Defaults(
+            project_id="test-project",
+            location="us-central1",
+        )
+        action_proto = v1_protos.Action()
+        action_proto.python.name = "no-retry-python"
+        action_proto.python.main_file_path = "script.py"
+        action_proto.python.python_callable = "main"
+        action_proto.python.engine.local.SetInParent()
+
+        internal_action = self.converter.convert_action(
+            action_proto, defaults, self.labels
+        )
+        self.assertIsNone(internal_action.retryPolicy)
+
+    def test_convert_to_internal_model_retry_policy_hierarchy(self):
+        """Tests retry policy hierarchy in full pipeline conversion."""
+        pipeline_proto = v1_protos.OrchestrationPipeline(
+            model_version="1.0",
+            pipeline_id="hierarchy-pipe",
+            runner=v1_protos.PipelineRunner.airflow,
+            defaults=v1_protos.Defaults(
+                project_id="test-proj",
+                location="us-central1",
+                retry_policy=v1_protos.RetryPolicy(
+                    max_retries=2,
+                    fixed_delay=v1_protos.FixedDelayStrategy(retry_delay="30s"),
+                ),
+            ),
+            actions=[
+                v1_protos.Action(
+                    python=v1_protos.PythonAction(
+                        name="inheriting-task",
+                        main_file_path="script1.py",
+                        python_callable="main1",
+                    )
+                ),
+                v1_protos.Action(
+                    python=v1_protos.PythonAction(
+                        name="overriding-task",
+                        main_file_path="script2.py",
+                        python_callable="main2",
+                        retry_policy=v1_protos.RetryPolicy(
+                            max_retries=6,
+                            fixed_delay=v1_protos.FixedDelayStrategy(
+                                retry_delay="5s"
+                            ),
+                        ),
+                    )
+                ),
+            ],
+        )
+        internal = self.converter.convert_to_internal_model(pipeline_proto)
+        self.assertEqual(len(internal.actions), 2)
+        # First action inherits defaults
+        self.assertIsNotNone(internal.actions[0].retryPolicy)
+        self.assertEqual(internal.actions[0].retryPolicy.maxRetries, 2)
+        self.assertEqual(
+            internal.actions[0].retryPolicy.fixedDelay.retryDelay, "30s"
+        )
+        # Second action overrides defaults
+        self.assertIsNotNone(internal.actions[1].retryPolicy)
+        self.assertEqual(internal.actions[1].retryPolicy.maxRetries, 6)
+        self.assertEqual(
+            internal.actions[1].retryPolicy.fixedDelay.retryDelay, "5s"
+        )
 
 
 if __name__ == "__main__":
