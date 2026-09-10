@@ -525,14 +525,30 @@ class ConverterV1ToInternal:
         if action.labels:
             merged_labels.update(dict(action.labels))
 
+        filename = None
+        if action.main_file_path:
+            resolved_main_path = self.file_manager.resolve_path(
+                action.main_file_path
+            )
+            filename = self.file_manager.get_blob_reference(resolved_main_path)
+
+        py_files = [
+            self.file_manager.get_blob_reference(
+                self.file_manager.resolve_path(p)
+            )
+            for p in getattr(action, "py_files", [])
+        ]
+
+        archives = [
+            self._resolve_archive_uri(uri)
+            for uri in getattr(action, "archive_uris", [])
+        ]
+
         return internal_actions.DataprocOperatorActionModel(
             name=action.name,
             type=action_type,
-            filename=self.file_manager.resolve_path(action.main_file_path),
-            pyFiles=[
-                self.file_manager.resolve_path(p)
-                for p in getattr(action, "py_files", [])
-            ],
+            filename=filename,
+            pyFiles=py_files,
             query=None,
             executionTimeout=action.execution_timeout or None,
             dependsOn=list(action.depends_on),
@@ -541,11 +557,22 @@ class ConverterV1ToInternal:
             labels=merged_labels,
             params=params,
             impersonationChain=impersonation_chain,
-            archives=list(action.archive_uris),
+            archives=archives,
             depsBucket=action.staging_bucket,
             engine=internal_engine,
             config=internal_config,
         )
+
+    def _resolve_archive_uri(self, archive_uri: str) -> str:
+        """Resolves an archive URI to a GCS blob reference while preserving
+        any '#alias'.
+        """
+        if not archive_uri:
+            return ""
+        path, sep, alias = archive_uri.partition("#")
+        resolved_path = self.file_manager.resolve_path(path)
+        blob_ref = self.file_manager.get_blob_reference(resolved_path)
+        return f"{blob_ref}{sep}{alias}" if sep else blob_ref
 
     def _convert_sql_action(
         self,

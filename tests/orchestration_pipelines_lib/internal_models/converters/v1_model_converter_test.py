@@ -362,7 +362,9 @@ class TestConverterV1ToInternal(unittest.TestCase):
                         )))))
         internal_gce_existing = self.converter._convert_dataproc_action(
             pyspark_gce_existing, "pyspark", self.defaults, self.labels)
-        self.assertEqual(internal_gce_existing.filename, "resolved/main.py")
+        self.assertEqual(
+            internal_gce_existing.filename, "gs://bucket/resolved/main.py"
+        )
         self.assertEqual(internal_gce_existing.engine.engineType,
                          "dataproc-gce")
         self.assertEqual(internal_gce_existing.engine.clusterMode, "existing")
@@ -394,8 +396,10 @@ class TestConverterV1ToInternal(unittest.TestCase):
         internal_gce_existing_defaults = self.converter._convert_dataproc_action(
             pyspark_gce_existing_defaults, "pyspark", self.defaults,
             self.labels)
-        self.assertEqual(internal_gce_existing_defaults.filename,
-                         "resolved/main.py")
+        self.assertEqual(
+            internal_gce_existing_defaults.filename,
+            "gs://bucket/resolved/main.py",
+        )
         self.assertEqual(internal_gce_existing_defaults.region,
                          "default-location")
         self.assertEqual(internal_gce_existing_defaults.config.project_id,
@@ -423,7 +427,9 @@ class TestConverterV1ToInternal(unittest.TestCase):
                             cluster_config=cluster_config_struct))))))))
         internal_gce_eph = self.converter._convert_dataproc_action(
             notebook_gce_ephemeral, "notebook", self.defaults, self.labels)
-        self.assertEqual(internal_gce_eph.filename, "resolved/main.ipynb")
+        self.assertEqual(
+            internal_gce_eph.filename, "gs://bucket/resolved/main.ipynb"
+        )
         self.assertEqual(internal_gce_eph.type, "notebook")
         self.assertEqual(internal_gce_eph.engine.clusterMode, "ephemeral")
         self.assertEqual(internal_gce_eph.config.cluster_name, "temp-cluster")
@@ -454,7 +460,9 @@ class TestConverterV1ToInternal(unittest.TestCase):
         internal_gce_eph_path = self.converter._convert_dataproc_action(
             notebook_gce_ephemeral_path, "notebook", self.defaults,
             self.labels)
-        self.assertEqual(internal_gce_eph_path.filename, "resolved/main.ipynb")
+        self.assertEqual(
+            internal_gce_eph_path.filename, "gs://bucket/resolved/main.ipynb"
+        )
         self.assertEqual(internal_gce_eph_path.config.cluster_config,
                          {"cluster_tier": "CLUSTER_TIER_STANDARD"})
         self.assertEqual(internal_gce_eph_path.labels, self.labels)
@@ -575,8 +583,10 @@ class TestConverterV1ToInternal(unittest.TestCase):
                                 ))))))
         internal_serverless_inline = self.converter._convert_dataproc_action(
             pyspark_serverless_inline, "pyspark", self.defaults, self.labels)
-        self.assertEqual(internal_serverless_inline.filename,
-                         "resolved/main.py")
+        self.assertEqual(
+            internal_serverless_inline.filename,
+            "gs://bucket/resolved/main.py",
+        )
         self.assertEqual(internal_serverless_inline.engine.engineType,
                          "dataproc-serverless")
         self.assertEqual(internal_serverless_inline.region, "us-west1")
@@ -609,8 +619,10 @@ class TestConverterV1ToInternal(unittest.TestCase):
                         path="gs://bucket/config.json"))))
         internal_serverless_defaults = self.converter._convert_dataproc_action(
             pyspark_serverless_defaults, "pyspark", self.defaults, self.labels)
-        self.assertEqual(internal_serverless_defaults.filename,
-                         "resolved/main.py")
+        self.assertEqual(
+            internal_serverless_defaults.filename,
+            "gs://bucket/resolved/main.py",
+        )
         self.assertEqual(internal_serverless_defaults.region,
                          "default-location")
         self.assertEqual(internal_serverless_defaults.labels, self.labels)
@@ -636,7 +648,9 @@ class TestConverterV1ToInternal(unittest.TestCase):
                         path="gs://bucket/config.json"))))
         internal_serverless_path = self.converter._convert_dataproc_action(
             pyspark_serverless_path, "pyspark", self.defaults, self.labels)
-        self.assertEqual(internal_serverless_path.filename, "resolved/main.py")
+        self.assertEqual(
+            internal_serverless_path.filename, "gs://bucket/resolved/main.py"
+        )
         self.assertEqual(
             internal_serverless_path.config.resourceProfile.runtimeConfig, {
                 "version": "2.2",
@@ -757,6 +771,173 @@ class TestConverterV1ToInternal(unittest.TestCase):
         self.assertEqual(internal_action.config.resourceProfile.runtimeConfig,
                          expected_runtime)
         self.assertEqual(internal_action.labels, self.labels)
+
+    def test_convert_dataproc_action_with_py_files(self):
+        """Tests converting a Dataproc action with py_files to GCS blob references."""
+        pyspark_action = v1_protos.PysparkAction(
+            name="dp-py-files",
+            main_file_path="main.py",
+            py_files=["scripts/helper.py", "lib/common.py"],
+            engine=v1_protos.PysparkEngine(
+                dataproc_on_gce=v1_protos.DataprocOnGceEngine(
+                    existing_cluster=v1_protos.DataprocExistingClusterConfiguration(
+                        cluster_name="my-cluster",
+                    )
+                )
+            ),
+        )
+
+        internal_action = self.converter._convert_dataproc_action(
+            pyspark_action, "pyspark", self.defaults, self.labels
+        )
+
+        self.assertEqual(
+            internal_action.filename, "gs://bucket/resolved/main.py"
+        )
+        self.assertEqual(
+            internal_action.pyFiles,
+            [
+                "gs://bucket/resolved/scripts/helper.py",
+                "gs://bucket/resolved/lib/common.py",
+            ],
+        )
+
+    def test_convert_dataproc_action_with_archive_uris(self):
+        """Tests converting a Dataproc action with archive_uris (both with and without aliases)."""
+        pyspark_action = v1_protos.PysparkAction(
+            name="dp-archives",
+            main_file_path="main.py",
+            archive_uris=[
+                "archives/deps.zip",
+                "archives/env.tar.gz#env",
+                "path/to/virtualenv.zip#venv",
+            ],
+            engine=v1_protos.PysparkEngine(
+                dataproc_on_gce=v1_protos.DataprocOnGceEngine(
+                    existing_cluster=v1_protos.DataprocExistingClusterConfiguration(
+                        cluster_name="my-cluster",
+                    )
+                )
+            ),
+        )
+
+        internal_action = self.converter._convert_dataproc_action(
+            pyspark_action, "pyspark", self.defaults, self.labels
+        )
+
+        self.assertEqual(
+            internal_action.filename, "gs://bucket/resolved/main.py"
+        )
+        self.assertEqual(
+            internal_action.archives,
+            [
+                "gs://bucket/resolved/archives/deps.zip",
+                "gs://bucket/resolved/archives/env.tar.gz#env",
+                "gs://bucket/resolved/path/to/virtualenv.zip#venv",
+            ],
+        )
+
+    def test_convert_dataproc_notebook_action_with_archive_uris(self):
+        """Tests converting a Dataproc notebook action with archive_uris."""
+        notebook_action = v1_protos.NotebookAction(
+            name="dp-nb-archives",
+            main_file_path="main.ipynb",
+            archive_uris=[
+                "archives/data.zip",
+                "archives/conda.tar.gz#environment",
+            ],
+            engine=v1_protos.NotebookEngine(
+                dataproc_serverless=v1_protos.DataprocServerlessBatchEngine(
+                    location="us-central1",
+                    resource_profile=v1_protos.DataprocBatchResourceProfile(
+                        inline=v1_protos.DataprocBatchResourceProfile.InlineConfig()
+                    ),
+                )
+            ),
+        )
+
+        internal_action = self.converter._convert_dataproc_action(
+            notebook_action, "notebook", self.defaults, self.labels
+        )
+
+        self.assertEqual(
+            internal_action.filename, "gs://bucket/resolved/main.ipynb"
+        )
+        self.assertEqual(
+            internal_action.archives,
+            [
+                "gs://bucket/resolved/archives/data.zip",
+                "gs://bucket/resolved/archives/conda.tar.gz#environment",
+            ],
+        )
+
+    def test_resolve_archive_uri(self):
+        """Tests _resolve_archive_uri helper with empty strings, relative paths, and aliases."""
+        self.assertEqual(self.converter._resolve_archive_uri(""), "")
+        self.assertEqual(self.converter._resolve_archive_uri(None), "")
+        self.assertEqual(
+            self.converter._resolve_archive_uri("env.tar.gz"),
+            "gs://bucket/resolved/env.tar.gz",
+        )
+        self.assertEqual(
+            self.converter._resolve_archive_uri("env.tar.gz#my_env"),
+            "gs://bucket/resolved/env.tar.gz#my_env",
+        )
+        self.assertEqual(
+            self.converter._resolve_archive_uri(
+                "path/to/archive.zip#custom_alias"
+            ),
+            "gs://bucket/resolved/path/to/archive.zip#custom_alias",
+        )
+
+    def test_convert_sql_action_dataproc_path(self):
+        """Tests SQL action with query path targeting Dataproc engines resolves to GCS blob reference."""
+        # Dataproc Serverless
+        sql_dp_serverless = v1_protos.SqlAction(
+            name="dp-sql-serverless-path",
+            query=v1_protos.Query(path="queries/query.sql"),
+            engine=v1_protos.SqlEngine(
+                dataproc_serverless=v1_protos.DataprocServerlessBatchEngine(
+                    location="us-central1",
+                    resource_profile=v1_protos.DataprocBatchResourceProfile(
+                        inline=v1_protos.DataprocBatchResourceProfile.InlineConfig()
+                    ),
+                )
+            ),
+        )
+
+        internal_dp_serverless = self.converter._convert_sql_action(
+            sql_dp_serverless, self.defaults, self.labels
+        )
+
+        self.assertEqual(
+            internal_dp_serverless.filename,
+            "gs://bucket/resolved/queries/query.sql",
+        )
+        self.assertIsNone(internal_dp_serverless.query)
+
+        # Dataproc on GCE
+        sql_dp_gce = v1_protos.SqlAction(
+            name="dp-sql-gce-path",
+            query=v1_protos.Query(path="queries/query.sql"),
+            engine=v1_protos.SqlEngine(
+                dataproc_on_gce=v1_protos.DataprocOnGceEngine(
+                    existing_cluster=v1_protos.DataprocExistingClusterConfiguration(
+                        cluster_name="my-cluster",
+                    )
+                )
+            ),
+        )
+
+        internal_dp_gce = self.converter._convert_sql_action(
+            sql_dp_gce, self.defaults, self.labels
+        )
+
+        self.assertEqual(
+            internal_dp_gce.filename,
+            "gs://bucket/resolved/queries/query.sql",
+        )
+        self.assertIsNone(internal_dp_gce.query)
 
     def test_convert_sql_action_bq_inline(self):
         """Tests conversion of a BigQuery action with an inline query."""

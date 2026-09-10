@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]  - yyyy-mm-dd
 
-...
+### Fixed
+
+- Resolved Dataproc file references (`main_file_path`, `py_files`, and `archive_uris`) to Cloud Storage blob URIs in Converter V1.
 
 ## [1.1.0] - 2026-09-02
 
