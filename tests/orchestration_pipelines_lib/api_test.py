@@ -631,10 +631,9 @@ class TestApi(unittest.TestCase):
     @patch("airflow.utils.db.create_session")
     def test_generate_non_versioned_success(self, mock_session):
         """Tests successful DAG generation using api.generate (non-versioned path)."""
-        pipeline_definition_file = os.path.join(
-            _get_data_root_path(),
-            "example-bundle/versions/a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p/sql-on-dataproc-serverless.yml"
-        )
+        pipeline_definition_file = os.path.join(_get_data_root_path(),
+            "example-bundle/versions/a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p/sql-on-dataproc-serverless.yml")
+
         globals_dict = {}
         api.generate(pipeline_definition_file, globals_dict=globals_dict)
 
@@ -714,6 +713,23 @@ class TestApi(unittest.TestCase):
         )
         self.assertEqual(batch_task.machine_type, "n1-standard-4")
         self.assertEqual(batch_task.labels, {"orchestration_pipeline": "true"})
+
+    @patch.dict(os.environ, {"GCS_BUCKET": "example-bucket"})
+    @patch("airflow.utils.db.create_session")
+    def test_generate_with_dag_root_parameter(self, mock_session):
+        """Tests successful DAG generation when using the dag_root parameter."""
+        globals_dict = {}
+        pipeline_path = "example-bundle/versions/" \
+            "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p/sql-on-dataproc-serverless.yml"
+        dag_root = _get_data_root_path()
+
+        api.generate(pipeline_path, globals_dict, dag_root)
+
+        expected_dag_id = "sql-on-dataproc-serverless"
+        self.assertIn(expected_dag_id, globals_dict)
+        dag = globals_dict[expected_dag_id]
+        self.assertIsInstance(dag, DAG)
+        self.assertEqual(dag.dag_id, expected_dag_id)
 
 
 def _get_data_root_path():

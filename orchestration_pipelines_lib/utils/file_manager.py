@@ -69,16 +69,21 @@ class FileManager:
     knowledge of versioning or relative path structures.
     """
 
-    def __init__(self, gcs_client: Optional[Any] = None):
+    def __init__(self, gcs_client: Optional[Any] = None,
+                 data_root: str | None = None):
         """Initializes the FileManager.
 
         Args:
             gcs_client: An optional pre-configured GCS client instance.
+            data_root: Folder with dags
         """
         self._gcs_client = gcs_client or _get_gcs_client()
-        self._dags_folder = os.environ.get("DAGS_FOLDER") or os.environ.get(
-            "AIRFLOW__CORE__DAGS_FOLDER", "."
-        )
+        if data_root is not None:
+            self._data_root = data_root
+        else:
+            self._data_root = os.environ.get("DAGS_FOLDER") or os.environ.get(
+                "AIRFLOW__CORE__DAGS_FOLDER", "."
+            )
 
     def _get_gcs_client(self):
         """Lazily initializes the GCS client."""
@@ -104,7 +109,7 @@ class FileManager:
         if self._is_gcs_blob(file_path):
             return file_path
 
-        return os.path.join(self._dags_folder, file_path)
+        return os.path.join(self._data_root, file_path)
 
     def extract_relative_path(
         self, full_path: str, local_data_root: str = "/"

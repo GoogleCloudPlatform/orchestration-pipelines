@@ -66,15 +66,17 @@ def validate(pipeline_definition_file: str) -> None:
 
 
 def generate(
-    pipeline_definition_file: str, globals_dict: dict[str, Any] = None
+    pipeline_definition_file: str, globals_dict: dict[str, Any] = None,
+    data_root: str | None = None,
 ) -> None:
     """Generates the DAG based on the input pipeline.
 
     Args:
         pipeline_definition_file (str): The path to the pipeline
             definition file.
-        globals_dict (Dict[str, Any], optional): The global dictionary to
+        globals_dict (dict[str, Any], optional): The global dictionary to
             register the DAG in. Defaults to None.
+        data_root (str | None): The root directory containing the data.
     """
     from orchestration_pipelines_lib.utils.file_manager import FileManager
     from orchestration_pipelines_lib.utils.pipeline_metadata import (
@@ -85,10 +87,11 @@ def generate(
     )
 
     dag_id = os.path.splitext(os.path.basename(pipeline_definition_file))[0]
-    repository = PipelineRepository(data_root="")
+    file_manager = FileManager(data_root=data_root)
+    repository = PipelineRepository(data_root=data_root,
+                                    file_manager=file_manager)
     pipeline_id = dag_id
 
-    file_manager = FileManager()
     source_filepath = file_manager.get_blob_reference(
         file_manager.resolve_path(pipeline_definition_file)
     )
@@ -103,7 +106,7 @@ def generate(
             version_id="",
             source_filepath=source_filepath,
         ),
-        data_root=None,
+        data_root=data_root,
         globals_dict=globals_dict,
         bundle_id=None,
         pipeline_id=pipeline_id,

@@ -34,11 +34,11 @@ class PipelineRepository:
     manifests.
     """
 
-    def __init__(self, data_root: str, file_manager: FileManager | None = None):
+    def __init__(self, data_root: str | None, file_manager: FileManager | None = None):
         """Initializes the repository with a specific data/dags
         root directory.
         """
-        self.data_root = data_root
+        self.data_root = data_root if data_root is not None else ""
         self.file_manager = file_manager or FileManager()
 
     def _resolve_with_fallback(self, base_path: str) -> str:

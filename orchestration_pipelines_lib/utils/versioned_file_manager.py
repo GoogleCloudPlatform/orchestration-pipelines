@@ -78,7 +78,7 @@ class VersionedFileManager(FileManager):
         pipeline_id: str,
         current_version: str,
         bundle_id: str,
-        local_data_root: str = "/orchestration_pipelines",
+        local_data_root: str = "/data",
     ) -> VersionedFileManager:
         """Creates a VersionedFileManager by reusing GCS client.
 
@@ -108,7 +108,7 @@ class VersionedFileManager(FileManager):
         """Resolves a relative path to an absolute path based on the version.
 
         - Relative paths are resolved to:
-          /orchestration_pipelines/<bundle_id>/versions/<version_id>/<file_path>
+          /data/<bundle_id>/versions/<version_id>/<file_path>
         - GCS URIs ('gcs://...') are returned as-is.
         - Absolute paths are returned as-is.
 
