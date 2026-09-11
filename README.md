@@ -20,7 +20,7 @@ A library for defining and generating Apache Airflow DAGs declaratively using YA
 
 ## Supported Python Versions
 
-Python >= 3.9
+Python >= 3.10
 
 ## Features
 

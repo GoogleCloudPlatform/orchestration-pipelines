@@ -5,7 +5,7 @@ This document outlines the known architectural boundaries, environment constrain
 ## 1. Compatibility
 
 * **Airflow Compatibility:** Versions of the package 0.4.0 and older are not compatible with Airflow 3.2.0+.
-* **Python Versions:** Supported only on Python 3.9+. Older Python runtimes (e.g., 3.8) are not supported.
+* **Python Versions:** Supported only on Python 3.10+. Older Python runtimes (e.g., 3.9) are not supported.
 
 ## 2. Feature Limitations
 
