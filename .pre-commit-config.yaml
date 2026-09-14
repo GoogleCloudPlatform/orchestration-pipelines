@@ -1,23 +1,20 @@
-exclude: ^tests/
+exclude: '^(tests/|.*_pb2\.py|.*\.ipynb)'
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.0.292
+    rev: v0.16.8
     hooks:
       - id: ruff
         args: [ --fix ]
-  - repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 24.3.0
-    hooks:
-      - id: black
+      - id: ruff-format
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v4.6.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.39.0
+    rev: v0.41.0
     hooks:
       - id: markdownlint
         args: ["--config", ".markdownlint.yaml", "--fix"]

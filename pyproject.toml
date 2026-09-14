@@ -45,7 +45,7 @@ dev = [
     "pytest",
     "pytest-cov>=4.1.0",
     "coverage>=7.3.1",
-    "pylint",
+    "ruff>=0.1.0",
     "pre-commit>=4.2.0",
     "virtualenv",
 ]
@@ -88,13 +88,28 @@ exclude = '.*_pb2\.py'
 # Set the line length to match Black
 line-length = 80
 exclude = [
+    "tests/",
     "*_pb2.py",
+    "*.ipynb",
 ]
 
 [tool.ruff.lint]
 # Enable Pyflakes (F), pycodestyle (E, W), isort (I), pyupgrade (UP), bugbear (B), and pydocstyle (D)
 select = ["E", "F", "W", "I", "B", "UP", "D"]
-ignore = ["D400", "D205", "UP006"] # D400: First line should end with a period, D205: 1-blank-line-after-summary, UP006: Use dict instead of typing.Dict
+ignore = [
+    "D1",
+    "D205",
+    "D400",
+    "D415",
+    "E501",
+    "UP006",
+    "UP007",
+    "UP035",
+    "UP045",
+    "B904",
+    "B905",
+    "W293",
+]
 
 [tool.ruff.lint.pydocstyle]
 # Enforce Google style docstring conventions

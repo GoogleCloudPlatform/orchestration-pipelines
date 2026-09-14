@@ -5,6 +5,10 @@ default: true
 MD013:
   line_length: 80
   tables: false
+  code_blocks: false
 
 # MD024/no-duplicate-heading - Multiple headings with the same content
 MD024: false
+
+# MD041/first-line-heading/first-line-h1 - First line in a file should be a top-level heading
+MD041: false
