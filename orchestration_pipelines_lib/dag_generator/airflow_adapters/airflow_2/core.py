@@ -278,9 +278,7 @@ def _get_tags(
 
     return (
         session.query(DagTag.dag_id, DagTag.name)
-        .filter(
-            DagTag.dag_id.in_(subquery), DagTag.name.like("op:version:%")
-        )  # pyright: ignore[reportOptionalCall]
+        .filter(DagTag.dag_id.in_(subquery), DagTag.name.like("op:version:%"))  # pyright: ignore[reportOptionalCall]
         .all()
     )
 

@@ -5,18 +5,25 @@
 [![Support Status](https://img.shields.io/badge/support-preview-orange.svg)](https://github.com/GoogleCloudPlatform/orchestration-pipelines)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-A library for defining and generating Apache Airflow DAGs declaratively using YAML. Currently focused on orchestration of GCP resources (Dataproc, BigQuery, Dataform) and DBT...
+A library for defining and generating Apache Airflow DAGs declaratively using
+YAML. Currently focused on orchestration of GCP resources (Dataproc, BigQuery,
+Dataform) and DBT...
 
-> [!NOTE]
-> This library is currently in **Preview**.
+> [!NOTE] This library is currently in **Preview**.
 
 ## Overview
 
-`orchestration-pipelines` allows you to define complex data workflows in simple, human-readable YAML files. It abstracts away the boilerplate of writing Airflow DAGs in Python, making it easier for non-Python experts to create and manage pipelines.
+`orchestration-pipelines` allows you to define complex data workflows in simple,
+human-readable YAML files. It abstracts away the boilerplate of writing Airflow
+DAGs in Python, making it easier for non-Python experts to create and manage
+pipelines.
 
-- **Documentation**: [docs/doc.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/docs/doc.md)
-- **Changelog**: [CHANGELOG.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/CHANGELOG.md)
-- **Limitations**: [docs/limitations.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/docs/limitations.md)
+- **Documentation**:
+  [docs/doc.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/docs/doc.md)
+- **Changelog**:
+  [CHANGELOG.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/CHANGELOG.md)
+- **Limitations**:
+  [docs/limitations.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/docs/limitations.md)
 
 ## Supported Python Versions
 
@@ -24,7 +31,8 @@ Python >= 3.10
 
 ## Features
 
-- **Declarative DAGs**: Define your pipeline structure, triggers, and actions in YAML.
+- **Declarative DAGs**: Define your pipeline structure, triggers, and actions in
+  YAML.
 - **Rich Actions Support**: Built-in support for:
   - Python Scripts
   - Google Cloud BigQuery
@@ -32,7 +40,8 @@ Python >= 3.10
   - Google Cloud Dataform
   - DBT
 - **Automatic Generation**: A simple Python call generates the full Airflow DAG.
-- **Versioning**: Supports versioning of pipelines via a manifest file(as of Preview, on Google Cloud Composer).
+- **Versioning**: Supports versioning of pipelines via a manifest file(as of
+  Preview, on Google Cloud Composer).
 
 ## Installation
 
@@ -42,8 +51,13 @@ You can install `orchestration-pipelines` from PyPI:
 pip install orchestration-pipelines
 ```
 
-> [!IMPORTANT]
-> Ensure your `apache-airflow-client` version is fully compatible with Airflow 3 to prevent critical DAG parsing or runtime errors. This package utilizes Airflow Client API calls to interact with the metadata database; `apache-airflow-client` library introduces significant architectural shifts in newer versions, a version mismatch will likely break communication and disrupt your pipelines. Always verify that your client version aligns with your Airflow environment to ensure stability.
+> [!IMPORTANT] Ensure your `apache-airflow-client` version is fully compatible
+> with Airflow 3 to prevent critical DAG parsing or runtime errors. This package
+> utilizes Airflow Client API calls to interact with the metadata database;
+> `apache-airflow-client` library introduces significant architectural shifts in
+> newer versions, a version mismatch will likely break communication and disrupt
+> your pipelines. Always verify that your client version aligns with your
+> Airflow environment to ensure stability.
 
 ## Quick Start
 
@@ -79,8 +93,9 @@ actions:
 
 > **Known Limitations**
 >
-> See [docs/limitations.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/docs/limitations.md) for the complete list of known limitations and compatibility constraints.
-
+> See
+> [docs/limitations.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/docs/limitations.md)
+> for the complete list of known limitations and compatibility constraints.
 
 ### 2. Generate the Airflow DAG
 
@@ -95,20 +110,26 @@ from orchestration_pipelines_lib.api import generate
 generate("dataform-pipeline-local.yml")
 ```
 
-Airflow will parse this Python file and automatically generate the DAG based on your YAML definition.
+Airflow will parse this Python file and automatically generate the DAG based on
+your YAML definition.
 
 ## Advanced Features
 
 ### Versioning and Manifests
 
-You can manage multiple versions of your pipelines using a `manifest.yml` file. This allows you to specify which version of a pipeline should be active.
+You can manage multiple versions of your pipelines using a `manifest.yml` file.
+This allows you to specify which version of a pipeline should be active.
 
 See the `examples/` directory for a sample `manifest.yml` and how to use it.
 
 ## Contributing
 
-Contributions are welcome! Please see [contributing.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/contributing.md) for guidelines.
+Contributions are welcome! Please see
+[contributing.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/contributing.md)
+for guidelines.
 
 ## License
 
-This project is licensed under the Apache 2.0 License - see the [LICENSE](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/LICENSE) file for details.
+This project is licensed under the Apache 2.0 License - see the
+[LICENSE](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/LICENSE)
+file for details.

@@ -66,7 +66,8 @@ def validate(pipeline_definition_file: str) -> None:
 
 
 def generate(
-    pipeline_definition_file: str, globals_dict: dict[str, Any] = None,
+    pipeline_definition_file: str,
+    globals_dict: dict[str, Any] = None,
     data_root: str | None = None,
 ) -> None:
     """Generates the DAG based on the input pipeline.
@@ -88,8 +89,9 @@ def generate(
 
     dag_id = os.path.splitext(os.path.basename(pipeline_definition_file))[0]
     file_manager = FileManager(data_root=data_root)
-    repository = PipelineRepository(data_root=data_root,
-                                    file_manager=file_manager)
+    repository = PipelineRepository(
+        data_root=data_root, file_manager=file_manager
+    )
     pipeline_id = dag_id
 
     source_filepath = file_manager.get_blob_reference(

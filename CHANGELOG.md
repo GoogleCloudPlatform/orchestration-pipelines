@@ -3,13 +3,15 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project adheres to
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]  - yyyy-mm-dd
+## [Unreleased] - yyyy-mm-dd
 
 ### Fixed
 
-- Resolved Dataproc file references (`main_file_path`, `py_files`, and `archive_uris`) to Cloud Storage blob URIs in Converter V1.
+- Resolved Dataproc file references (`main_file_path`, `py_files`, and
+  `archive_uris`) to Cloud Storage blob URIs in Converter V1.
 
 ## [1.1.0] - 2026-09-02
 
@@ -19,28 +21,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Output overwriting on historical runs for Dataproc notebook actions by properly resolving template variables.
+- Output overwriting on historical runs for Dataproc notebook actions by
+  properly resolving template variables.
 - Schedule triggers population for unversioned pipelines.
 
 ## [1.0.0] - 2026-08-24
 
 ### Added
 
-- Observability metrics for pipeline runs via DAG callbacks (success/failure counters).
+- Observability metrics for pipeline runs via DAG callbacks (success/failure
+  counters).
 - Observability metrics for action execution using a custom operator.
 - Observability metrics for internal pipeline metadata population.
-- The library limitations have been documented and can be found under `docs/limitations.md`.
+- The library limitations have been documented and can be found under
+  `docs/limitations.md`.
 
 ### Fixed
 
-- Dummy DAG indicating parsing errors now fails by default with an `AirflowFailException` showing the parsing error message.
-- Actions running on Dataproc Ephemeral Cluster as engine are properly marked as success/failed based on the job status, abstracting the cleanup step result.
+- Dummy DAG indicating parsing errors now fails by default with an
+  `AirflowFailException` showing the parsing error message.
+- Actions running on Dataproc Ephemeral Cluster as engine are properly marked as
+  success/failed based on the job status, abstracting the cleanup step result.
 
 ## [0.4.1] - 2026-08-18
 
 ### Added
 
-- A separate document for known limitations and compatibility constraints (`docs/limitations.md`).
+- A separate document for known limitations and compatibility constraints
+  (`docs/limitations.md`).
 
 ### Fixed
 
@@ -75,7 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Params support for SQL, Pyspark and Notebook actions.
-- Params support for DBT pipeline and Dataform pipeline local (on Airflow) executions.
+- Params support for DBT pipeline and Dataform pipeline local (on Airflow)
+  executions.
 - Support for custom labels in Dataproc, SQL, and Dataform local execution.
 - Inline requirements support for Notebook/PySpark run on Dataproc.
 - Support for trigger rules in all actions.
@@ -83,7 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Replaced `runtime_params` from BigQuery DTS action with two specific fields: `requested_run_time` and `requested_time_range`.
+- Replaced `runtime_params` from BigQuery DTS action with two specific fields:
+  `requested_run_time` and `requested_time_range`.
 
 ### Fixed
 
@@ -108,19 +118,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The Dataform local docker image has been updated. Now users should not provide the dataform-core version in the workflow_settings.yaml.
+- The Dataform local docker image has been updated. Now users should not provide
+  the dataform-core version in the workflow_settings.yaml.
 - Performance improvements.
 
 ### Fixed
 
-- Auto-generated batch_id for actions using dataprocServerless is now resolved properly in both Airflow 2 and Airflow 3.
+- Auto-generated batch_id for actions using dataprocServerless is now resolved
+  properly in both Airflow 2 and Airflow 3.
 
-[Unreleased]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.1.0...main
-[1.1.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.1...v1.0.0
-[0.4.1]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.0...v0.4.1
-[0.4.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/releases/tag/v0.1.2
-
+[0.2.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.1.2...v0.2.0
+[0.3.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.2.0...v0.3.0
+[0.4.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.3.0...v0.4.0
+[0.4.1]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.0...v0.4.1
+[1.0.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.1...v1.0.0
+[1.1.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.0.0...v1.1.0
+[Unreleased]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.1.0...main

@@ -42,9 +42,7 @@ def send_notification_email(emails, is_success, context=None):
         subject = f"DAG Failed: {dag_run.dag_id}"
         h3_topic = "DAG Failure"
         task_id = task_instance.task_id if task_instance else "N/A"
-        tasks_paragraph = (
-            f"<p><b>Failed Task:</b> {task_id}</p>"
-        )
+        tasks_paragraph = f"<p><b>Failed Task:</b> {task_id}</p>"
 
     href = task_instance.log_url if task_instance else "#"
 

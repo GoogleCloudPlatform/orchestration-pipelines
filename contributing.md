@@ -20,8 +20,8 @@ sign a new one.
 
 ### Review our Community Guidelines
 
-This project follows [Google's Open Source Community
-Guidelines](https://opensource.google/conduct/).
+This project follows
+[Google's Open Source Community Guidelines](https://opensource.google/conduct/).
 
 ## Contribution process
 
@@ -33,4 +33,6 @@ for this purpose.
 
 ## Coding Style
 
-Please format and lint your code to follow the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html) before submitting.
+Please format and lint your code to follow the
+[Google Python Style Guide](https://google.github.io/styleguide/pyguide.html)
+before submitting.

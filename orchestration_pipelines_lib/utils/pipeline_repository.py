@@ -15,6 +15,7 @@
 """Repository class abstracting data access for orchestration pipelines and
 manifests.
 """
+
 from __future__ import annotations
 
 import os
@@ -34,7 +35,9 @@ class PipelineRepository:
     manifests.
     """
 
-    def __init__(self, data_root: str | None, file_manager: FileManager | None = None):
+    def __init__(
+        self, data_root: str | None, file_manager: FileManager | None = None
+    ):
         """Initializes the repository with a specific data/dags
         root directory.
         """

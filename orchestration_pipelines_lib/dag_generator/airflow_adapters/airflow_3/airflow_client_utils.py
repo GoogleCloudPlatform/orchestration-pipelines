@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 """Module with Airflow 3 Python Client package methods."""
+
 import os
 
 _API_CLIENT = None

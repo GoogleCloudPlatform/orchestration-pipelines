@@ -14,24 +14,24 @@ race, religion, or sexual identity and orientation.
 Examples of behavior that contributes to creating a positive environment
 include:
 
-* Using welcoming and inclusive language
-* Being respectful of differing viewpoints and experiences
-* Gracefully accepting constructive criticism
-* Focusing on what is best for the community
-* Showing empathy towards other community members
+- Using welcoming and inclusive language
+- Being respectful of differing viewpoints and experiences
+- Gracefully accepting constructive criticism
+- Focusing on what is best for the community
+- Showing empathy towards other community members
 
 Examples of unacceptable behavior by participants include:
 
-* The use of sexualized language or imagery and unwelcome sexual attention or
-    advances
-* Trolling, insulting/derogatory comments, and personal or political attacks
-* Public or private harassment
-* Publishing others' private information, such as a physical or electronic
-    address, without explicit permission
-* Disrespecting the community's time by sending spam or other unsolicited
-    commercial messages
-* Other conduct which could reasonably be considered inappropriate in a
-    professional setting
+- The use of sexualized language or imagery and unwelcome sexual attention or
+  advances
+- Trolling, insulting/derogatory comments, and personal or political attacks
+- Public or private harassment
+- Publishing others' private information, such as a physical or electronic
+  address, without explicit permission
+- Disrespecting the community's time by sending spam or other unsolicited
+  commercial messages
+- Other conduct which could reasonably be considered inappropriate in a
+  professional setting
 
 ## Our Responsibilities
 
@@ -72,9 +72,9 @@ behavior is threatening or harassing, report it. We are dedicated to providing
 an environment where participants feel welcome and safe.
 
 Reports should be directed to <orchestration-pipelines-swe@google.com>, the
-Project Steward(s) for Orchestration Pipelines. It is the Project Steward’s duty to
-receive and address reported violations of the code of conduct. They will then
-work with a committee consisting of representatives from the Open Source
+Project Steward(s) for Orchestration Pipelines. It is the Project Steward’s duty
+to receive and address reported violations of the code of conduct. They will
+then work with a committee consisting of representatives from the Open Source
 Programs Office and the Google Open Source Strategy team. If for any reason you
 are uncomfortable reaching out to the Project Steward, please email
 <opensource@google.com>.
@@ -91,5 +91,4 @@ harassment or threats to anyone's safety, we may take action without notice.
 ## Attribution
 
 This Code of Conduct is adapted from the Contributor Covenant, version 1.4,
-available at
-<https://www.contributor-covenant.org/version/1/4/code-of-conduct/>
+available at <https://www.contributor-covenant.org/version/1/4/code-of-conduct/>

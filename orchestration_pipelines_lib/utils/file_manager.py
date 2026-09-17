@@ -19,6 +19,7 @@ their existence. It operates on absolute local paths or full GCS URIs and has
 no knowledge of versioning. It also defines a set of custom exceptions for
 handling various file-related errors.
 """
+
 import os
 from typing import Any, Optional
 
@@ -69,8 +70,9 @@ class FileManager:
     knowledge of versioning or relative path structures.
     """
 
-    def __init__(self, gcs_client: Optional[Any] = None,
-                 data_root: str | None = None):
+    def __init__(
+        self, gcs_client: Optional[Any] = None, data_root: str | None = None
+    ):
         """Initializes the FileManager.
 
         Args:

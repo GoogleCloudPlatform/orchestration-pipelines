@@ -49,7 +49,7 @@ def send_notification_email(emails, is_success, context):
     <h3>{h3_topic}</h3>
     <p><b>DAG:</b> {dag_run.dag_id}</p>
     <p><b>Run ID:</b> {dag_run.run_id}</p>
-    <p><b>Execution Date:</b> {context.get('execution_date')}</p>
+    <p><b>Execution Date:</b> {context.get("execution_date")}</p>
     {tasks_paragraph}
     <p><b>Log URL:</b> {log_url}</p>
     """

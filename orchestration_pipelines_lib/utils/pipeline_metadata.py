@@ -210,17 +210,17 @@ class PipelineMetadata:
         }
 
         if self._unversioned:
-            doc_data.update({
-                "op_unversioned": self._unversioned
-            })
+            doc_data.update({"op_unversioned": self._unversioned})
         else:
-            doc_data.update({
-                "op_bundle": self._bundle_id,
-                "op_version": self._version_id,
-                "op_origination": self._origination,
-                "op_is_paused": self._is_paused,
-                "op_is_current": self._is_current,
-            })
+            doc_data.update(
+                {
+                    "op_bundle": self._bundle_id,
+                    "op_version": self._version_id,
+                    "op_origination": self._origination,
+                    "op_is_paused": self._is_paused,
+                    "op_is_current": self._is_current,
+                }
+            )
 
             # Create and filter deployment_details dict concisely.
             deployment_details = {
@@ -228,7 +228,9 @@ class PipelineMetadata:
                 "op_branch": self._branch,
                 "op_commit_sha": self._commit,
             }
-            filtered_details = {k: v for k, v in deployment_details.items() if v}
+            filtered_details = {
+                k: v for k, v in deployment_details.items() if v
+            }
 
             if filtered_details:
                 doc_data["op_deployment_details"] = filtered_details
