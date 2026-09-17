@@ -16,11 +16,17 @@
 
 import json
 from datetime import datetime
-from typing import List, Optional
 
-from airflow.exceptions import AirflowFailException
-from airflow.models import DAG
-from airflow.operators.python import PythonOperator
+try:
+    from airflow.providers.standard.operators.python import (
+        PythonOperator,
+    )
+    from airflow.sdk import DAG
+    from airflow.sdk.exceptions import AirflowFailException
+except ImportError:
+    from airflow.exceptions import AirflowFailException
+    from airflow.models import DAG
+    from airflow.operators.python import PythonOperator
 
 _ERROR_DAG_PREFIX = "ERROR__"
 
@@ -31,8 +37,8 @@ def _fail_task(error_message: str):
 
 
 def create(
-    dag_base_id: str, error_message: str, tags: List[str], doc_md: Optional[str]
-):
+    dag_base_id: str, error_message: str, tags: list[str], doc_md: str | None
+) -> DAG:
     """Creates a dummy Airflow DAG to surface parsing errors in the UI.
 
     Args:
