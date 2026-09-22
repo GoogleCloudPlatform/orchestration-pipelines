@@ -33,7 +33,7 @@ dependencies = [
     "tenacity",
     "litellm>=1.84.0",
     "google-cloud-aiplatform>=1.163.0",
-    "apache-airflow-providers-cncf-kubernetes>=10.17.0",
+    "apache-airflow-providers-cncf-kubernetes",
     "papermill",
 ]
 

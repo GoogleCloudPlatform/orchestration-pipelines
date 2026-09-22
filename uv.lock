@@ -5732,7 +5732,7 @@ dev = [
 requires-dist = [
     { name = "apache-airflow", specifier = ">=2.9.0" },
     { name = "apache-airflow-client" },
-    { name = "apache-airflow-providers-cncf-kubernetes", specifier = ">=10.17.0" },
+    { name = "apache-airflow-providers-cncf-kubernetes" },
     { name = "apache-airflow-providers-google", specifier = ">=19.0.0" },
     { name = "dbt-core", specifier = ">=1.0.0" },
     { name = "google-auth" },
