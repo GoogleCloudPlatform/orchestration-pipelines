@@ -50,10 +50,10 @@ dev = [
     "virtualenv",
 ]
 airflow2 = [
-    "apache-airflow>=2.9.0,<3.0.0",
+    "apache-airflow>=2.9.0,<4.0.0",
 ]
 airflow3 = [
-    "apache-airflow>=3.0.0,<4.0.0",
+    "apache-airflow<4.0.0,>=3.0.0",
     "apache-airflow-client>=3.0.0,<4.0.0",
 ]
 
