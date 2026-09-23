@@ -78,7 +78,8 @@ def _resolve_latest_pipeline_dag_id(
             tags_match_mode="all",
         )
 
-        # Return the first matching DAG ID (only one marked as current)
+        # Return the first matching DAG ID (should only be one marked as
+        # current)
         if response.dags and len(response.dags) > 0:
             return response.dags[0].dag_id
         else:
@@ -135,11 +136,10 @@ def create_python_script_task(
             **task_utils.get_action_retry_kwargs(action),
         )
     except Exception as e:
-        logging.error(
-            f"Error creating task for action '{action.name}'"
-            f" from '{action.config.pythonCallable}': {e}"
-        )
-        raise
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}' "
+            f"from '{action.config.pythonCallable}': {e}"
+        ) from e
 
 
 def create_python_virtualenv_task(
@@ -190,11 +190,10 @@ def create_python_virtualenv_task(
             **task_utils.get_action_retry_kwargs(action),
         )
     except Exception as e:
-        logging.error(
-            f"Error creating task for action '{action.name}' "
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}' "
             f"from '{action.config.pythonCallable}': {e}"
-        )
-        raise
+        ) from e
 
 
 def create_bq_operation_task(
@@ -254,8 +253,9 @@ def create_dbt_task(
             **task_utils.get_action_retry_kwargs(action),
         )
     except Exception as e:
-        logging.error(f"Error creating task for action '{action.name}': {e}")
-        raise
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}': {e}"
+        ) from e
 
 
 def create_dataform_task(action: dict[str, Any], pipeline: dict[str, Any], dag):
@@ -327,8 +327,9 @@ def create_orchestration_pipeline_trigger_task(
             **task_utils.get_action_retry_kwargs(action),
         )
     except Exception as e:
-        logging.error(f"Error creating task for action '{action.name}': {e}")
-        raise
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}': {e}"
+        ) from e
 
 
 def create_ai_task(action: dict[str, Any], pipeline: dict[str, Any], dag):

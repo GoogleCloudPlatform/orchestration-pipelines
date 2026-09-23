@@ -137,11 +137,10 @@ def create_python_script_task(
             **task_utils.get_action_retry_kwargs(action),
         )
     except Exception as e:
-        logging.error(
-            f"Error creating task for action '{action.name}'"
-            f" from '{action.config.pythonCallable}': {e}"
-        )
-        raise
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}' "
+            f"from '{action.config.pythonCallable}': {e}"
+        ) from e
 
 
 def create_python_virtualenv_task(
@@ -190,11 +189,10 @@ def create_python_virtualenv_task(
             **task_utils.get_action_retry_kwargs(action),
         )
     except Exception as e:
-        logging.error(
-            f"Error creating task for action '{action.name}' "
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}' "
             f"from '{action.config.pythonCallable}': {e}"
-        )
-        raise
+        ) from e
 
 
 def create_bq_operation_task(
@@ -254,8 +252,9 @@ def create_dbt_task(
             **task_utils.get_action_retry_kwargs(action),
         )
     except Exception as e:
-        logging.error(f"Error creating task for action '{action.name}': {e}")
-        raise
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}': {e}"
+        ) from e
 
 
 def create_dataform_task(action: dict[str, Any], pipeline: dict[str, Any], dag):
@@ -303,8 +302,15 @@ def create_orchestration_pipeline_trigger_task(
 
         return OrchestrationTriggerDagRunOperator(
             task_id=action.name,
-            trigger_dag_id="{{ resolve_latest_pipeline_dag_id(params.current_dag_id, params.target_pipeline_id, params.bundle_id) }}",
+            trigger_dag_id=(
+                "{{ params.resolve_latest_pipeline_dag_id("
+                "params.current_dag_id, params.target_pipeline_id, "
+                "params.bundle_id) }}"
+            ),
             params={
+                "resolve_latest_pipeline_dag_id": (
+                    _resolve_latest_pipeline_dag_id
+                ),
                 "current_dag_id": dag.dag_id,
                 "target_pipeline_id": action.pipeline_id,
                 "bundle_id": action.bundle_id,
@@ -321,8 +327,9 @@ def create_orchestration_pipeline_trigger_task(
             **task_utils.get_action_retry_kwargs(action),
         )
     except Exception as e:
-        logging.error(f"Error creating task for action '{action.name}': {e}")
-        raise
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}': {e}"
+        ) from e
 
 
 def create_ai_task(action: dict[str, Any], pipeline: dict[str, Any], dag):

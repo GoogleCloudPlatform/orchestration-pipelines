@@ -314,9 +314,10 @@ def create_dataproc_create_batch_operator_task(
             **get_action_retry_kwargs(action),
             **extra_kwargs,
         )
-    except Exception:
-        logging.exception("Error creating task for action '%s'", action.name)
-        raise
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}': {e}"
+        ) from e
 
 
 def create_bq_operation_task(
@@ -409,9 +410,10 @@ def create_bq_operation_task(
             dag=dag,
             **get_action_retry_kwargs(action),
         )
-    except Exception:
-        logging.exception("Error creating task for action '%s'", action.name)
-        raise
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}': {e}"
+        ) from e
 
 
 def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
@@ -532,9 +534,10 @@ def dataproc_ephemeral_task(action: dict[str, Any], dag) -> TaskGroup:
             # pylint: disable=pointless-statement
             create_cluster >> submit_job >> delete_cluster
         return task_group
-    except Exception:
-        logging.exception("Error creating task for action '%s'", action.name)
-        raise
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}': {e}"
+        ) from e
 
 
 def dataproc_existing_cluster(
@@ -620,9 +623,10 @@ def dataproc_existing_cluster(
             **get_action_retry_kwargs(action),
             **extra_kwargs,
         )
-    except Exception:
-        logging.exception("Error creating task for action '%s'", action.name)
-        raise
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}': {e}"
+        ) from e
 
 
 def create_schedule_trigger_task(dag_kwargs: DAGKwargs, schedule_trigger: Any):
@@ -941,9 +945,10 @@ def create_bq_dts_task(
             start_task >> sensor_task
 
         return task_group
-    except Exception:
-        logging.exception("Error creating task for action '%s'", action.name)
-        raise
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}': {e}"
+        ) from e
 
 
 def create_vertex_upload_model_task(
@@ -1001,9 +1006,10 @@ def create_vertex_upload_model_task(
             dag=dag,
             **get_action_retry_kwargs(action),
         )
-    except Exception:
-        logging.exception("Error creating task for action '%s'", action.name)
-        raise
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}': {e}"
+        ) from e
 
 
 def create_vertex_batch_inference_task(
@@ -1081,9 +1087,10 @@ def create_vertex_batch_inference_task(
             **get_action_retry_kwargs(action),
             **extra_kwargs,
         )
-    except Exception:
-        logging.exception("Error creating task for action '%s'", action.name)
-        raise
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}': {e}"
+        ) from e
 
 
 def create_ai_task(action: dict[str, Any], pipeline: dict[str, Any], dag):
