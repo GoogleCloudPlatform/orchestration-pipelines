@@ -717,13 +717,14 @@ name = "apache-airflow-providers-http"
 version = "6.0.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "aiohttp", marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "aiohttp" },
     { name = "apache-airflow", version = "2.11.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow-providers-common-compat", marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "asgiref", marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pydantic", marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "requests", marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "requests-toolbelt", marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "apache-airflow-providers-common-compat" },
+    { name = "asgiref" },
+    { name = "pydantic" },
+    { name = "requests" },
+    { name = "requests-toolbelt" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/bc/32/de5a495385f371a4d9d1a6047779161b2d276efcfc40de32c426366a65d3/apache_airflow_providers_http-6.0.5.tar.gz", hash = "sha256:35d0a8e8ec7ab7aa81fec5b8255327a6792ec85928ae319dbab9e8eb011c8bf8", size = 72314, upload-time = "2026-07-28T06:38:45.735Z" }
 wheels = [
@@ -5643,6 +5644,7 @@ airflow3 = [
     { name = "apache-airflow-client" },
 ]
 dev = [
+    { name = "apache-airflow-providers-http" },
     { name = "coverage" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -5678,6 +5680,7 @@ airflow3 = [
     { name = "apache-airflow-client", specifier = ">=3.0.0,<4.0.0" },
 ]
 dev = [
+    { name = "apache-airflow-providers-http" },
     { name = "coverage", specifier = ">=7.3.1" },
     { name = "pre-commit", specifier = ">=4.2.0" },
     { name = "pytest" },
@@ -7321,7 +7324,7 @@ name = "requests-toolbelt"
 version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "requests", marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "requests" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f3/61/d7545dafb7ac2230c70d38d31cbfe4cc64f7144dc41f6e4e4b78ecd9f5bb/requests-toolbelt-1.0.0.tar.gz", hash = "sha256:7681a0a3d047012b5bdc0ee37d7f8f07ebe76ab08caeccfc3921ce23c88d5bc6", size = 206888, upload-time = "2023-05-01T04:11:33.229Z" }
 wheels = [

@@ -21,6 +21,7 @@ from enum import Enum
 
 from orchestration_pipelines_lib.internal_models.actions import (
     AIActionModel,
+    AirflowActionModel,
     BqOperationActionModel,
     DataformActionModel,
     DataIngestionActionModel,
@@ -48,6 +49,7 @@ AnyAction = (
     | DataIngestionActionModel
     | OrchestrationPipelineActionModel
     | AIActionModel
+    | AirflowActionModel
 )
 AnyScheduleTrigger = ScheduleTriggerModel
 

@@ -1,0 +1,62 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+modelVersion: "1.0"
+pipelineId: "airflow-task-action"
+description: "Call different Airflow operators"
+runner: "airflow"
+owner: "data_eng"
+tags: ["operators"]
+
+defaults:
+  projectId: "your-gcp-project-id"
+  location: "us"
+  executionConfig:
+    retries: 1
+
+triggers:
+  - schedule:
+      interval: "0 0 * * *"
+      startTime: "2026-01-01T00:00:00"
+      catchup: false
+      timezone: "UTC"
+
+actions:
+  - airflowTask:
+      name: "air_simple_http"
+      dependsOn: []
+      executionTimeout: 5m
+      triggerRule: all_success
+      operatorClass: airflow.providers.http.operators.http.HttpOperator
+      params:
+        http_conn_id: "my_test_http"
+        endpoint: "post"
+        method: "POST"
+        headers:
+          Content-Type: "application/json"
+        data: '{"source": "gcp_airflow", "status": "testing_yaml_engine"}'
+        log_response: true
+
+  - airflowTask:
+      name: "air_simple_big_query"
+      dependsOn: []
+      executionTimeout: 5m
+      triggerRule: all_success
+      operatorClass: airflow.providers.google.cloud.operators.bigquery.BigQueryInsertJobOperator
+      params:
+        gcp_conn_id: "google_cloud_default"
+        configuration:
+          query:
+            query: "SELECT * FROM `your-gcp-project-id.your_dataset.your_table`;"
+            useLegacySql: false

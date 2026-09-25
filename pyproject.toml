@@ -47,6 +47,7 @@ dev = [
     "coverage>=7.3.1",
     "ruff>=0.1.0",
     "pre-commit>=4.2.0",
+    "apache-airflow-providers-http",
     "virtualenv",
 ]
 airflow2 = [

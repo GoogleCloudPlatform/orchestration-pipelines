@@ -297,3 +297,10 @@ class AIActionModel(ActionBaseModel):
         AgentPlatformModelUploadSpecModel | AgentPlatformBatchInferenceSpecModel
     )
     labels: dict[str, str] | None = None
+
+@dataclass
+class AirflowActionModel(ActionBaseModel):
+    """Internal model representing an Airflow action."""
+    type: Literal["airflow_task"]
+    operator_class: str
+    params: dict[str, Any] | None = None

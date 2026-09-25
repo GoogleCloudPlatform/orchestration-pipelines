@@ -309,6 +309,20 @@ inference on Vertex AI via `AgentPlatform`.
   - [pipeline-vertex-ai-upload-model.yml](../examples/pipeline-vertex-ai-upload-model.yml)
   - [pipeline-vertex-ai-batch-inference.yml](../examples/pipeline-vertex-ai-batch-inference.yml)
 
+### 4.9. AirflowTaskAction
+
+Instantiates and executes an arbitrary Apache Airflow operator within the pipeline.
+
+* **Key Fields**:
+  * `operator_class` (string, **Required**): Fully qualified Python path to the Airflow operator class (e.g., `airflow.operators.bash.BashOperator`, `airflow.providers.http.operators.http.HttpOperator`).
+  * `params` (mapping/dictionary): Operator-specific parameters passed directly to the operator's constructor as keyword arguments (`**kwargs`). Supports arbitrarily nested structures (primitives, lists, maps) to configure operators with complex requirements (e.g., BigQuery job configurations, HTTP headers/payloads).
+* **Examples**:
+  * [pipeline-airflow-task-action.yml](../examples/pipeline-airflow-task-action.yml)
+
+Only operators that accept configuration purely via JSON/YAML-serializable data structures are supported.
+Check details in [Limitations](./limitations.md).
+
+
 ---
 
 ## 5. Engines Configuration Detail

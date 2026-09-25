@@ -246,6 +246,7 @@ message Action {
     DataIngestionAction data_ingestion = 6;
     OrchestrationPipelineAction orchestration_pipeline = 7;
     AIAction ai = 8;
+    AirflowTaskAction airflow_task = 9;
   }
 }
 
@@ -609,4 +610,18 @@ message AgentPlatformBatchInference {
   string bigquery_destination_prefix = 7;
   string gcs_destination_prefix = 8;
   repeated string impersonation_chain = 12;
+}
+
+message AirflowTaskAction {
+  string name = 1 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.regex) = "^[a-zA-Z0-9_.-]+$",
+    (pipeline_models.validation.min_len) = 1,
+    (pipeline_models.validation.max_len) = 64
+  ];
+  repeated string depends_on = 2;
+  string execution_timeout = 3 [(pipeline_models.validation.is_iso8601_duration) = true];
+  TriggerRule trigger_rule = 4;
+  string operator_class = 5 [(pipeline_models.validation.is_required) = true];
+  google.protobuf.Struct params = 6 [(pipeline_models.validation.map_key_regex) = "^[a-zA-Z0-9_-]+$"];
 }

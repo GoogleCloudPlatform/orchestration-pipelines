@@ -25,6 +25,7 @@ import pytest
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (  # noqa: E501
     _get_config_or_default,
     _upload_inline_query_to_gcs,
+    create_airflow_task,
     create_ai_task,
     create_bq_dts_task,
     create_bq_operation_task,
@@ -1864,6 +1865,92 @@ def test_dataproc_existing_cluster_raises_runtime_error_on_exception(
         )
 
     assert isinstance(exc_info.value.__cause__, TypeError)
+
+@pytest.mark.parametrize(
+    ("action_name", "operator_class", "params"),
+    [
+        (
+            "empty_action",
+            "airflow.operators.empty.EmptyOperator",
+            {},
+        ),
+        (
+            "bash_action",
+            "airflow.operators.bash.BashOperator",
+            {"bash_command": "echo 'Hello World'"},
+        ),
+        (
+            "trigger_action",
+            "airflow.operators.trigger_dagrun.TriggerDagRunOperator",
+            {"trigger_dag_id": "target_pipeline_dag"},
+        ),
+        (
+            "sql_action",
+            "airflow.providers.common.sql.operators.sql.SQLExecuteQueryOperator",
+            {"sql": "SELECT 1;", "conn_id": "postgres_default"},
+        ),
+        (
+            "http_action",
+            "airflow.providers.http.operators.http.HttpOperator",
+            {"endpoint": "api/v1/health", "method": "GET"},
+        ),
+        (
+            "bigquery_action",
+            (
+                "airflow.providers.google.cloud.operators.bigquery."
+                "BigQueryInsertJobOperator"
+            ),
+            {
+                "configuration": {
+                    "query": {
+                        "query": "SELECT 1;",
+                        "useLegacySql": False,
+                    }
+                }
+            },
+        ),
+    ],
+)
+def test_create_airflow_task_standard_operators(
+    action_name,
+    operator_class,
+    params,
+    sample_dag,
+    pipeline,
+):
+    """Tests that create_airflow_task successfully instantiates common Airflow operators."""
+    action = MagicMock()
+    action.name = action_name
+    action.type = "airflow_task"
+    action.operator_class = operator_class
+    action.params = params
+    action.triggerRule = "all_done"
+    action.executionTimeout = "120s"
+
+    task = create_airflow_task(action, pipeline, sample_dag)
+
+    assert task.task_id == action_name
+    assert task.trigger_rule == "all_done"
+    assert task.execution_timeout is not None
+
+    for param_name, param_value in params.items():
+        assert hasattr(task, param_name), f"Task missing parameter: {param_name}"
+        assert getattr(task, param_name) == param_value
+
+
+def test_create_airflow_task_invalid_operator_class_raises(sample_dag, pipeline):
+     """Tests that invalid operator_class raises an exception."""
+     action = MagicMock()
+     action.name = "invalid_action"
+     action.type = "airflow_task"
+     action.operator_class = "airflow.operators.non_existent.FakeOperator"
+     action.params = {}
+     action.triggerRule = "all_success"
+     action.executionTimeout = None
+
+     with pytest.raises((ModuleNotFoundError, AttributeError)):
+         create_airflow_task(action, pipeline, sample_dag)
+
 
 
 def test_create_dataproc_operator_task_raises_on_unsupported_engine(

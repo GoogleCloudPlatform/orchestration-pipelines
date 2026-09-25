@@ -1401,3 +1401,48 @@ def create_ai_task(action: AIActionModel, pipeline: PipelineModel, dag: DAG):
             f"Unsupported agent_platform action type: {action.ai_action_type}"
         )
     raise ValueError(f"Unsupported AI provider: {action.provider}")
+
+
+def create_airflow_task(action: dict[str, Any], pipeline: dict[str, Any], dag):
+    """Converts Airflow task action to the appropriate Airflow task operator.
+
+    Args:
+        action: The action configuration object.
+        pipeline: The pipeline configuration object.
+        dag: The Airflow DAG object.
+
+    Returns:
+        An instance of the specified Airflow operator.
+    """
+    import importlib
+
+    try:
+        module_path, class_name = action.operator_class.rsplit(".", 1)
+        module = importlib.import_module(module_path)
+        operator_class = getattr(module, class_name)
+
+        params = action.params or {}
+
+        ObservableOperator = wrap_operator(
+            operator_class,
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.LOCAL,
+            get_pipeline_metadata,
+        )
+
+        return ObservableOperator(
+            task_id=action.name,
+            execution_timeout=(
+                duration_to_timedelta(action.executionTimeout)
+                if action.executionTimeout
+                else None
+            ),
+            trigger_rule=action.triggerRule,
+            doc_md=json.dumps({"op_action_name": action.name}),
+            dag=dag,
+            **get_action_retry_kwargs(action),
+            **params,
+        )
+    except Exception:
+        logging.exception("Error creating task for action '%s'", action.name)
+        raise

@@ -470,6 +470,11 @@ class ConverterV1ToInternal:
             )
         if action_type == "ai":
             return self._convert_ai_action(action.ai, defaults, shared_labels)
+
+        if action_type == "airflow_task":
+            return self._convert_airflow_task_action(action.airflow_task,
+                                                     defaults, shared_labels)
+
         raise TypeError(f"Unknown action type: {action_type}")
 
     def _convert_python_action(
@@ -1067,6 +1072,26 @@ class ConverterV1ToInternal:
                 )
             raise TypeError(f"Unknown AgentPlatform type: {platform_type}")
         raise TypeError(f"Unknown AIAction provider type: {provider_type}")
+
+    def _convert_airflow_task_action(self,
+            action: v1_pipeline_protos.AirflowTaskAction,
+            defaults: v1_pipeline_protos.Defaults,
+            shared_labels: dict[str, str],
+        ) -> internal_pipeline.AnyAction:
+        params = (
+            struct_to_dict(action.params)
+            if action.HasField("params") and action.params
+            else None
+        )
+        return internal_actions.AirflowActionModel(
+            name=action.name,
+            type="airflow_task",
+            executionTimeout=action.execution_timeout or None,
+            dependsOn=list(action.depends_on),
+            triggerRule=self._convert_trigger_rule(action.trigger_rule),
+            operator_class=action.operator_class,
+            params=params
+        )
 
     def _get_labels(self, tags: list[str]):
         labels = {"orchestration_pipeline": "true"}

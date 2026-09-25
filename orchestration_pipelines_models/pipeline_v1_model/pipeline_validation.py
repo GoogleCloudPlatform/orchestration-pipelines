@@ -462,7 +462,8 @@ class PipelineValidator:
         cls, field: FieldDescriptor, value, pattern: str, path: str
     ):
         """Validates the keys of a Protobuf map against a regex pattern."""
-        if not cls._is_map_field(field):
+        if field.message_type.full_name != "google.protobuf.Struct" and \
+            not cls._is_map_field(field):
             raise RuntimeError(
                 f"Internal Error: Map key regex validation called on field "
                 f"'{path}' which is not defined as a Protobuf map."

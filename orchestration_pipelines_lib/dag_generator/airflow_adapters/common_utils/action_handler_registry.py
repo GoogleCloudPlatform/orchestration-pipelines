@@ -24,6 +24,7 @@ from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils imp
 )
 from orchestration_pipelines_lib.internal_models.actions import (
     AIActionModel,
+    AirflowActionModel,
     BqOperationActionModel,
     DataformActionModel,
     DataIngestionActionModel,
@@ -81,4 +82,5 @@ def get_action_handlers(
             adapter_imports.get_trigger_dagrun_operator,
         ),
         AIActionModel: task_utils.create_ai_task,
+        AirflowActionModel: task_utils.create_airflow_task,
     }

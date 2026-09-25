@@ -56,6 +56,7 @@ class ActionExecutionType(str, Enum):
     DBT_PIPELINE = "DBT_PIPELINE"
     DATAFORM_PIPELINE = "DATAFORM_PIPELINE"
     AI = "AI"
+    AIRFLOW_TASK = "AIRFLOW_TASK"
     UNKNOWN = "UNKNOWN"
 
     def __str__(self) -> str:
@@ -89,6 +90,7 @@ ACTION_TYPE_MAPPING = {
     "pyspark": ActionExecutionType.PYSPARK,
     "sql": ActionExecutionType.SQL,
     "ai": ActionExecutionType.AI,
+    "airflow_task": ActionExecutionType.AIRFLOW_TASK,
 }
 
 
