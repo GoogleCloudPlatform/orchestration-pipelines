@@ -38,8 +38,6 @@ from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.tas
     create_python_script_task,
     create_python_virtualenv_task,
     create_service_dataform_task,
-    create_vertex_batch_inference_task,
-    create_vertex_upload_model_task,
     dataproc_ephemeral_task,
     dataproc_existing_cluster,
     get_action_retry_kwargs,
@@ -49,7 +47,7 @@ from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.tas
 )
 from orchestration_pipelines_lib.internal_models.actions import (
     AgentPlatformBatchInferenceSpecModel,
-    AgentPlatformModelUploadSpecModel,
+    AgentPlatformCreateAndRunCustomJobSpecModel,
     AIActionModel,
     BigQueryDtsSpecModel,
     BqOperationActionModel,
@@ -2004,7 +2002,7 @@ def test_create_bq_dts_task_raises_runtime_error_on_exception(
     bq_dts_action, pipeline, sample_dag
 ):
     """Tests create_bq_dts_task wraps exceptions in RuntimeError."""
-    action = replace(bq_dts_action, name="failing_dts", config=None)  # type: ignore
+    action = replace(bq_dts_action, name="failing_dts", config=None)
 
     with pytest.raises(
         RuntimeError, match="Failed to create task for action 'failing_dts'"
@@ -2015,35 +2013,22 @@ def test_create_bq_dts_task_raises_runtime_error_on_exception(
 
 
 def test_create_vertex_upload_model_task_raises_runtime_error_on_exception(
-    pipeline, mock_dag
+    vertex_custom_job_action, pipeline, sample_dag
 ):
-    """Tests create_vertex_upload_model_task wraps errors in RuntimeError."""
-    action = AIActionModel(
+    """Tests _create_vertex_upload_model_task wraps errors in RuntimeError."""
+    action = replace(
+        vertex_custom_job_action,
         name="failing_upload_model",
-        type="ai",
-        provider="agent_platform",
         ai_action_type="model_upload",
-        config=AgentPlatformModelUploadSpecModel(
-            project_id="proj",
-            location="us-central1",
-            model_name="m",
-            model_artifact_uri="gs://b/m",
-            serving_container_image_uri="img",
-            description=None,
-        ),
-        labels=None,
-        dependsOn=None,
-        executionTimeout=None,
-        triggerRule="all_success",
     )
 
     with pytest.raises(
         RuntimeError,
         match="Failed to create task for action 'failing_upload_model'",
     ) as exc_info:
-        create_vertex_upload_model_task(action, pipeline, dag=mock_dag)
+        create_ai_task(action, pipeline, dag=sample_dag)
 
-    assert isinstance(exc_info.value.__cause__, TypeError)
+    assert isinstance(exc_info.value.__cause__, AttributeError)
 
 
 @pytest.fixture
@@ -2077,25 +2062,133 @@ def vertex_batch_inference_action() -> AIActionModel:
 def test_create_vertex_batch_inference_task_with_gcs_source_and_dest(
     vertex_batch_inference_action, pipeline, sample_dag
 ):
-    """Tests create_vertex_batch_inference_task with GCS source and dest."""
-    task = create_vertex_batch_inference_task(
-        vertex_batch_inference_action, pipeline, dag=sample_dag
-    )
+    """Tests _create_vertex_batch_inference_task with GCS source and dest."""
+    task = create_ai_task(vertex_batch_inference_action, pipeline, sample_dag)
 
     assert task.gcs_source == ["gs://src/input.jsonl"]
     assert task.gcs_destination_prefix == "gs://dst/output"
 
 
 def test_create_vertex_batch_inference_task_raises_runtime_error_on_exception(
-    vertex_batch_inference_action, pipeline, mock_dag
+    vertex_batch_inference_action, vertex_custom_job_action, pipeline, sample_dag
 ):
-    """Tests create_vertex_batch_inference_task wraps errors in RuntimeError."""
+    """Tests _create_vertex_batch_inference_task wraps errors in RuntimeError."""
+    action = replace(
+        vertex_batch_inference_action,
+        config=vertex_custom_job_action.config,
+    )
+
     with pytest.raises(
         RuntimeError,
         match="Failed to create task for action 'vertex_gcs_batch'",
     ) as exc_info:
-        create_vertex_batch_inference_task(
-            vertex_batch_inference_action, pipeline, dag=mock_dag
-        )
+        create_ai_task(action, pipeline, dag=sample_dag)
+
+    assert isinstance(exc_info.value.__cause__, AttributeError)
+
+
+@pytest.fixture
+def vertex_custom_job_action() -> AIActionModel:
+    """Returns a full AIActionModel for Vertex AI create_and_run_custom_job."""
+    return AIActionModel(
+        name="run_custom_job_task",
+        type="ai",
+        provider="agent_platform",
+        ai_action_type="create_and_run_custom_job",
+        executionTimeout="2h",
+        dependsOn=[],
+        triggerRule="all_success",
+        labels={"orchestration_pipeline": "true", "env": "prod"},
+        config=AgentPlatformCreateAndRunCustomJobSpecModel(
+            project_id="my-project",
+            location="us-central1",
+            impersonation_chain=["sa-1@project.iam.gserviceaccount.com"],
+            custom_job={
+                "display_name": "my_custom_training_job",
+                "job_spec": {
+                    "worker_pool_specs": [
+                        {
+                            "machine_spec": {"machine_type": "n1-standard-4"},
+                            "replica_count": "1",
+                        }
+                    ]
+                },
+                "labels": {"job_label": "val1"},
+            },
+        ),
+    )
+
+
+def test_create_ai_task_vertex_create_and_run_custom_job(
+    vertex_custom_job_action, pipeline, sample_dag
+):
+    """Tests that create_ai_task creates CreateCustomJobOperator."""
+    from airflow.providers.google.cloud.operators.vertex_ai import (
+        custom_job as vertex_ai_custom_job,
+    )
+
+    task = create_ai_task(vertex_custom_job_action, pipeline, sample_dag)
+
+    assert isinstance(task, vertex_ai_custom_job.CreateCustomJobOperator)
+    assert task.task_id == "run_custom_job_task"
+    assert task.project_id == "my-project"
+    assert task.region == "us-central1"
+    assert task.impersonation_chain == ["sa-1@project.iam.gserviceaccount.com"]
+    assert task.execution_timeout == timedelta(hours=2)
+    assert task.custom_job == {
+        "display_name": "my_custom_training_job",
+        "job_spec": {
+            "worker_pool_specs": [
+                {
+                    "machine_spec": {"machine_type": "n1-standard-4"},
+                    "replica_count": "1",
+                }
+            ]
+        },
+        "labels": {
+            "orchestration_pipeline": "true",
+            "env": "prod",
+            "job_label": "val1",
+        },
+    }
+
+
+def test_create_ai_task_vertex_create_and_run_custom_job_minimal(
+    vertex_custom_job_action, pipeline, sample_dag
+):
+    """Tests create_ai_task with minimal custom job config and no labels."""
+    action = replace(
+        vertex_custom_job_action,
+        labels=None,
+        executionTimeout=None,
+        config=AgentPlatformCreateAndRunCustomJobSpecModel(
+            project_id="my-project",
+            location="us-central1",
+            custom_job={"display_name": "minimal_custom_job"},
+        ),
+    )
+
+    task = create_ai_task(action, pipeline, sample_dag)
+
+    assert task.execution_timeout is None
+    assert task.impersonation_chain is None
+    assert task.custom_job == {"display_name": "minimal_custom_job"}
+
+
+def test_create_vertex_custom_job_task_raises_runtime_error_on_exception(
+    vertex_custom_job_action, vertex_batch_inference_action, pipeline, sample_dag
+):
+    """Tests _create_vertex_custom_job_task wraps errors in RuntimeError."""
+    action = replace(
+        vertex_custom_job_action,
+        name="failing_custom_job",
+        config=vertex_batch_inference_action.config,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Failed to create task for action 'failing_custom_job'",
+    ) as exc_info:
+        create_ai_task(action, pipeline, dag=sample_dag)
 
     assert isinstance(exc_info.value.__cause__, TypeError)

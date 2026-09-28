@@ -26,15 +26,19 @@
 
 import unittest
 
+import pytest
+from google.protobuf import struct_pb2
+
 from orchestration_pipelines_models.pipeline_v1_model.pipeline_validation import (
     PipelineValidator,
 )
 from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipeline_pb2 import (
     Action,
-    AIAction,
     AgentPlatform,
     AgentPlatformBatchInference,
+    AgentPlatformCreateAndRunCustomJob,
     AgentPlatformModelUpload,
+    AIAction,
     Defaults,
     ExecutionConfig,
     ExponentialBackoffStrategy,
@@ -796,6 +800,107 @@ class TestPipelineValidator(unittest.TestCase):
             PipelineValidator.validate(self.pipeline)
 
 
+@pytest.fixture
+def valid_pipeline_for_custom_job():
+    """Provides a baseline valid OrchestrationPipeline for custom job tests."""
+    return OrchestrationPipeline(
+        model_version="1.0",
+        pipeline_id="valid-pipeline-id",
+        runner=PipelineRunner.airflow,
+        owner="valid-owner",
+        defaults=Defaults(
+            project_id="test-project",
+            location="us-central1",
+        ),
+        triggers=[
+            Trigger(
+                schedule=ScheduleTrigger(
+                    interval="@daily",
+                    start_time="2026-01-01T00:00:00Z",
+                    timezone="UTC",
+                )
+            )
+        ],
+    )
+
+
+@pytest.fixture
+def custom_job_struct() -> struct_pb2.Struct:
+    """Provides a minimal valid CustomJob protobuf Struct."""
+    job_struct = struct_pb2.Struct()
+    job_struct.update({"displayName": "my-custom-job"})
+    return job_struct
+
+
+def test_valid_ai_action_create_and_run_custom_job_succeeds(
+    valid_pipeline_for_custom_job,
+    custom_job_struct,
+):
+    """Tests that valid create_and_run_custom_job passes validation."""
+    ai_action = Action(
+        ai=AIAction(
+            name="custom-job-action",
+            agent_platform=AgentPlatform(
+                create_and_run_custom_job=AgentPlatformCreateAndRunCustomJob(
+                    custom_job=custom_job_struct,
+                    execution_timeout="2h",
+                )
+            ),
+        )
+    )
+    valid_pipeline_for_custom_job.actions.append(ai_action)
+
+    PipelineValidator.validate(valid_pipeline_for_custom_job)
+
+
+def test_ai_action_create_and_run_custom_job_invalid_execution_timeout_fails(
+    valid_pipeline_for_custom_job,
+    custom_job_struct,
+):
+    """Tests invalid execution_timeout in create_and_run_custom_job fails."""
+    ai_action = Action(
+        ai=AIAction(
+            name="custom-job-action",
+            agent_platform=AgentPlatform(
+                create_and_run_custom_job=AgentPlatformCreateAndRunCustomJob(
+                    custom_job=custom_job_struct,
+                    execution_timeout="invalid-duration",
+                )
+            ),
+        )
+    )
+    valid_pipeline_for_custom_job.actions.append(ai_action)
+
+    expected_error = (
+        r"Error for field 'actions\[0\]\.ai\.agent_platform"
+        r"\.create_and_run_custom_job\.execution_timeout'"
+    )
+    with pytest.raises(ValueError, match=expected_error):
+        PipelineValidator.validate(valid_pipeline_for_custom_job)
+
+
+def test_ai_action_create_and_run_custom_job_missing_custom_job_fails(
+    valid_pipeline_for_custom_job,
+):
+    """Tests that missing custom_job in create_and_run_custom_job fails."""
+    ai_action = Action(
+        ai=AIAction(
+            name="custom-job-action",
+            agent_platform=AgentPlatform(
+                create_and_run_custom_job=AgentPlatformCreateAndRunCustomJob(
+                    execution_timeout="2h",
+                )
+            ),
+        )
+    )
+    valid_pipeline_for_custom_job.actions.append(ai_action)
+    expected_error = (
+        r"Error for field 'actions\[0\]\.ai\.agent_platform"
+        r"\.create_and_run_custom_job\.custom_job': field is required\."
+    )
+    with pytest.raises(ValueError, match=expected_error):
+        PipelineValidator.validate(valid_pipeline_for_custom_job)
+
+
 if __name__ == "__main__":
     unittest.main()
-

@@ -988,90 +988,175 @@ class ConverterV1ToInternal:
         action: v1_pipeline_protos.AIAction,
         defaults: v1_pipeline_protos.Defaults,
         shared_labels: dict[str, str],
-    ) -> internal_pipeline.AnyAction:
-        retry_policy = self._convert_action_retry_policy(action, defaults)
+    ) -> internal_actions.AIActionModel:
         provider_type = action.WhichOneof("provider")
-        if provider_type == "agent_platform":
-            agent_platform = action.agent_platform
-            platform_type = agent_platform.WhichOneof("type")
+        if provider_type != "agent_platform":
+            raise TypeError(f"Unknown AIAction provider type: {provider_type}")
 
-            merged_labels = dict(shared_labels)
-            if action.labels:
-                merged_labels.update(dict(action.labels))
+        agent_platform = action.agent_platform
+        platform_type = agent_platform.WhichOneof("type")
 
-            if platform_type == "model_upload":
-                upload_spec = agent_platform.model_upload
+        merged_labels = dict(shared_labels)
+        if action.labels:
+            merged_labels.update(dict(action.labels))
 
-                spec_model = internal_actions.AgentPlatformModelUploadSpecModel(
-                    model_name=upload_spec.model_name,
-                    description=upload_spec.description or None,
-                    model_artifact_uri=upload_spec.model_artifact_uri,
-                    serving_container_image_uri=upload_spec.serving_container_image_uri,
-                    project_id=agent_platform.project_id or defaults.project_id,
-                    location=agent_platform.location or defaults.location,
+        match platform_type:
+            case "model_upload":
+                return self._convert_model_upload_ai_action(
+                    action, defaults, merged_labels
                 )
 
-                return internal_actions.AIActionModel(
-                    name=action.name,
-                    type="ai",
-                    provider="agent_platform",
-                    ai_action_type="model_upload",
-                    executionTimeout=action.execution_timeout or None,
-                    dependsOn=list(action.depends_on),
-                    triggerRule=self._convert_trigger_rule(action.trigger_rule),
-                    labels=merged_labels,
-                    config=spec_model,
-                    retryPolicy=retry_policy,
-                )
-            elif platform_type == "batch_inference":
-                inference_spec = agent_platform.batch_inference
-                impersonation_chain = None
-                if inference_spec.impersonation_chain:
-                    impersonation_chain = list(
-                        inference_spec.impersonation_chain
-                    )
-
-                gcs_source = None
-                if inference_spec.gcs_source:
-                    gcs_source = list(inference_spec.gcs_source)
-
-                spec_model = (
-                    internal_actions.AgentPlatformBatchInferenceSpecModel(
-                        job_display_name=inference_spec.job_display_name,
-                        model_name=inference_spec.model_name,
-                        instances_format=inference_spec.instances_format
-                        or None,
-                        predictions_format=inference_spec.predictions_format
-                        or None,
-                        bigquery_source=inference_spec.bigquery_source or None,
-                        gcs_source=gcs_source,
-                        bigquery_destination_prefix=(
-                            inference_spec.bigquery_destination_prefix or None
-                        ),
-                        gcs_destination_prefix=(
-                            inference_spec.gcs_destination_prefix or None
-                        ),
-                        project_id=agent_platform.project_id
-                        or defaults.project_id,
-                        location=agent_platform.location or defaults.location,
-                        impersonation_chain=impersonation_chain,
-                    )
+            case "batch_inference":
+                return self._convert_batch_inference_ai_action(
+                    action, defaults, merged_labels
                 )
 
-                return internal_actions.AIActionModel(
-                    name=action.name,
-                    type="ai",
-                    provider="agent_platform",
-                    ai_action_type="batch_inference",
-                    executionTimeout=action.execution_timeout or None,
-                    dependsOn=list(action.depends_on),
-                    triggerRule=self._convert_trigger_rule(action.trigger_rule),
-                    labels=merged_labels,
-                    config=spec_model,
-                    retryPolicy=retry_policy,
+            case "create_and_run_custom_job":
+                return self._convert_create_and_run_custom_job_ai_action(
+                    action, defaults, merged_labels
                 )
-            raise TypeError(f"Unknown AgentPlatform type: {platform_type}")
-        raise TypeError(f"Unknown AIAction provider type: {provider_type}")
+
+        raise TypeError(f"Unknown AgentPlatform type: {platform_type}")
+
+    def _convert_model_upload_ai_action(
+        self,
+        action: v1_pipeline_protos.AIAction,
+        defaults: v1_pipeline_protos.Defaults,
+        merged_labels: dict[str, str],
+    ):
+        retry_policy = self._convert_action_retry_policy(action, defaults)
+
+        agent_platform = action.agent_platform
+        upload_spec = agent_platform.model_upload
+
+        spec_model = internal_actions.AgentPlatformModelUploadSpecModel(
+            model_name=upload_spec.model_name,
+            description=upload_spec.description or None,
+            model_artifact_uri=upload_spec.model_artifact_uri,
+            serving_container_image_uri=upload_spec.serving_container_image_uri,
+            project_id=agent_platform.project_id or defaults.project_id,
+            location=agent_platform.location or defaults.location,
+        )
+
+        return internal_actions.AIActionModel(
+            name=action.name,
+            type="ai",
+            provider="agent_platform",
+            ai_action_type="model_upload",
+            executionTimeout=action.execution_timeout or None,
+            dependsOn=list(action.depends_on),
+            triggerRule=self._convert_trigger_rule(action.trigger_rule),
+            labels=merged_labels,
+            config=spec_model,
+            retryPolicy=retry_policy,
+        )
+
+    def _convert_batch_inference_ai_action(
+        self,
+        action: v1_pipeline_protos.AIAction,
+        defaults: v1_pipeline_protos.Defaults,
+        merged_labels: dict[str, str],
+    ):
+        retry_policy = self._convert_action_retry_policy(action, defaults)
+
+        agent_platform = action.agent_platform
+        inference_spec = agent_platform.batch_inference
+
+        impersonation_chain = None
+        if inference_spec.impersonation_chain:
+            impersonation_chain = list(inference_spec.impersonation_chain)
+
+        gcs_source = None
+        if inference_spec.gcs_source:
+            gcs_source = list(inference_spec.gcs_source)
+
+        spec_model = internal_actions.AgentPlatformBatchInferenceSpecModel(
+            job_display_name=inference_spec.job_display_name,
+            model_name=inference_spec.model_name,
+            instances_format=inference_spec.instances_format or None,
+            predictions_format=inference_spec.predictions_format or None,
+            bigquery_source=inference_spec.bigquery_source or None,
+            gcs_source=gcs_source,
+            bigquery_destination_prefix=(
+                inference_spec.bigquery_destination_prefix or None
+            ),
+            gcs_destination_prefix=(
+                inference_spec.gcs_destination_prefix or None
+            ),
+            project_id=agent_platform.project_id or defaults.project_id,
+            location=agent_platform.location or defaults.location,
+            impersonation_chain=impersonation_chain,
+        )
+
+        return internal_actions.AIActionModel(
+            name=action.name,
+            type="ai",
+            provider="agent_platform",
+            ai_action_type="batch_inference",
+            executionTimeout=action.execution_timeout or None,
+            dependsOn=list(action.depends_on),
+            triggerRule=self._convert_trigger_rule(action.trigger_rule),
+            labels=merged_labels,
+            config=spec_model,
+            retryPolicy=retry_policy,
+        )
+
+    def _convert_create_and_run_custom_job_ai_action(
+        self,
+        action: v1_pipeline_protos.AIAction,
+        defaults: v1_pipeline_protos.Defaults,
+        merged_labels: dict[str, str],
+    ) -> internal_pipeline.AIActionModel:
+        from google.cloud.aiplatform_v1.types import (
+            custom_job as aiplatform_custom_job,
+        )
+
+        retry_policy = self._convert_action_retry_policy(action, defaults)
+
+        agent_platform = action.agent_platform
+        job_spec = agent_platform.create_and_run_custom_job
+
+        normalized_job = normalize_struct(
+            job_spec.custom_job, aiplatform_custom_job.CustomJob
+        )
+
+        job_dict = (
+            struct_to_dict(normalized_job._pb)
+            if normalized_job
+            else {}
+        )
+
+        impersonation_chain = None
+        if job_spec.impersonation_chain:
+            impersonation_chain = list(job_spec.impersonation_chain)
+
+        spec_model = (
+            internal_actions.AgentPlatformCreateAndRunCustomJobSpecModel(
+                custom_job=job_dict,
+                project_id=agent_platform.project_id or defaults.project_id,
+                location=agent_platform.location or defaults.location,
+                impersonation_chain=impersonation_chain,
+            )
+        )
+
+        execution_timeout = (
+            job_spec.execution_timeout
+            or action.execution_timeout
+            or None
+        )
+
+        return internal_actions.AIActionModel(
+            name=action.name,
+            type="ai",
+            provider="agent_platform",
+            ai_action_type="create_and_run_custom_job",
+            executionTimeout=execution_timeout,
+            dependsOn=list(action.depends_on),
+            triggerRule=self._convert_trigger_rule(action.trigger_rule),
+            labels=merged_labels,
+            config=spec_model,
+            retryPolicy=retry_policy,
+        )
 
     def _convert_airflow_task_action(self,
             action: v1_pipeline_protos.AirflowTaskAction,

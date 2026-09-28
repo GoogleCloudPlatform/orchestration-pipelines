@@ -1310,6 +1310,62 @@ actions:
         )
 
 
+def test_build_ai_action_vertex_create_and_run_custom_job_success():
+    """Tests building a pipeline with a Vertex AI create_and_run_custom_job action."""
+    pipeline_def = {
+        "model_version": "1.0",
+        "pipeline_id": "valid_pipeline_1",
+        "runner": "airflow",
+        "owner": "data_eng_team",
+        "defaults": {
+            "project_id": "gcp-project-default",
+            "location": "us-central1",
+        },
+        "actions": [
+            {
+                "ai": {
+                    "name": "custom_job_vertex",
+                    "agent_platform": {
+                        "project_id": "custom-project",
+                        "location": "us-central1",
+                        "create_and_run_custom_job": {
+                            "execution_timeout": "2h",
+                            "impersonation_chain": [
+                                "sa-1@project.iam.gserviceaccount.com"
+                            ],
+                            "custom_job": {
+                                "displayName": "my_custom_job",
+                                "jobSpec": {
+                                    "workerPoolSpecs": [
+                                        {
+                                            "machineSpec": {
+                                                "machineType": "n1-standard-4"
+                                            },
+                                            "replicaCount": 1,
+                                        }
+                                    ]
+                                },
+                            },
+                        },
+                    },
+                }
+            }
+        ],
+    }
+
+    pipeline = OrchestrationPipelineBuilder.build(pipeline_def)
+
+    assert len(pipeline.actions) == 1
+    ai_action = pipeline.actions[0].ai
+    assert ai_action.name == "custom_job_vertex"
+    assert ai_action.agent_platform.HasField("create_and_run_custom_job")
+    custom_job_spec = ai_action.agent_platform.create_and_run_custom_job
+    assert custom_job_spec.execution_timeout == "2h"
+    assert list(custom_job_spec.impersonation_chain) == [
+        "sa-1@project.iam.gserviceaccount.com"
+    ]
+    assert custom_job_spec.custom_job["displayName"] == "my_custom_job"
+
+
 if __name__ == "__main__":
     unittest.main()
-

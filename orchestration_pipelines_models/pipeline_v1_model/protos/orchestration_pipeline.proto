@@ -590,6 +590,7 @@ message AgentPlatform {
   oneof type {
     AgentPlatformModelUpload model_upload = 3;
     AgentPlatformBatchInference batch_inference = 4;
+    AgentPlatformCreateAndRunCustomJob create_and_run_custom_job = 5;
   }
 }
 
@@ -610,6 +611,12 @@ message AgentPlatformBatchInference {
   string bigquery_destination_prefix = 7;
   string gcs_destination_prefix = 8;
   repeated string impersonation_chain = 12;
+}
+
+message AgentPlatformCreateAndRunCustomJob {
+  google.protobuf.Struct custom_job = 1 [(pipeline_models.validation.is_required) = true];
+  string execution_timeout = 2 [(pipeline_models.validation.is_iso8601_duration) = true];
+  repeated string impersonation_chain = 3;
 }
 
 message AirflowTaskAction {

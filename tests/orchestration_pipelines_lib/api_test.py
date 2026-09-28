@@ -17,7 +17,7 @@
 import os
 import sys
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -36,8 +36,12 @@ from airflow.providers.google.cloud.operators.dataproc import (
     DataprocDeleteClusterOperator,
     DataprocSubmitJobOperator,
 )
+from airflow.providers.google.cloud.operators.vertex_ai import (
+    custom_job as vertex_ai_custom_job,
+)
 
 from orchestration_pipelines_lib import api
+from orchestration_pipelines_lib.utils import file_manager
 from tests.conftest import IS_AIRFLOW_2
 
 pytestmark = pytest.mark.skipif(
@@ -767,6 +771,7 @@ class TestApi(unittest.TestCase):
         self.assertEqual(batch_task.machine_type, "n1-standard-4")
         self.assertEqual(batch_task.labels, {"orchestration_pipeline": "true"})
 
+
     @patch.dict(os.environ, {"GCS_BUCKET": "example-bucket"})
     @patch("airflow.utils.db.create_session")
     def test_generate_with_dag_root_parameter(self, mock_session):
@@ -785,6 +790,62 @@ class TestApi(unittest.TestCase):
         self.assertEqual(dag.dag_id, expected_dag_id)
 
 
+@pytest.fixture
+def stub_blob_reference(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stubs FileManager.get_blob_reference for local non-Composer paths."""
+    monkeypatch.setattr(
+        file_manager.FileManager,
+        "get_blob_reference",
+        lambda self, path: (
+            f"gs://example-bucket/{os.path.basename(path)}" if path else None
+        ),
+    )
+
+
+def test_generate_vertex_ai_custom_job_pipeline(stub_blob_reference: None):
+    """Tests that api.generate creates a DAG with CreateCustomJobOperator."""
+    example_path = os.path.join(
+        _PROJECT_ROOT, "examples/pipeline-vertex-ai-custom-job.yml"
+    )
+    globals_dict = {}
+    expected_custom_job = {
+        "display_name": "my_custom_training_job",
+        "job_spec": {
+            "worker_pool_specs": [
+                {
+                    "machine_spec": {"machine_type": "n1-standard-4"},
+                    "replica_count": "1",
+                    "container_spec": {
+                        "image_uri": (
+                            "us-docker.pkg.dev/vertex-ai/training/"
+                            "tf-cpu.2-12.py310:latest"
+                        ),
+                        "command": ["python", "train.py"],
+                    },
+                }
+            ]
+        },
+        "labels": {"orchestration_pipeline": "true"},
+    }
+
+    api.validate(example_path)
+    api.generate(example_path, globals_dict)
+
+    assert "pipeline-vertex-ai-custom-job" in globals_dict
+    dag = globals_dict["pipeline-vertex-ai-custom-job"]
+    assert isinstance(dag, DAG)
+    tasks_map = {t.task_id: t for t in dag.tasks}
+    assert "run_vertex_custom_job" in tasks_map
+    custom_job_task = tasks_map["run_vertex_custom_job"]
+    assert isinstance(
+        custom_job_task, vertex_ai_custom_job.CreateCustomJobOperator
+    )
+    assert custom_job_task.project_id == "your-gcp-project-id"
+    assert custom_job_task.region == "us-central1"
+    assert custom_job_task.execution_timeout == timedelta(hours=2)
+    assert custom_job_task.custom_job == expected_custom_job
+
+
 def _get_data_root_path():
     return os.path.join(_PROJECT_ROOT,
                         "tests/orchestration_pipelines_lib/test-data/")
@@ -800,4 +861,3 @@ def _get_expected_dag_id(pipeline_id, parsing_failed=False, is_current=True):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -284,6 +284,23 @@ class AgentPlatformBatchInferenceSpecModel:
 
 
 @dataclass
+class AgentPlatformCreateAndRunCustomJobSpecModel:
+    """Agent Platform (Vertex AI) Create and Run Custom Job spec model.
+
+    Attributes:
+        custom_job: Normalized Vertex AI CustomJob configuration dictionary.
+        project_id: Optional GCP project ID override.
+        location: Optional GCP region/location override.
+        impersonation_chain: Optional service account impersonation chain.
+    """
+
+    custom_job: dict[str, Any]
+    project_id: str | None = None
+    location: str | None = None
+    impersonation_chain: str | list[str] | None = None
+
+
+@dataclass
 class AIActionModel(ActionBaseModel):
     """Internal model representing an AI action."""
 
@@ -292,9 +309,12 @@ class AIActionModel(ActionBaseModel):
     ai_action_type: Literal[
         "model_upload",
         "batch_inference",
+        "create_and_run_custom_job",
     ]
     config: (
-        AgentPlatformModelUploadSpecModel | AgentPlatformBatchInferenceSpecModel
+        AgentPlatformModelUploadSpecModel |
+        AgentPlatformBatchInferenceSpecModel |
+        AgentPlatformCreateAndRunCustomJobSpecModel
     )
     labels: dict[str, str] | None = None
 

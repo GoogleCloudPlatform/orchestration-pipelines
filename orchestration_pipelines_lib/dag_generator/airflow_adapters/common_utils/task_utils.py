@@ -30,6 +30,9 @@ from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils imp
     gcs_utils,
     utils,
 )
+from orchestration_pipelines_lib.internal_models import (
+    actions as internal_actions,
+)
 from orchestration_pipelines_lib.internal_models.actions import (
     AIActionModel,
     BqOperationActionModel,
@@ -1241,7 +1244,7 @@ def create_bq_dts_task(
         ) from e
 
 
-def create_vertex_upload_model_task(
+def _create_vertex_upload_model_task(
     action: AIActionModel, pipeline: PipelineModel, dag
 ):
     """Converts an AI action into an UploadModelOperator for Vertex AI.
@@ -1302,7 +1305,7 @@ def create_vertex_upload_model_task(
         ) from e
 
 
-def create_vertex_batch_inference_task(
+def _create_vertex_batch_inference_task(
     action: AIActionModel, pipeline: PipelineModel, dag: DAG
 ):
     """Converts an AI action into a CreateBatchPredictionJobOperator
@@ -1381,7 +1384,76 @@ def create_vertex_batch_inference_task(
         ) from e
 
 
-def create_ai_task(action: AIActionModel, pipeline: PipelineModel, dag: DAG):
+def _create_vertex_custom_job_task(
+    action: internal_actions.AIActionModel,
+    pipeline: PipelineModel,
+    dag: DAG,
+):
+    """Creates CreateCustomJobOperator for Vertex AI.
+
+    Args:
+        action: The AI action configuration model.
+        pipeline: The pipeline configuration object.
+        dag: The Airflow DAG object.
+
+    Returns:
+        An instance of CreateCustomJobOperator wrapped with observability.
+    """
+    from airflow.providers.google.cloud.operators.vertex_ai import (
+        custom_job as vertex_ai_custom_job,
+    )
+
+    try:
+        if not isinstance(
+            action.config,
+            internal_actions.AgentPlatformCreateAndRunCustomJobSpecModel,
+        ):
+            raise TypeError(
+                "Expected AgentPlatformCreateAndRunCustomJobSpecModel, "
+                f"got {type(action.config).__name__}"
+            )
+        project_id = action.config.project_id
+        region = action.config.location
+        custom_job = dict(action.config.custom_job)
+        if action.labels:
+            existing_labels = dict(custom_job.get("labels") or {})
+            existing_labels.update(action.labels)
+            custom_job["labels"] = existing_labels
+
+        ObservableCreateCustomJobOperator = wrap_operator(
+            vertex_ai_custom_job.CreateCustomJobOperator,
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.AGENT_PLATFORM,
+            get_pipeline_metadata,
+        )
+
+        return ObservableCreateCustomJobOperator(
+            task_id=action.name,
+            project_id=project_id,
+            region=region,
+            custom_job=custom_job,
+            impersonation_chain=action.config.impersonation_chain,
+            execution_timeout=(
+                duration_to_timedelta(action.executionTimeout)
+                if action.executionTimeout
+                else None
+            ),
+            trigger_rule=action.triggerRule,
+            doc_md=json.dumps({"op_action_name": action.name}),
+            dag=dag,
+            **get_action_retry_kwargs(action),
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create task for action '{action.name}': {e}"
+        ) from e
+
+
+def create_ai_task(
+    action: internal_actions.AIActionModel,
+    pipeline: PipelineModel,
+    dag: DAG,
+):
     """Converts an AI action into the appropriate Airflow operator.
 
     Args:
@@ -1392,15 +1464,21 @@ def create_ai_task(action: AIActionModel, pipeline: PipelineModel, dag: DAG):
     Returns:
         An Airflow operator for the AI action.
     """
-    if action.provider == "agent_platform":
-        if action.ai_action_type == "model_upload":
-            return create_vertex_upload_model_task(action, pipeline, dag=dag)
-        elif action.ai_action_type == "batch_inference":
-            return create_vertex_batch_inference_task(action, pipeline, dag=dag)
-        raise ValueError(
-            f"Unsupported agent_platform action type: {action.ai_action_type}"
-        )
-    raise ValueError(f"Unsupported AI provider: {action.provider}")
+    if action.provider != "agent_platform":
+        raise ValueError(f"Unsupported AI provider: {action.provider}")
+
+    match action.ai_action_type:
+        case "model_upload":
+            return _create_vertex_upload_model_task(action, pipeline, dag=dag)
+        case "batch_inference":
+            return _create_vertex_batch_inference_task(action, pipeline, dag=dag)
+        case "create_and_run_custom_job":
+            return _create_vertex_custom_job_task(action, pipeline, dag=dag)
+        case _:
+            raise ValueError(
+                "Unsupported agent_platform action type: "
+                f"{action.ai_action_type}"
+            )
 
 
 def create_airflow_task(action: dict[str, Any], pipeline: dict[str, Any], dag):

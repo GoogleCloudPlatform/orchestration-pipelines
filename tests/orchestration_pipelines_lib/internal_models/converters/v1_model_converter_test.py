@@ -17,6 +17,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+import pytest
 from google.protobuf import struct_pb2
 
 from orchestration_pipelines_lib.internal_models import (
@@ -31,6 +32,7 @@ from orchestration_pipelines_lib.internal_models import (
 from orchestration_pipelines_lib.internal_models.converters.v1_model_converter import (
     ConverterV1ToInternal,
 )
+from orchestration_pipelines_lib.utils.file_manager import FileManager
 from orchestration_pipelines_models.pipeline_v1_model.protos import (
     orchestration_pipeline_pb2 as v1_protos,
 )
@@ -1949,6 +1951,142 @@ class TestConverterV1ToInternal(unittest.TestCase):
         )
 
 
+@pytest.fixture
+def converter() -> ConverterV1ToInternal:
+    """Returns a ConverterV1ToInternal instance with a real FileManager."""
+    return ConverterV1ToInternal(
+        file_manager=FileManager(gcs_client=object(), data_root=".")
+    )
+
+
+@pytest.fixture
+def default_proto() -> v1_protos.Defaults:
+    """Returns baseline Defaults proto for converter tests."""
+    return v1_protos.Defaults(
+        project_id="default-project",
+        location="default-location",
+    )
+
+
+@pytest.fixture
+def custom_job_struct() -> struct_pb2.Struct:
+    """Returns a protobuf Struct for a Vertex AI CustomJob."""
+    job_struct = struct_pb2.Struct()
+    job_struct.update(
+        {
+            "displayName": "my_custom_training_job",
+            "jobSpec": {
+                "workerPoolSpecs": [
+                    {
+                        "machineSpec": {"machineType": "n1-standard-4"},
+                        "replicaCount": 1,
+                    }
+                ]
+            },
+        }
+    )
+    return job_struct
+
+
+def test_convert_ai_action_vertex_create_and_run_custom_job(
+    converter, default_proto, custom_job_struct
+):
+    """Tests converting AIAction with Vertex AI create_and_run_custom_job."""
+    labels = {"orchestration_pipeline": "true"}
+    action_proto = v1_protos.Action(
+        ai=v1_protos.AIAction(
+            name="test-vertex-custom-job",
+            depends_on=["upstream-task"],
+            trigger_rule=v1_protos.TriggerRule.all_success,
+            labels={"env": "prod"},
+            agent_platform=v1_protos.AgentPlatform(
+                project_id="custom-project",
+                location="us-east1",
+                create_and_run_custom_job=(
+                    v1_protos.AgentPlatformCreateAndRunCustomJob(
+                        custom_job=custom_job_struct,
+                        execution_timeout="2h",
+                        impersonation_chain=[
+                            "sa-1@project.iam.gserviceaccount.com"
+                        ],
+                    )
+                ),
+            ),
+        )
+    )
+
+    internal_ai = converter.convert_action(action_proto, default_proto, labels)
+
+    assert isinstance(internal_ai, internal_actions.AIActionModel)
+    assert internal_ai.name == "test-vertex-custom-job"
+    assert internal_ai.type == "ai"
+    assert internal_ai.provider == "agent_platform"
+    assert internal_ai.ai_action_type == "create_and_run_custom_job"
+    assert internal_ai.executionTimeout == "2h"
+    assert internal_ai.dependsOn == ["upstream-task"]
+    assert internal_ai.triggerRule == "all_success"
+    assert internal_ai.labels == {
+        "orchestration_pipeline": "true",
+        "env": "prod",
+    }
+    assert isinstance(
+        internal_ai.config,
+        internal_actions.AgentPlatformCreateAndRunCustomJobSpecModel,
+    )
+    assert internal_ai.config.project_id == "custom-project"
+    assert internal_ai.config.location == "us-east1"
+    assert internal_ai.config.impersonation_chain == [
+        "sa-1@project.iam.gserviceaccount.com"
+    ]
+    assert internal_ai.config.custom_job == {
+        "display_name": "my_custom_training_job",
+        "job_spec": {
+            "worker_pool_specs": [
+                {
+                    "machine_spec": {"machine_type": "n1-standard-4"},
+                    "replica_count": "1",
+                }
+            ]
+        },
+    }
+
+
+def test_convert_ai_action_vertex_create_and_run_custom_job_defaults(
+    converter, default_proto
+):
+    """Tests converting create_and_run_custom_job with fallback to defaults."""
+    labels = {"orchestration_pipeline": "true"}
+    custom_job_struct = struct_pb2.Struct()
+    custom_job_struct.update({"displayName": "default_custom_job"})
+    action_proto = v1_protos.Action(
+        ai=v1_protos.AIAction(
+            name="test-vertex-custom-job-defaults",
+            execution_timeout="1h",
+            agent_platform=v1_protos.AgentPlatform(
+                create_and_run_custom_job=(
+                    v1_protos.AgentPlatformCreateAndRunCustomJob(
+                        custom_job=custom_job_struct,
+                    )
+                ),
+            ),
+        )
+    )
+
+    internal_ai = converter.convert_action(action_proto, default_proto, labels)
+
+    assert isinstance(internal_ai, internal_actions.AIActionModel)
+    assert isinstance(
+        internal_ai.config,
+        internal_actions.AgentPlatformCreateAndRunCustomJobSpecModel,
+    )
+    assert internal_ai.config.project_id == "default-project"
+    assert internal_ai.config.location == "default-location"
+    assert internal_ai.config.impersonation_chain is None
+    assert internal_ai.executionTimeout == "1h"
+    assert internal_ai.config.custom_job == {
+        "display_name": "default_custom_job"
+    }
+
+
 if __name__ == "__main__":
     unittest.main()
-
