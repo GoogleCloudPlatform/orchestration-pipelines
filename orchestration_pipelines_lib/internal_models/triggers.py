@@ -18,7 +18,7 @@
 # pylint: disable=invalid-name,missing-class-docstring
 
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 
 @dataclass
@@ -29,3 +29,13 @@ class ScheduleTriggerModel:
     catchup: bool
     endTime: Optional[str] = None
     timezone: Optional[str] = "UTC"
+
+
+@dataclass
+class DatasetTriggerModel:
+    uris: list[str]
+    condition: str = "all"
+    type: Literal["datasets"] = "datasets"
+
+
+AnyScheduleTrigger = Union[ScheduleTriggerModel, DatasetTriggerModel]

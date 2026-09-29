@@ -198,6 +198,7 @@ def _configure_dag_schedule(
     dag_kwargs: DAGKwargs, triggers: list["AnyScheduleTrigger"], task_factory
 ):
     from orchestration_pipelines_lib.internal_models.triggers import (
+        DatasetTriggerModel,
         ScheduleTriggerModel,
     )
 
@@ -205,9 +206,15 @@ def _configure_dag_schedule(
         (t for t in triggers if isinstance(t, ScheduleTriggerModel)),
         None,
     )
+    dataset_trigger = next(
+        (t for t in triggers if isinstance(t, DatasetTriggerModel)),
+        None,
+    )
 
     if schedule_trigger:
         task_factory.create_schedule_trigger_task(dag_kwargs, schedule_trigger)
+    elif dataset_trigger:
+        task_factory.create_dataset_trigger_task(dag_kwargs, dataset_trigger)
     else:
         dag_kwargs["schedule"] = None
 

@@ -32,6 +32,7 @@ from orchestration_pipelines_lib.internal_models.actions import (
     RetryPolicyModel,
 )
 from orchestration_pipelines_lib.internal_models.triggers import (
+    DatasetTriggerModel,
     ScheduleTriggerModel,
 )
 
@@ -49,7 +50,7 @@ AnyAction = (
     | OrchestrationPipelineActionModel
     | AIActionModel
 )
-AnyScheduleTrigger = ScheduleTriggerModel
+AnyScheduleTrigger = ScheduleTriggerModel | DatasetTriggerModel
 
 
 class RunnerType(str, Enum):

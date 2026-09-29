@@ -421,6 +421,28 @@ def test_configure_dag_schedule_with_schedule_trigger_creates_trigger_task(
     assert "schedule" not in dag_kwargs
 
 
+def test_configure_dag_schedule_with_dataset_trigger_creates_dataset_trigger_task():
+    """Test that a dataset trigger task is created when a DatasetTriggerModel
+    exists.
+    """
+    from orchestration_pipelines_lib.internal_models.triggers import (
+        DatasetTriggerModel,
+    )
+
+    dag_kwargs: DAGKwargs = {}
+    dataset_trigger = DatasetTriggerModel(
+        uris=["bq://proj.ds.tbl"], condition="all"
+    )
+    mock_task_factory = MagicMock()
+
+    _configure_dag_schedule(dag_kwargs, [dataset_trigger], mock_task_factory)
+
+    mock_task_factory.create_dataset_trigger_task.assert_called_once_with(
+        dag_kwargs, dataset_trigger
+    )
+    mock_task_factory.create_schedule_trigger_task.assert_not_called()
+
+
 def test_configure_dag_schedule_without_schedule_trigger_sets_schedule_none(
     schedule_setup,
 ):

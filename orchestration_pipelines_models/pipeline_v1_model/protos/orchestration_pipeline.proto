@@ -134,9 +134,15 @@ message ScheduleTrigger {
   string timezone = 5 [(pipeline_models.validation.is_iana_timezone) = true]; // Defaults to "UTC" if not provided.
 }
 
+message DatasetTrigger {
+  repeated string uris = 1 [(pipeline_models.validation.min_items) = 1];
+  string condition = 2; // "all" (default) or "any"
+}
+
 message Trigger {
   oneof trigger {
     ScheduleTrigger schedule = 1;
+    DatasetTrigger datasets = 2;
   }
 }
 
@@ -255,6 +261,7 @@ message PythonAction {
   PythonEngine engine = 8 [(pipeline_models.validation.is_required) = true];
   TriggerRule trigger_rule = 9; // Default: all_success.
   RetryPolicy retry_policy = 10;
+  repeated string outlets = 11;
 }
 
 message PythonEnvironment {
@@ -303,6 +310,7 @@ message PysparkAction {
   ];
   map<string, string> labels = 12;
   RetryPolicy retry_policy = 13;
+  repeated string outlets = 14;
 }
 
 message PysparkEngine {
@@ -349,6 +357,7 @@ message NotebookAction {
   ];
   map<string, string> labels = 11;
   RetryPolicy retry_policy = 12;
+  repeated string outlets = 13;
 }
 
 message NotebookEngine {
@@ -392,6 +401,7 @@ message SqlAction {
   ];
   map<string, string> labels = 8;
   RetryPolicy retry_policy = 9;
+  repeated string outlets = 10;
 }
 
 message Query {
@@ -432,6 +442,7 @@ message PipelineAction {
   // Note: 'labels' is currently not supported when executing DBT or Dataform using Dataform Service.
   map<string, string> labels = 7;
   RetryPolicy retry_policy = 8;
+  repeated string outlets = 9;
 }
 
 message PipelineFramework {
@@ -499,6 +510,7 @@ message DataIngestionAction {
   }
   TriggerRule trigger_rule = 5; // Default: all_success.
   RetryPolicy retry_policy = 6;
+  repeated string outlets = 7;
 }
 
 message BigQueryDtsSpec {
@@ -545,6 +557,7 @@ message OrchestrationPipelineAction {
   bool wait_for_completion = 6; // Default: false.
   TriggerRule trigger_rule = 7; // Default: all_success.
   RetryPolicy retry_policy = 8;
+  repeated string outlets = 9;
 }
 
 /////////////////////////
@@ -567,6 +580,7 @@ message AIAction {
 
   map<string, string> labels = 6;
   RetryPolicy retry_policy = 7;
+  repeated string outlets = 8;
 }
 
 message AgentPlatform {
