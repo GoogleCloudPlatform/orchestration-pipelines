@@ -34,7 +34,7 @@ class PipelineMetadata:
     def __init__(
         self,
         pipeline_id: str,
-        source_filepath: str,
+        source_filepath: str = None,
         manifest: Optional[Manifest] = None,
         version_id: Optional[str] = None,
     ):
@@ -49,12 +49,7 @@ class PipelineMetadata:
         self._manifest = manifest
         self._version_id = version_id
         self._pipeline_id = pipeline_id
-        if not source_filepath:
-            raise ValueError(
-                "Internal error: Pipeline definition file path is missing or"
-                " empty."
-            )
-        self._source_filepath = source_filepath
+        self._source_filepath = source_filepath if source_filepath else ""
 
         if self._manifest is None:
             self._bundle_id = ""
@@ -245,3 +240,11 @@ class PipelineMetadata:
             }
 
         return json.dumps(doc_data)
+
+    @property
+    def source_filepath(self) -> str:
+        return self._source_filepath
+
+    @source_filepath.setter
+    def source_filepath(self, value: Optional[str]) -> None:
+        self._source_filepath = value or ""

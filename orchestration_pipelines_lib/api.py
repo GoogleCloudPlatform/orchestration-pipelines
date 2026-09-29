@@ -94,19 +94,15 @@ def generate(
     )
     pipeline_id = dag_id
 
-    source_filepath = file_manager.get_blob_reference(
-        file_manager.resolve_path(pipeline_definition_file)
-    )
     _generate_dag(
-        file_manager,
-        pipeline_definition_file,
-        repository,
+        file_manager=file_manager,
+        pipeline_definition_path=pipeline_definition_file,
+        repository=repository,
         dag_id=dag_id,
         metadata=PipelineMetadata(
             pipeline_id=pipeline_id,
             manifest=None,
             version_id="",
-            source_filepath=source_filepath,
         ),
         data_root=data_root,
         globals_dict=globals_dict,
@@ -145,6 +141,7 @@ def generate_dags(
     repository = PipelineRepository(
         data_root=data_root, file_manager=base_file_manager
     )
+
     manifest = repository.get_manifest(bundle_id)
 
     versions_to_parse = get_versions_to_parse(pipeline_id, manifest)
@@ -260,6 +257,10 @@ def _generate_dag(
     generate_time_start = time.perf_counter()
 
     try:
+        metadata.source_filepath = file_manager.get_blob_reference(
+            file_manager.resolve_path(pipeline_definition_path)
+        )
+
         internal_pipeline = _get_and_convert_pipeline(
             repository=repository,
             file_manager=file_manager,
@@ -405,23 +406,16 @@ def _generate_dag_for_version(
     from orchestration_pipelines_lib.utils.pipeline_metadata import (
         PipelineMetadata,
     )
-
-    pipeline_definition_path = f"{pipeline_id}.yml"
-
     metadata = PipelineMetadata(
         pipeline_id=pipeline_id,
         manifest=manifest,
-        version_id=version_id,
-        source_filepath=file_manager.get_blob_reference(
-            file_manager.resolve_path(pipeline_definition_path)
-        ),
+        version_id=version_id
     )
-    pipeline_filename = f"{pipeline_id}.yml"
 
     _generate_dag(
-        file_manager,
-        pipeline_filename,
-        repository,
+        file_manager=file_manager,
+        pipeline_definition_path=f"{pipeline_id}.yml",
+        repository=repository,
         dag_id=f"{bundle_id}__v__{version_id}__{pipeline_id}",
         metadata=metadata,
         data_root=data_root,

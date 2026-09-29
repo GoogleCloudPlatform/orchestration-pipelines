@@ -340,27 +340,15 @@ class TestPipelineMetadata(unittest.TestCase):
         self.assertEqual(doc_md["op_source_filepath"], "gs://dummy/path.yml")
 
     def test_empty_source_filepath(self):
-        """Test that initializing with empty source_filepath raises ValueError."""
-        expected_msg = "Internal error: Pipeline definition file path is missing or empty."
-        exception_raised = None
+        """Test that initializing with empty source_filepath."""
 
-        try:
-            PipelineMetadata(pipeline_id=self.pipeline_id, source_filepath="")
-        except ValueError as e:
-            exception_raised = e
+        metadata = PipelineMetadata(pipeline_id=self.pipeline_id, source_filepath="")
 
-        self.assertIsNotNone(exception_raised)
-        self.assertEqual(str(exception_raised), expected_msg)
+        self.assertEqual(str(metadata.source_filepath), "")
 
     def test_none_source_filepath(self):
-        """Test that initializing with None source_filepath raises ValueError."""
-        expected_msg = "Internal error: Pipeline definition file path is missing or empty."
-        exception_raised = None
+        """Test that initializing with None source_filepath."""
 
-        try:
-            PipelineMetadata(pipeline_id=self.pipeline_id, source_filepath=None)
-        except ValueError as e:
-            exception_raised = e
+        metadata = PipelineMetadata(pipeline_id=self.pipeline_id, source_filepath=None)
 
-        self.assertIsNotNone(exception_raised)
-        self.assertEqual(str(exception_raised), expected_msg)
+        self.assertEqual(str(metadata.source_filepath), "")

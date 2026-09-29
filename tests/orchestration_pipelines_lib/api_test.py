@@ -244,6 +244,48 @@ class TestApi(unittest.TestCase):
                                                  mock_generate, error_message)
         self._assert_dummy_dag_was_created(pipeline_id)
 
+    @patch("airflow.utils.db.create_session")
+    @patch(
+        "orchestration_pipelines_lib.utils.versions_utils.get_versions_to_parse"
+    )
+    def test_generate_dags_with_missing_pipeline_file_creates_dummy_dag(
+        self, mock_get_versions, mock_session
+    ):
+        """Tests that a missing pipeline definition file results in a dummy DAG with proper tags."""
+        from orchestration_pipelines_lib.utils.file_manager import (
+            OrchestrationPipelinesFileNotFoundError,
+        )
+
+        pipeline_id = "sql-on-dataproc-serverless"
+        self.mock_get_blob_ref.side_effect = (
+            OrchestrationPipelinesFileNotFoundError(
+                f"File not found: {pipeline_id}.yml"
+            )
+        )
+        mock_get_versions.return_value = [_TEST_DEFAULT_VERSION_ID]
+
+        expected_dag_id = _get_expected_dag_id(
+            pipeline_id, parsing_failed=True
+        )
+        if hasattr(_API_MODULE, expected_dag_id):
+            delattr(_API_MODULE, expected_dag_id)
+
+        api.generate_dags(
+            _get_data_root_path(),
+            _TEST_BUNDLE_ID,
+            pipeline_id,
+            _API_MODULE.__dict__,
+        )
+
+        self._assert_dummy_dag_was_created(pipeline_id)
+        dag = getattr(_API_MODULE, expected_dag_id)
+
+        # Verify that essential gcloud polling tags are present on the dummy DAG
+        self.assertIn("op:orchestration_pipeline", dag.tags)
+        self.assertIn(f"op:bundle:{_TEST_BUNDLE_ID}", dag.tags)
+        self.assertIn(f"op:version:{_TEST_DEFAULT_VERSION_ID}", dag.tags)
+        self.assertIn("op:is_current", dag.tags)
+
     @patch("airflow.models.variable.Variable.get")
     @patch("airflow.utils.db.create_session")
     @patch(
