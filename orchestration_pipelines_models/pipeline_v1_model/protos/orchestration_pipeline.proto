@@ -531,6 +531,10 @@ message DbtFrameworkSpec {
     // Execute DBT using Airflow Worker (local execution).
     DbtAirflowExecution airflow_worker = 1;
   }
+  // Ordered sequence of structured DBT commands executed sequentially.
+  repeated DbtInvocation invocations = 3;
+  // Optional GCS destination URI where produced output files and logs are synced.
+  string output_gcs_uri = 4 [(pipeline_models.validation.regex) = "^gs://.+$"];
 }
 
 message DataformFrameworkSpec {
@@ -560,8 +564,39 @@ message DbtAirflowExecution {
   // Relative path to folder containing DBT project.
   string project_directory_path = 1 [(pipeline_models.validation.is_required) = true];
   // List of models to include in the run (equivalent to dbt --select).
-  repeated string select_models = 2 [(pipeline_models.validation.is_parameterizable) = true];
-  repeated string tags = 3 [(pipeline_models.validation.is_parameterizable) = true];
+  repeated string select_models = 2 [
+    deprecated = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
+  repeated string tags = 3 [
+    deprecated = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
+}
+
+// Structured DBT Invocations & Sub-Configurations.
+message DbtInvocation {
+  // Base DBT command (e.g., "build", "run", "test", "snapshot", "freshness", "seed", "compile").
+  string command = 1 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.regex) = "^(build|run|test|snapshot|freshness|seed|compile)$"
+  ];
+  // Node selection syntax equivalent to `dbt --select <models...>`.
+  repeated string select = 2;
+  // Node exclusion syntax equivalent to `dbt --exclude <models...>`.
+  repeated string exclude = 3;
+  // Key-value variables passed to DBT as `--vars '{"key": "value"}'`.
+  map<string, string> vars = 4;
+  // Re-run models in full-refresh mode (`--full-refresh`).
+  bool full_refresh = 5;
+  // Exit immediately upon first model/test failure (`--fail-fast`).
+  bool fail_fast = 6;
+  // Number of threads to use for parallel model execution (`--threads`).
+  int32 threads = 7 [(pipeline_models.validation.min_value) = 0];
+  // Target profile output name (`--target`).
+  string target = 8;
+  // Advanced passthrough CLI arguments (e.g., ["--store-failures"]).
+  repeated string extra_args = 9;
 }
 
 // Configuration for executing Dataform on Airflow Worker.

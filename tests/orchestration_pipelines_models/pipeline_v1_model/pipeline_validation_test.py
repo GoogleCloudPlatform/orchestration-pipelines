@@ -799,6 +799,150 @@ class TestPipelineValidator(unittest.TestCase):
         ):
             PipelineValidator.validate(self.pipeline)
 
+    def test_dbt_invocation_valid_commands_succeed(self):
+        """Tests that all supported DBT invocation commands pass validation."""
+        from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipeline_pb2 import (
+            DbtAirflowExecution,
+            DbtFrameworkSpec,
+            DbtInvocation,
+            PipelineAction,
+            PipelineFramework,
+        )
+
+        valid_commands = [
+            "build",
+            "run",
+            "test",
+            "snapshot",
+            "freshness",
+            "seed",
+            "compile",
+        ]
+        self.pipeline.actions[0].CopyFrom(
+            Action(
+                pipeline=PipelineAction(
+                    name="dbt-valid",
+                    framework=PipelineFramework(
+                        dbt=DbtFrameworkSpec(
+                            airflow_worker=DbtAirflowExecution(
+                                project_directory_path="dbt_project"
+                            ),
+                            invocations=[
+                                DbtInvocation(command=cmd)
+                                for cmd in valid_commands
+                            ],
+                        )
+                    ),
+                )
+            )
+        )
+        PipelineValidator.validate(self.pipeline)
+
+    def test_dbt_invocation_invalid_command_fails(self):
+        """Tests that an unsupported DBT invocation command fails validation."""
+        from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipeline_pb2 import (
+            DbtAirflowExecution,
+            DbtFrameworkSpec,
+            DbtInvocation,
+            PipelineAction,
+            PipelineFramework,
+        )
+
+        self.pipeline.actions[0].CopyFrom(
+            Action(
+                pipeline=PipelineAction(
+                    name="dbt-invalid-cmd",
+                    framework=PipelineFramework(
+                        dbt=DbtFrameworkSpec(
+                            airflow_worker=DbtAirflowExecution(
+                                project_directory_path="dbt_project"
+                            ),
+                            invocations=[DbtInvocation(command="unsupported")],
+                        )
+                    ),
+                )
+            )
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            r"Error for field 'actions\[0\]\.pipeline\.framework\.dbt\.invocations\[0\]\.command': value 'unsupported' does not match regex pattern",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_dbt_invocation_negative_threads_fails(self):
+        """Tests that negative threads on DbtInvocation fails validation."""
+        from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipeline_pb2 import (
+            DbtAirflowExecution,
+            DbtFrameworkSpec,
+            DbtInvocation,
+            PipelineAction,
+            PipelineFramework,
+        )
+
+        self.pipeline.actions[0].CopyFrom(
+            Action(
+                pipeline=PipelineAction(
+                    name="dbt-negative-threads",
+                    framework=PipelineFramework(
+                        dbt=DbtFrameworkSpec(
+                            airflow_worker=DbtAirflowExecution(
+                                project_directory_path="dbt_project"
+                            ),
+                            invocations=[
+                                DbtInvocation(command="run", threads=-1)
+                            ],
+                        )
+                    ),
+                )
+            )
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            r"Error for field 'actions\[0\]\.pipeline\.framework\.dbt\.invocations\[0\]\.threads': value -1 must be at least 0",
+        ):
+            PipelineValidator.validate(self.pipeline)
+
+    def test_dbt_deprecated_select_models_and_tags_emit_warning(self):
+        """Tests that using deprecated select_models and tags emits DeprecationWarning."""
+        import warnings
+
+        from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipeline_pb2 import (
+            DbtAirflowExecution,
+            DbtFrameworkSpec,
+            PipelineAction,
+            PipelineFramework,
+        )
+
+        self.pipeline.actions[0].CopyFrom(
+            Action(
+                pipeline=PipelineAction(
+                    name="dbt-legacy",
+                    framework=PipelineFramework(
+                        dbt=DbtFrameworkSpec(
+                            airflow_worker=DbtAirflowExecution(
+                                project_directory_path="dbt_project",
+                                select_models=["model_1"],
+                                tags=["tag_1"],
+                            )
+                        )
+                    ),
+                )
+            )
+        )
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always", DeprecationWarning)
+            PipelineValidator.validate(self.pipeline)
+
+        deprecation_messages = [
+            str(w.message)
+            for w in recorded
+            if issubclass(w.category, DeprecationWarning)
+        ]
+        self.assertTrue(
+            any("select_models" in msg for msg in deprecation_messages)
+        )
+        self.assertTrue(any("tags" in msg for msg in deprecation_messages))
+
 
 @pytest.fixture
 def valid_pipeline_for_custom_job():

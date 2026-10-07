@@ -46,7 +46,7 @@ from orchestration_pipelines_lib.internal_models.actions import (
     PythonVirtualenvActionModel,
 )
 from orchestration_pipelines_lib.internal_models.pipeline import PipelineModel
-from orchestration_pipelines_lib.scripts.dbt_wrapper import invoke_dbt_run
+from orchestration_pipelines_lib.scripts.dbt_wrapper import invoke_dbt
 from orchestration_pipelines_lib.utils.duration_utils import (
     duration_to_timedelta,
 )
@@ -200,6 +200,17 @@ def create_python_virtualenv_task(
         )
 
 
+def _get_base_gcs_output_uri(action: Any) -> str | None:
+    """Returns the base GCS URI for pipeline outputs."""
+    output_gcs_uri = getattr(action, "output_gcs_uri", None)
+    if output_gcs_uri:
+        return output_gcs_uri.rstrip("/")
+    gcs_bucket = os.environ.get("GCS_BUCKET")
+    if gcs_bucket:
+        return f"gs://{gcs_bucket}/orchestration_pipelines_outputs"
+    return None
+
+
 def create_dbt_task(
     get_operator: Callable[[], type],
     action: DBTActionModel,
@@ -225,10 +236,31 @@ def create_dbt_task(
             "project_dir": action.source.path,
             "profiles_dir": action.source.path,
         }
-        if action.select_models:
-            op_kwargs["select_models"] = action.select_models
+        if action.invocations:
+            op_kwargs["invocations"] = [
+                {
+                    "command": inv.command,
+                    "select": inv.select,
+                    "exclude": inv.exclude,
+                    "vars": inv.vars,
+                    "full_refresh": inv.full_refresh,
+                    "fail_fast": inv.fail_fast,
+                    "threads": inv.threads,
+                    "target": inv.target,
+                    "extra_args": inv.extra_args,
+                }
+                for inv in action.invocations
+            ]
         if action.params:
             op_kwargs["params"] = action.params
+
+        base_gcs_output_uri = _get_base_gcs_output_uri(action)
+        if base_gcs_output_uri:
+            bundle_id, version_id, pipeline_id = get_pipeline_metadata(dag)
+            op_kwargs["output_gcs_uri"] = (
+                f"{base_gcs_output_uri}/{bundle_id}/versions/{version_id}/"
+                f"{pipeline_id}/{{{{ run_id }}}}/{action.name}/"
+            )
 
         OrchestrationPythonOperator = wrap_operator(
             get_operator(),
@@ -239,7 +271,7 @@ def create_dbt_task(
 
         return OrchestrationPythonOperator(
             task_id=action.name,
-            python_callable=invoke_dbt_run,
+            python_callable=invoke_dbt,
             op_kwargs=op_kwargs,
             execution_timeout=(
                 duration_to_timedelta(action.executionTimeout)

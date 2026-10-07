@@ -802,6 +802,26 @@ class ConverterV1ToInternal:
 
         raise TypeError(f"Unknown SQL engine type: {engine_type}")
 
+    def _convert_dbt_invocations(
+        self,
+        invocations_proto,
+    ) -> list[internal_actions.DbtInvocationModel]:
+        """Converts repeated DbtInvocation proto messages to internal models."""
+        return [
+            internal_actions.DbtInvocationModel(
+                command=inv.command,
+                select=list(inv.select) if inv.select else None,
+                exclude=list(inv.exclude) if inv.exclude else None,
+                vars=dict(inv.vars) if inv.vars else None,
+                full_refresh=inv.full_refresh,
+                fail_fast=inv.fail_fast,
+                threads=inv.threads if inv.threads > 0 else None,
+                target=inv.target or None,
+                extra_args=list(inv.extra_args) if inv.extra_args else None,
+            )
+            for inv in invocations_proto
+        ]
+
     def _convert_pipeline_action(
         self,
         action: v1_pipeline_protos.PipelineAction,
@@ -823,7 +843,21 @@ class ConverterV1ToInternal:
             execution_type = dbt.WhichOneof("execution")
             if execution_type == "airflow_worker":
                 airflow_worker = dbt.airflow_worker
+                if airflow_worker.select_models and dbt.invocations:
+                    raise ValueError(
+                        f"Action {action.name}: 'select_models' and "
+                        "'invocations' are mutually exclusive in DBT action."
+                    )
                 params = dict(action.params) if action.params else None
+                if dbt.invocations:
+                    invocations = self._convert_dbt_invocations(dbt.invocations)
+                else:
+                    invocations = [
+                        internal_actions.DbtInvocationModel(
+                            command="run",
+                            select=list(airflow_worker.select_models),
+                        )
+                    ]
                 return internal_actions.DBTActionModel(
                     name=action.name,
                     executionTimeout=action.execution_timeout or None,
@@ -837,8 +871,9 @@ class ConverterV1ToInternal:
                             airflow_worker.project_directory_path
                         )
                     ),
-                    select_models=list(airflow_worker.select_models),
                     params=params,
+                    invocations=invocations,
+                    output_gcs_uri=dbt.output_gcs_uri or None,
                     retryPolicy=retry_policy,
                 )
         elif framework_type == "dataform":

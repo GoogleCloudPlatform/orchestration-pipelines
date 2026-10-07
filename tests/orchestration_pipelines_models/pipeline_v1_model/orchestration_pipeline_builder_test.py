@@ -355,6 +355,57 @@ class TestOrchestrationPipelineBuilder(unittest.TestCase):
                              ["model_1_stg", "model_2_vip"])
         self.assertListEqual(list(airflow_worker.tags), ["tag1"])
 
+    def test_build_action_dbt_with_invocations(self):
+        """Tests DBT action with structured invocations."""
+        pipeline_def = self._get_valid_pipeline_def(
+            actions=[
+                {
+                    "pipeline": {
+                        "name": "dbt_invocations_run",
+                        "framework": {
+                            "dbt": {
+                                "airflow_worker": {
+                                    "project_directory_path": "dbt_project",
+                                },
+                                "output_gcs_uri": "gs://my-bucket/dbt-outputs/",
+                                "invocations": [
+                                    {"command": "seed"},
+                                    {
+                                        "command": "build",
+                                        "select": ["tag:nightly", "my_model+"],
+                                        "exclude": ["legacy_model"],
+                                        "vars": {"env": "prod"},
+                                        "full_refresh": True,
+                                        "fail_fast": True,
+                                        "threads": 4,
+                                        "target": "prod",
+                                        "extra_args": ["--store-failures"],
+                                    },
+                                ],
+                            }
+                        },
+                    }
+                }
+            ]
+        )
+
+        pipeline = OrchestrationPipelineBuilder.build(pipeline_def)
+
+        dbt = pipeline.actions[0].pipeline.framework.dbt
+        self.assertEqual(dbt.output_gcs_uri, "gs://my-bucket/dbt-outputs/")
+        self.assertEqual(len(dbt.invocations), 2)
+        self.assertEqual(dbt.invocations[0].command, "seed")
+        build_inv = dbt.invocations[1]
+        self.assertEqual(build_inv.command, "build")
+        self.assertListEqual(list(build_inv.select), ["tag:nightly", "my_model+"])
+        self.assertListEqual(list(build_inv.exclude), ["legacy_model"])
+        self.assertEqual(dict(build_inv.vars), {"env": "prod"})
+        self.assertTrue(build_inv.full_refresh)
+        self.assertTrue(build_inv.fail_fast)
+        self.assertEqual(build_inv.threads, 4)
+        self.assertEqual(build_inv.target, "prod")
+        self.assertListEqual(list(build_inv.extra_args), ["--store-failures"])
+
     def test_build_action_dataform(self):
         """Tests Dataform action."""
         pipeline_def = self._get_valid_pipeline_def(

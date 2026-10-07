@@ -189,6 +189,21 @@ class DbtLocalExecutionModel:
 
 
 @dataclass
+class DbtInvocationModel:
+    """Configuration for a single structured DBT CLI invocation."""
+
+    command: str
+    select: list[str] | None = None
+    exclude: list[str] | None = None
+    vars: dict[str, str] | None = None
+    full_refresh: bool = False
+    fail_fast: bool = False
+    threads: int | None = None
+    target: str | None = None
+    extra_args: list[str] | None = None
+
+
+@dataclass
 class DBTActionModel(ActionBaseModel):
     """Action model for DBT pipelines."""
 
@@ -196,8 +211,9 @@ class DBTActionModel(ActionBaseModel):
     engine: Literal["dbt"]
     executionMode: Literal["local"]
     source: DbtLocalExecutionModel
-    select_models: list[str] | None = None
     params: dict[str, str] | None = None
+    invocations: list[DbtInvocationModel] | None = None
+    output_gcs_uri: str | None = None
 
 
 @dataclass

@@ -1159,7 +1159,15 @@ class TestConverterV1ToInternal(unittest.TestCase):
             dbt_action, self.defaults)
         self.assertIsInstance(internal_dbt, internal_actions.DBTActionModel)
         self.assertEqual(internal_dbt.source.path, "resolved/dbt/project")
-        self.assertEqual(internal_dbt.select_models, ["model1"])
+        self.assertEqual(
+            internal_dbt.invocations,
+            [
+                internal_actions.DbtInvocationModel(
+                    command="run",
+                    select=["model1"],
+                )
+            ],
+        )
         self.assertIsNone(internal_dbt.params)
 
     def test_convert_pipeline_action_dbt_local_with_params(self):
@@ -1172,7 +1180,6 @@ class TestConverterV1ToInternal(unittest.TestCase):
                 dbt=v1_protos.DbtFrameworkSpec(
                     airflow_worker=v1_protos.DbtAirflowExecution(
                         project_directory_path="dbt/project",
-                        select_models=["model1"],
                     )
                 )
             ),
@@ -1182,8 +1189,96 @@ class TestConverterV1ToInternal(unittest.TestCase):
         )
         self.assertIsInstance(internal_dbt, internal_actions.DBTActionModel)
         self.assertEqual(internal_dbt.source.path, "resolved/dbt/project")
-        self.assertEqual(internal_dbt.select_models, ["model1"])
         self.assertEqual(internal_dbt.params, {"my_param": "my_value"})
+        self.assertEqual(
+            internal_dbt.invocations,
+            [
+                internal_actions.DbtInvocationModel(
+                    command="run",
+                    select=[],
+                )
+            ],
+        )
+
+    def test_convert_pipeline_action_dbt_with_invocations(self):
+        """Tests conversion of a dbt action with structured invocations."""
+        dbt_action = v1_protos.PipelineAction(
+            name="dbt-task-invocations",
+            framework=v1_protos.PipelineFramework(
+                dbt=v1_protos.DbtFrameworkSpec(
+                    airflow_worker=v1_protos.DbtAirflowExecution(
+                        project_directory_path="dbt/project",
+                    ),
+                    output_gcs_uri="gs://my-bucket/dbt-outputs/",
+                    invocations=[
+                        v1_protos.DbtInvocation(command="seed"),
+                        v1_protos.DbtInvocation(
+                            command="build",
+                            select=["tag:nightly", "my_model+"],
+                            exclude=["old_model"],
+                            vars={"env": "prod"},
+                            full_refresh=True,
+                            fail_fast=True,
+                            threads=4,
+                            target="prod",
+                            extra_args=["--store-failures"],
+                        ),
+                    ],
+                )
+            ),
+        )
+        internal_dbt = self.converter._convert_pipeline_action(
+            dbt_action, self.defaults
+        )
+        self.assertIsInstance(internal_dbt, internal_actions.DBTActionModel)
+        self.assertEqual(internal_dbt.source.path, "resolved/dbt/project")
+        self.assertEqual(
+            internal_dbt.output_gcs_uri, "gs://my-bucket/dbt-outputs/"
+        )
+        self.assertEqual(
+            internal_dbt.invocations,
+            [
+                internal_actions.DbtInvocationModel(command="seed"),
+                internal_actions.DbtInvocationModel(
+                    command="build",
+                    select=["tag:nightly", "my_model+"],
+                    exclude=["old_model"],
+                    vars={"env": "prod"},
+                    full_refresh=True,
+                    fail_fast=True,
+                    threads=4,
+                    target="prod",
+                    extra_args=["--store-failures"],
+                ),
+            ],
+        )
+
+    def test_convert_pipeline_action_dbt_select_models_and_invocations_mutually_exclusive(
+        self,
+    ):
+        """Tests that setting both select_models and invocations raises ValueError."""
+        dbt_action = v1_protos.PipelineAction(
+            name="dbt-task-conflict",
+            framework=v1_protos.PipelineFramework(
+                dbt=v1_protos.DbtFrameworkSpec(
+                    airflow_worker=v1_protos.DbtAirflowExecution(
+                        project_directory_path="dbt/project",
+                        select_models=["legacy_model"],
+                    ),
+                    invocations=[
+                        v1_protos.DbtInvocation(
+                            command="test",
+                            select=["new_model"],
+                        )
+                    ],
+                )
+            ),
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "Action dbt-task-conflict: 'select_models' and 'invocations' are mutually exclusive in DBT action.",
+        ):
+            self.converter._convert_pipeline_action(dbt_action, self.defaults)
 
     def test_convert_pipeline_action_dataform_local(self):
         """Tests conversion of a Dataform local execution action."""

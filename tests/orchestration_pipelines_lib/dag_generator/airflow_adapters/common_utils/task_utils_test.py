@@ -80,7 +80,7 @@ from orchestration_pipelines_lib.internal_models.pipeline import (
     PipelineModel,
     RunnerType,
 )
-from orchestration_pipelines_lib.scripts.dbt_wrapper import invoke_dbt_run
+from orchestration_pipelines_lib.scripts.dbt_wrapper import invoke_dbt
 from tests.conftest import IS_AIRFLOW_2
 
 if IS_AIRFLOW_2:
@@ -1112,7 +1112,6 @@ def dbt_action_full() -> DBTActionModel:
         executionMode="local",
         dependsOn=None,
         source=DbtLocalExecutionModel(path="/opt/dbt/my_project"),
-        select_models=["my_model+", "other_model"],
         params={"vars": '{"date": "2023-01-01"}'},
         executionTimeout="30m",
         triggerRule="all_success",
@@ -1126,7 +1125,6 @@ def dbt_action_minimal(dbt_action_full: DBTActionModel) -> DBTActionModel:
         dbt_action_full,
         name="dbt_minimal_run",
         source=DbtLocalExecutionModel(path="/opt/dbt/minimal_project"),
-        select_models=None,
         params={},
         executionTimeout=None,
     )
@@ -1147,7 +1145,7 @@ def test_creates_dbt_task_with_full_params(
 
     assert isinstance(result, adapter_imports.get_python_operator())
     assert result.task_id == "dbt_full_run"
-    assert result.python_callable is invoke_dbt_run
+    assert result.python_callable is invoke_dbt
     assert result.execution_timeout == timedelta(minutes=30)
     assert result.trigger_rule == "all_success"
     assert result.doc_md == json.dumps({"op_action_name": "dbt_full_run"})
@@ -1155,7 +1153,6 @@ def test_creates_dbt_task_with_full_params(
     expected_op_kwargs = {
         "project_dir": "/opt/dbt/my_project",
         "profiles_dir": "/opt/dbt/my_project",
-        "select_models": ["my_model+", "other_model"],
         "params": {"vars": '{"date": "2023-01-01"}'},
     }
     assert result.op_kwargs == expected_op_kwargs
@@ -1181,6 +1178,122 @@ def test_creates_dbt_task_with_minimal_params(
         "profiles_dir": "/opt/dbt/minimal_project",
     }
     assert result.op_kwargs == expected_op_kwargs
+
+
+def test_creates_dbt_task_with_invocations(
+    dbt_action_full,
+    pipeline,
+    sample_dag,
+):
+    """Tests creating DBT task with structured invocations."""
+    from orchestration_pipelines_lib.internal_models.actions import (
+        DbtInvocationModel,
+    )
+
+    action_with_invocations = replace(
+        dbt_action_full,
+        invocations=[
+            DbtInvocationModel(command="seed"),
+            DbtInvocationModel(
+                command="build",
+                select=["model_1"],
+                full_refresh=True,
+            ),
+        ],
+    )
+
+    result = create_dbt_task(
+        get_operator=adapter_imports.get_python_operator,
+        action=action_with_invocations,
+        pipeline=pipeline,
+        dag=sample_dag,
+    )
+
+    assert result.op_kwargs["project_dir"] == "/opt/dbt/my_project"
+    assert result.op_kwargs["profiles_dir"] == "/opt/dbt/my_project"
+    assert result.op_kwargs["invocations"] == [
+        {
+            "command": "seed",
+            "select": None,
+            "exclude": None,
+            "vars": None,
+            "full_refresh": False,
+            "fail_fast": False,
+            "threads": None,
+            "target": None,
+            "extra_args": None,
+        },
+        {
+            "command": "build",
+            "select": ["model_1"],
+            "exclude": None,
+            "vars": None,
+            "full_refresh": True,
+            "fail_fast": False,
+            "threads": None,
+            "target": None,
+            "extra_args": None,
+        },
+    ]
+
+
+@patch.dict("os.environ", {"GCS_BUCKET": "composer-bucket"})
+def test_creates_dbt_task_with_default_gcs_bucket_output_uri(
+    dbt_action_minimal,
+    pipeline,
+    sample_dag,
+):
+    """Tests that create_dbt_task populates standardized output_gcs_uri when GCS_BUCKET is set."""
+    sample_dag.doc_md = json.dumps(
+        {
+            "op_bundle": "bundle_1",
+            "op_version": "v123",
+            "op_pipeline": "pipe_1",
+        }
+    )
+
+    result = create_dbt_task(
+        get_operator=adapter_imports.get_python_operator,
+        action=dbt_action_minimal,
+        pipeline=pipeline,
+        dag=sample_dag,
+    )
+
+    assert result.op_kwargs["output_gcs_uri"] == (
+        "gs://composer-bucket/orchestration_pipelines_outputs/"
+        "bundle_1/versions/v123/pipe_1/{{ run_id }}/dbt_minimal_run/"
+    )
+
+
+def test_creates_dbt_task_with_custom_output_gcs_uri(
+    dbt_action_minimal,
+    pipeline,
+    sample_dag,
+):
+    """Tests that create_dbt_task formats custom output_gcs_uri with pipeline metadata."""
+    sample_dag.doc_md = json.dumps(
+        {
+            "op_bundle": "bundle_1",
+            "op_version": "v123",
+            "op_pipeline": "pipe_1",
+        }
+    )
+    action_with_custom_uri = replace(
+        dbt_action_minimal,
+        output_gcs_uri="gs://custom-bucket/dbt-outputs/",
+    )
+
+    result = create_dbt_task(
+        get_operator=adapter_imports.get_python_operator,
+        action=action_with_custom_uri,
+        pipeline=pipeline,
+        dag=sample_dag,
+    )
+
+    assert result.op_kwargs["output_gcs_uri"] == (
+        "gs://custom-bucket/dbt-outputs/"
+        "bundle_1/versions/v123/pipe_1/{{ run_id }}/dbt_minimal_run/"
+    )
 
 
 @pytest.fixture

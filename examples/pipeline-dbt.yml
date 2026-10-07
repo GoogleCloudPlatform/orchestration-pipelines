@@ -26,7 +26,6 @@ triggers:
   - schedule:
       interval: "0 5 * * *"
       startTime: "2025-10-01T00:00:00"
-      endTime: "2026-10-01T00:00:00"
       catchup: false
       timezone: "UTC"
 actions:
@@ -36,4 +35,16 @@ actions:
         dbt:
           airflowWorker:
             projectDirectoryPath: "dbt_project"
-            selectModels: ["model_1_stg", "model_2_vip"]
+          outputGcsUri: "gs://your-bucket-name/dbt-outputs/"
+          invocations:
+            - command: "run"
+              select: ["model_1_stg", "model_2_vip"]
+              vars:
+                amount: "80"
+              fullRefresh: true
+              failFast: true
+              threads: 2
+              target: "prod"
+            - command: "test"
+              select: ["model_1_stg", "model_2_vip"]
+              failFast: true

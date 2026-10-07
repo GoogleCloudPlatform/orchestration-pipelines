@@ -240,9 +240,26 @@ Orchestrates third-party transformation frameworks.
     - `airflow_worker` (`DbtAirflowExecution`): Executes locally on the Airflow
       worker.
       - `project_directory_path` (string, **Required**): Path to dbt project.
-      - `select_models` (`repeated string`): Models to run (equivalent to
-        `--select`).
-      - `tags` (`repeated string`): dbt tags to filter.
+      - `select_models` (`repeated string`): **[DEPRECATED]** Models to run
+        (equivalent to `--select`). Use `invocations` instead.
+      - `tags` (`repeated string`): **[DEPRECATED]** dbt tags to filter.
+    - `output_gcs_uri` (string, optional): GCS URI (`gs://...`) where dbt
+      `target/` and `logs/` artifacts are uploaded after execution. Defaults
+      to the Composer environment's bucket under
+      `orchestration_pipelines_outputs/` when `GCS_BUCKET` is set.
+    - `invocations` (`repeated DbtInvocation`, optional): Ordered sequence of
+      structured dbt commands executed sequentially. Defaults to a single `run`
+      invocation if omitted.
+      - `command` (string, **Required**): Base dbt command (`build`, `run`,
+        `test`, `snapshot`, `freshness`, `seed`, `compile`).
+      - `select` (`repeated string`, optional): Node selection (`--select`).
+      - `exclude` (`repeated string`, optional): Node exclusion (`--exclude`).
+      - `vars` (`map<string, string>`, optional): Variables passed via `--vars`.
+      - `full_refresh` (bool, optional): Pass `--full-refresh`.
+      - `fail_fast` (bool, optional): Pass `--fail-fast`.
+      - `threads` (int32, optional): Number of threads (`--threads`, >= 0).
+      - `target` (string, optional): Target profile name (`--target`).
+      - `extra_args` (`repeated string`, optional): Additional CLI flags.
   - `dataform`: Runs Dataform.
     - `dataform_service` (`DataformServiceExecution`): Executes via GCP Dataform
       API.
@@ -360,11 +377,11 @@ pipeline.
   - `operator_class` (string, **Required**): Fully qualified Python path to the
     Airflow operator class (e.g., `airflow.operators.bash.BashOperator`,
     `airflow.providers.http.operators.http.HttpOperator`).
-  - `params` (mapping/dictionary): Operator-specific parameters passed
-    directly to the operator's constructor as keyword arguments (`**kwargs`).
-    Supports arbitrarily nested structures (primitives, lists, maps) to
-    configure operators with complex requirements (e.g., BigQuery job
-    configurations, HTTP headers/payloads).
+  - `params` (mapping/dictionary): Operator-specific parameters passed directly
+    to the operator's constructor as keyword arguments (`**kwargs`). Supports
+    arbitrarily nested structures (primitives, lists, maps) to configure
+    operators with complex requirements (e.g., BigQuery job configurations,
+    HTTP headers/payloads).
 - **Examples**:
   - [pipeline-airflow-task-action.yml](../examples/pipeline-airflow-task-action.yml)
 

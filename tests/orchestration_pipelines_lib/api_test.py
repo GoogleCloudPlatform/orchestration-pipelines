@@ -905,6 +905,7 @@ def test_generate_dag_worker_path(
     mock_get_manifest.assert_not_called()
     mock_get_versions.assert_not_called()
 
+
 @patch("time.sleep", return_value=None)
 def test_generate_dags_retries_on_manifest_read_failure(
     mock_sleep: MagicMock,
@@ -935,3 +936,40 @@ def test_generate_dags_retries_on_manifest_read_failure(
 
     assert mock_get_manifest.call_count == 3
     assert len(globals_dict) > 0
+
+
+def test_generate_dbt_pipeline() -> None:
+    """Tests that api.validate and api.generate correctly create a DAG for
+    examples/pipeline-dbt.yml.
+    """
+    example_path = os.path.join(_PROJECT_ROOT, "examples/pipeline-dbt.yml")
+    api.validate(example_path)
+
+    globals_dict = {}
+    api.generate(example_path, globals_dict)
+
+    assert "pipeline-dbt" in globals_dict
+    dag = globals_dict["pipeline-dbt"]
+    assert isinstance(dag, DAG)
+
+    tasks_map = {t.task_id: t for t in dag.tasks}
+    assert "dbt-action" in tasks_map
+    dbt_task = tasks_map["dbt-action"]
+    assert isinstance(dbt_task, PythonOperator)
+    assert dbt_task.op_kwargs["output_gcs_uri"] == (
+        "gs://your-bucket-name/dbt-outputs/"
+        "unknown_bundle/versions/unknown_version/pipeline-dbt/"
+        "{{ run_id }}/dbt-action/"
+    )
+    assert len(dbt_task.op_kwargs["invocations"]) == 2
+    assert dbt_task.op_kwargs["invocations"][0]["command"] == "run"
+    assert dbt_task.op_kwargs["invocations"][0]["select"] == [
+        "model_1_stg",
+        "model_2_vip",
+    ]
+    assert dbt_task.op_kwargs["invocations"][0]["vars"] == {"amount": "80"}
+    assert dbt_task.op_kwargs["invocations"][0]["full_refresh"] is True
+    assert dbt_task.op_kwargs["invocations"][0]["fail_fast"] is True
+    assert dbt_task.op_kwargs["invocations"][0]["threads"] == 2
+    assert dbt_task.op_kwargs["invocations"][0]["target"] == "prod"
+    assert dbt_task.op_kwargs["invocations"][1]["command"] == "test"
