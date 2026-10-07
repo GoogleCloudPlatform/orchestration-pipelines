@@ -54,6 +54,7 @@ from orchestration_pipelines_lib.utils.metrics import (
     ActionExecutionEngine,
     ActionExecutionType,
     wrap_operator,
+    wrap_retry_operator,
 )
 
 from .retry_resolver import RetryResolver
@@ -1188,7 +1189,13 @@ def create_bq_dts_task(
                     )
                 }
 
-            start_task = BigQueryDataTransferServiceStartTransferRunsOperator(
+            OrchestrationBigQueryDataTransferServiceStartTransferRunsOperator = (  # noqa: E501
+                wrap_retry_operator(
+                    BigQueryDataTransferServiceStartTransferRunsOperator
+                )
+            )
+
+            start_task = OrchestrationBigQueryDataTransferServiceStartTransferRunsOperator(  # noqa: E501
                 task_id=f"{action.name}_start",
                 transfer_config_id=action.config.transferConfigId,
                 project_id=project_id,

@@ -318,6 +318,43 @@ class MetricsMixin:
             return super().execute(context, **kwargs)  # type: ignore[misc]
 
 
+def wrap_retry_operator(
+    base_operator_class: type[T],
+) -> type[T]:
+    """Creates a wrapper operator class with RetryMixin."""
+    if not issubclass(base_operator_class, BaseOperator):
+        return base_operator_class
+
+    cls_name = f"Orchestration{base_operator_class.__name__}"
+    cls_qualname = f"Orchestration{base_operator_class.__qualname__}"
+
+    def __init__(
+        self: Any,
+        *args: Any,
+        _op_custom_retry_policy: Any = None,
+        **kwargs: Any,
+    ) -> None:
+        super(orchestration_cls, self).__init__(
+            *args,
+            _op_custom_retry_policy=_op_custom_retry_policy,
+            **kwargs,
+        )
+
+    namespace = {
+        "__init__": __init__,
+        "__qualname__": cls_qualname,
+        "__module__": base_operator_class.__module__,
+    }
+
+    orchestration_cls = type(
+        cls_name,
+        (RetryMixin, base_operator_class),
+        namespace,
+    )
+
+    return cast(type[T], orchestration_cls)
+
+
 def wrap_operator(
     base_operator_class: type[T],
     action_type: ActionExecutionType,

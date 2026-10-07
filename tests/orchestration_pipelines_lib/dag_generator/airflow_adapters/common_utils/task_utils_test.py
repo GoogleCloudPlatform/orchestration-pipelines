@@ -25,8 +25,8 @@ import pytest
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (  # noqa: E501
     _get_config_or_default,
     _upload_inline_query_to_gcs,
-    create_airflow_task,
     create_ai_task,
+    create_airflow_task,
     create_bq_dts_task,
     create_bq_operation_task,
     create_dataform_task,
@@ -62,12 +62,14 @@ from orchestration_pipelines_lib.internal_models.actions import (
     DBTActionModel,
     DbtLocalExecutionModel,
     EngineModel,
+    FixedDelayStrategyModel,
     OrchestrationPipelineActionModel,
     PythonScriptActionModel,
     PythonScriptConfigurationModel,
     PythonVirtualenvActionModel,
     PythonVirtualenvConfigurationModel,
     ResourceProfile,
+    RetryPolicyModel,
 )
 from orchestration_pipelines_lib.internal_models.pipeline import (
     CloudDefaultsModel,
@@ -1996,6 +1998,29 @@ def test_create_bq_dts_task_uses_runtime_params_fallback(
     task_group = create_bq_dts_task(bq_dts_action, pipeline, dag=sample_dag)
 
     assert task_group.group_id == "dts_runtime_params"
+
+
+def test_create_bq_dts_task_with_retry_policy(
+    bq_dts_action, pipeline, sample_dag
+):
+    """Tests create_bq_dts_task applies RetryPolicyModel to start_task."""
+    retry_policy = RetryPolicyModel(
+        maxRetries=2,
+        fixedDelay=FixedDelayStrategyModel(retryDelay="5m"),
+    )
+    action = replace(bq_dts_action, retryPolicy=retry_policy)
+    start_task_id = f"{action.name}.{action.name}_start"
+
+    task_group = create_bq_dts_task(action, pipeline, dag=sample_dag)
+
+    assert task_group.children[start_task_id].retries == 2
+    assert task_group.children[start_task_id].retry_delay == timedelta(
+        minutes=5
+    )
+    assert (
+        task_group.children[start_task_id]._op_custom_retry_policy
+        == retry_policy
+    )
 
 
 def test_create_bq_dts_task_raises_runtime_error_on_exception(

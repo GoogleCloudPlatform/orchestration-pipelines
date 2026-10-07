@@ -1,12 +1,17 @@
 """Tests for the metrics module."""
 
 import logging
+from datetime import timedelta
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from airflow.utils.state import DagRunState
 from airflow.utils.types import DagRunType
 
+from orchestration_pipelines_lib.internal_models.actions import (
+    FixedDelayStrategyModel,
+    RetryPolicyModel,
+)
 from orchestration_pipelines_lib.utils.metrics import (
     MODULE_NAME,
     VERSION_LABEL,
@@ -27,6 +32,7 @@ from orchestration_pipelines_lib.utils.metrics import (
     report_parsing,
     report_pipeline_run,
     wrap_operator,
+    wrap_retry_operator,
 )
 
 TARGET_MODULE = "orchestration_pipelines_lib.utils.metrics"
@@ -778,3 +784,31 @@ def test_wrap_operator_forwards_sentinel_kwargs_on_execute(
         "OrchestrationSentinelOperator__sentinel": "sentinel_val"
     }
 
+
+@patch(MOCK_BASE_OPERATOR, DummyBaseOperator)
+def test_wrap_retry_operator_applies_retry_mixin_without_metrics():
+    """Tests that wrap_retry_operator adds RetryMixin without MetricsMixin."""
+    policy = RetryPolicyModel(
+        maxRetries=3,
+        fixedDelay=FixedDelayStrategyModel(retryDelay="30s"),
+    )
+    WrappedClass = wrap_retry_operator(DummyOperator)  # type: ignore
+
+    instance = WrappedClass(_op_custom_retry_policy=policy)  # type: ignore
+
+    assert WrappedClass.__name__ == "OrchestrationDummyOperator"
+    assert issubclass(WrappedClass, DummyOperator)
+    assert issubclass(WrappedClass, RetryMixin)
+    assert not issubclass(WrappedClass, MetricsMixin)
+    assert instance.retries == 3
+    assert instance.retry_delay == timedelta(seconds=30)
+    assert instance._op_custom_retry_policy == policy
+
+
+def test_wrap_retry_operator_non_base_operator():
+    """Tests wrap_retry_operator returns original class if not BaseOperator."""
+    non_operator_cls = type("NotAnOperator", (), {})
+
+    result = wrap_retry_operator(non_operator_cls)  # type: ignore
+
+    assert result is non_operator_cls
