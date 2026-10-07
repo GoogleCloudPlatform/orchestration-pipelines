@@ -2192,3 +2192,22 @@ def test_create_vertex_custom_job_task_raises_runtime_error_on_exception(
         create_ai_task(action, pipeline, dag=sample_dag)
 
     assert isinstance(exc_info.value.__cause__, TypeError)
+
+
+def test_create_vertex_custom_job_task_raises_runtime_error_on_missing_operator(
+    vertex_custom_job_action, pipeline, sample_dag, monkeypatch
+):
+    """Tests _create_vertex_custom_job_task raises RuntimeError when CreateCustomJobOperator is unavailable."""
+    monkeypatch.delattr(
+        "airflow.providers.google.cloud.operators.vertex_ai.custom_job.CreateCustomJobOperator",
+        raising=False,
+    )
+
+    with pytest.raises(RuntimeError) as exc_info:
+        create_ai_task(vertex_custom_job_action, pipeline, dag=sample_dag)
+
+    assert (
+        "The Agent Platform CreateCustomJobOperator is not available in "
+        "the installed version of apache-airflow-providers-google"
+    ) in str(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, ImportError)

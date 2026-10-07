@@ -7,6 +7,9 @@ constraints, and temporary limitations of `orchestration-pipelines`.
 
 - **Airflow Compatibility:** Versions of the package 0.4.0 and older are not
   compatible with Airflow 3.2.0+.
+- **Vertex AI CustomJob Action (`create_and_run_custom_job`):** Only valid with
+  Airflow versions compatible with `apache-airflow-providers-google>=22.5.0`
+  (requires Airflow 2.11.0+; not supported on Airflow 2.10.x).
 - **Python Versions:** Supported only on Python 3.10+. Older Python runtimes
   (e.g., 3.9) are not supported.
 

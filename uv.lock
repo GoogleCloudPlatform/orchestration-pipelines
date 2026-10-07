@@ -753,15 +753,15 @@ wheels = [
 
 [[package]]
 name = "apache-airflow-providers-sqlite"
-version = "4.3.3"
+version = "4.3.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apache-airflow", version = "2.11.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
     { name = "apache-airflow-providers-common-sql", marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c2/e2/661b59a838918d76a32c9f9baf94bf01a402a23376959dd7df3f6a6f8a17/apache_airflow_providers_sqlite-4.3.3.tar.gz", hash = "sha256:4a4cae6dd9b26cc74ce887635f4903ff71b17ff540024468aa8059a3dfe6c2c6", size = 33588, upload-time = "2026-06-07T09:44:32.782Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b2/af/0f5078ac8cb4365b2f45773b603334c26cab056cb79141782b50586f4595/apache_airflow_providers_sqlite-4.3.2.tar.gz", hash = "sha256:26c786a21abc50a321cc49e97a1b2fc177dde71307965f8ab98762fbc0278dee", size = 33410, upload-time = "2026-04-12T14:22:44.385Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/70/2a/aa5b972e792c93556ca6ffecf411d11b206aca15289762150606bcf3cf40/apache_airflow_providers_sqlite-4.3.3-py3-none-any.whl", hash = "sha256:1795660bf01b3e863d18e86b96467d3c5cbc727e493da1a14dddec30a596ad24", size = 11503, upload-time = "2026-06-07T09:43:24.887Z" },
+    { url = "https://files.pythonhosted.org/packages/88/d4/0b38873e7bc034723262e130d4a0b5428074c0afb8b17f662a0cbfcb4b2f/apache_airflow_providers_sqlite-4.3.2-py3-none-any.whl", hash = "sha256:db823522edc6c833af2d03aa0d4ef1ab0f8d5ea1c50b4d5ac4e2238675b8cd4b", size = 11502, upload-time = "2026-04-12T14:21:10.765Z" },
 ]
 
 [[package]]
@@ -1653,7 +1653,7 @@ wheels = [
 
 [[package]]
 name = "db-dtypes"
-version = "1.7.1"
+version = "1.7.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
@@ -1664,9 +1664,9 @@ dependencies = [
     { name = "pandas", version = "3.0.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
     { name = "pyarrow" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7d/bc/b348b35245452af9a6c8a360ae3434f027b919349a786d1cb73ded0c234e/db_dtypes-1.7.1.tar.gz", hash = "sha256:75adf3bdf3174a6474ea4162d9a345ea0b3102ec4fd603e69ec26b6e8a99145a", size = 36036, upload-time = "2026-07-08T17:03:35.671Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a3/6f/c89f2a8981b01c2712868028f2a8a1e4c1d99a9154a19b493e393148da63/db_dtypes-1.7.2.tar.gz", hash = "sha256:0fb8794a29adb3d4e56c4347eecf9711ad35d847b6fb3d32e2c5a4de021f5afc", size = 36408, upload-time = "2026-10-01T18:14:06.137Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/83/5a/5601050daf8f21d201e7ff68cda559aac56b5be18632876daf7a711809b5/db_dtypes-1.7.1-py3-none-any.whl", hash = "sha256:450b94cd010cfa6d4d13cca2593009eba4fbe15516084c332cde1a47bbce0625", size = 17768, upload-time = "2026-07-08T17:03:03.252Z" },
+    { url = "https://files.pythonhosted.org/packages/b5/51/3aec09b651917a0fe9bd968adb7888882064eddabb868cff8102e3f088c1/db_dtypes-1.7.2-py3-none-any.whl", hash = "sha256:3bf00b681afc270ae3b329b3f7e5b61fbea3f425226bb168ccfad2665ee8221b", size = 17764, upload-time = "2026-10-01T18:07:07.512Z" },
 ]
 
 [[package]]
@@ -2833,7 +2833,7 @@ wheels = [
 
 [[package]]
 name = "google-cloud-dataproc"
-version = "5.30.0"
+version = "5.31.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-core", extra = ["grpc"] },
@@ -2843,9 +2843,9 @@ dependencies = [
     { name = "proto-plus" },
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ec/02/efe55b880fbc34b6874191af644614141d641569ed35603c53a548c9ab38/google_cloud_dataproc-5.30.0.tar.gz", hash = "sha256:2a3c44cc3d6a3d7a680dc9331f1f97cd57c5934a1357aee77a07607276644e6d", size = 591835, upload-time = "2026-07-08T17:03:46.202Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f1/30/65ccd4456e0109b516593bc77b37693adf00e1f4414d96776ba1f4f8f1b3/google_cloud_dataproc-5.31.0.tar.gz", hash = "sha256:56edc831b4190abb4b3c3b951ae90ed511e1df596f0b3a96435e5c7a894b091c", size = 571674, upload-time = "2026-10-01T18:16:05.539Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b1/cb/2ffcff4764c2a326a634f7b38a5173ebbaf12e3819be5a2bc91e5bd87dc3/google_cloud_dataproc-5.30.0-py3-none-any.whl", hash = "sha256:9b51d37b91ae2c300effd4cf645d57c9484fa601d47a34a30d01fd822b63fd1a", size = 496258, upload-time = "2026-07-08T17:03:16.138Z" },
+    { url = "https://files.pythonhosted.org/packages/04/fc/a0a83efef3f6fd42bb0e072d789507d472d96d4e9cc3f628c8382fc56d02/google_cloud_dataproc-5.31.0-py3-none-any.whl", hash = "sha256:3fd0111a72fdd23b56f7cd72a828c1e740b5aec835801ff8e2971e5fe8afa69c", size = 485377, upload-time = "2026-10-01T18:09:43.127Z" },
 ]
 
 [[package]]
@@ -5658,6 +5658,7 @@ airflow2 = [
 airflow3 = [
     { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" } },
     { name = "apache-airflow-client" },
+    { name = "apache-airflow-providers-google" },
 ]
 dev = [
     { name = "apache-airflow-providers-http" },
@@ -5674,7 +5675,7 @@ requires-dist = [
     { name = "apache-airflow", specifier = ">=2.9.0" },
     { name = "apache-airflow-client" },
     { name = "apache-airflow-providers-cncf-kubernetes" },
-    { name = "apache-airflow-providers-google", specifier = ">=22.5.0" },
+    { name = "apache-airflow-providers-google", specifier = ">=19.0.0" },
     { name = "dbt-core", specifier = ">=1.0.0" },
     { name = "google-auth" },
     { name = "google-cloud-aiplatform", specifier = ">=1.163.0" },
@@ -5694,6 +5695,7 @@ airflow2 = [{ name = "apache-airflow", specifier = ">=2.9.0,<3.0.0" }]
 airflow3 = [
     { name = "apache-airflow", specifier = ">=3.0.0,<4.0.0" },
     { name = "apache-airflow-client", specifier = ">=3.0.0,<4.0.0" },
+    { name = "apache-airflow-providers-google", specifier = ">=22.5.0" },
 ]
 dev = [
     { name = "apache-airflow-providers-http" },

@@ -1399,9 +1399,16 @@ def _create_vertex_custom_job_task(
     Returns:
         An instance of CreateCustomJobOperator wrapped with observability.
     """
-    from airflow.providers.google.cloud.operators.vertex_ai import (
-        custom_job as vertex_ai_custom_job,
-    )
+    try:
+        from airflow.providers.google.cloud.operators.vertex_ai.custom_job import (
+            CreateCustomJobOperator,
+        )
+    except ImportError as e:
+        raise RuntimeError(
+            "The Agent Platform CreateCustomJobOperator is not available in the installed "
+            "version of apache-airflow-providers-google. Please upgrade to a "
+            "newer version (>=22.5.0) to use this feature."
+        ) from e
 
     try:
         if not isinstance(
@@ -1421,7 +1428,7 @@ def _create_vertex_custom_job_task(
             custom_job["labels"] = existing_labels
 
         ObservableCreateCustomJobOperator = wrap_operator(
-            vertex_ai_custom_job.CreateCustomJobOperator,
+            CreateCustomJobOperator,
             ActionExecutionType.from_action_type(action.type),
             ActionExecutionEngine.AGENT_PLATFORM,
             get_pipeline_metadata,

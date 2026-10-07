@@ -307,6 +307,9 @@ inference on Vertex AI via `AgentPlatform`.
       impersonation chain for the batch prediction job.
   - `create_and_run_custom_job` (`AgentPlatformCreateAndRunCustomJob`,
     `oneof type`):
+    *Note: This action is only supported on Airflow versions compatible with
+    `apache-airflow-providers-google>=22.5.0`. Check details in
+    [Limitations](./limitations.md).*
     - `custom_job` (`google.protobuf.Struct`): Agent Platform [`CustomJob`](https://cloud.google.com/python/docs/reference/aiplatform/latest/google.cloud.aiplatform_v1.types.CustomJob)
       configuration (`display_name`, `job_spec`, etc.).
     - `execution_timeout` (string, optional): ISO 8601 duration string for
