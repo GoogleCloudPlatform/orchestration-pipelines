@@ -8,10 +8,34 @@ and this project adheres to
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [1.2.0] - 2026-10-08
+
+### Added
+
+- Support for `AirflowTaskAction` (`airflow_task`) to instantiate and execute
+  arbitrary Apache Airflow operators within a pipeline.
+- Support for creating and running Vertex AI custom jobs
+  (`create_and_run_custom_job`) in `AIAction`.
+- Support for `retry_policy` at both pipeline defaults and action levels with
+  `fixed_delay` and `exponential_backoff` strategies.
+- Support for email notifications on pipeline success (`on_pipeline_success`).
+- Support for passing `data_root` in `generate()` for unversioned pipelines.
+
+### Changed
+
+- Updated minimum required Python version to 3.10+.
+
+### Deprecated
+
+- `execution_config` in pipeline `defaults` in favor of `retry_policy`.
+
 ### Fixed
 
 - Resolved Dataproc file references (`main_file_path`, `py_files`, and
   `archive_uris`) to Cloud Storage blob URIs in Converter V1.
+- Improved handling of missing pipeline definition files during DAG generation.
+- Surfaced task creation errors with action context when generating tasks.
+- Preserved negative signs when converting durations in `duration_to_timedelta`.
 
 ## [1.1.0] - 2026-09-02
 
@@ -134,4 +158,5 @@ and this project adheres to
 [0.4.1]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.0...v0.4.1
 [1.0.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.1...v1.0.0
 [1.1.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.0.0...v1.1.0
-[Unreleased]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.1.0...main
+[1.2.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.1.0...v1.2.0
+[Unreleased]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.2.0...main
