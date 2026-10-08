@@ -406,10 +406,9 @@ def _generate_dag_for_version(
     from orchestration_pipelines_lib.utils.pipeline_metadata import (
         PipelineMetadata,
     )
+
     metadata = PipelineMetadata(
-        pipeline_id=pipeline_id,
-        manifest=manifest,
-        version_id=version_id
+        pipeline_id=pipeline_id, manifest=manifest, version_id=version_id
     )
 
     _generate_dag(

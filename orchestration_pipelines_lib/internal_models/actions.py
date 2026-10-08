@@ -312,15 +312,17 @@ class AIActionModel(ActionBaseModel):
         "create_and_run_custom_job",
     ]
     config: (
-        AgentPlatformModelUploadSpecModel |
-        AgentPlatformBatchInferenceSpecModel |
-        AgentPlatformCreateAndRunCustomJobSpecModel
+        AgentPlatformModelUploadSpecModel
+        | AgentPlatformBatchInferenceSpecModel
+        | AgentPlatformCreateAndRunCustomJobSpecModel
     )
     labels: dict[str, str] | None = None
+
 
 @dataclass
 class AirflowActionModel(ActionBaseModel):
     """Internal model representing an Airflow action."""
+
     type: Literal["airflow_task"]
     operator_class: str
     params: dict[str, Any] | None = None

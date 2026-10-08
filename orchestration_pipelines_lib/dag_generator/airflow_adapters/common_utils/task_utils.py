@@ -1485,7 +1485,9 @@ def create_ai_task(
         case "model_upload":
             return _create_vertex_upload_model_task(action, pipeline, dag=dag)
         case "batch_inference":
-            return _create_vertex_batch_inference_task(action, pipeline, dag=dag)
+            return _create_vertex_batch_inference_task(
+                action, pipeline, dag=dag
+            )
         case "create_and_run_custom_job":
             return _create_vertex_custom_job_task(action, pipeline, dag=dag)
         case _:
