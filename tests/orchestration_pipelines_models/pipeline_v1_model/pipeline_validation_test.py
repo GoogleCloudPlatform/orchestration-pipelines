@@ -902,5 +902,30 @@ def test_ai_action_create_and_run_custom_job_missing_custom_job_fails(
         PipelineValidator.validate(valid_pipeline_for_custom_job)
 
 
+def test_ai_action_create_and_run_custom_job_empty_custom_job_fails(
+    valid_pipeline_for_custom_job,
+):
+    """Tests that an empty custom_job Struct in create_and_run_custom_job fails."""
+    ai_action = Action(
+        ai=AIAction(
+            name="custom-job-action",
+            agent_platform=AgentPlatform(
+                create_and_run_custom_job=AgentPlatformCreateAndRunCustomJob(
+                    custom_job=struct_pb2.Struct(),
+                    execution_timeout="2h",
+                )
+            ),
+        )
+    )
+    valid_pipeline_for_custom_job.actions.append(ai_action)
+    expected_error = (
+        r"Error for field 'actions\[0\]\.ai\.agent_platform"
+        r"\.create_and_run_custom_job\.custom_job': "
+        r"field is required and cannot be empty\."
+    )
+    with pytest.raises(ValueError, match=expected_error):
+        PipelineValidator.validate(valid_pipeline_for_custom_job)
+
+
 if __name__ == "__main__":
     unittest.main()

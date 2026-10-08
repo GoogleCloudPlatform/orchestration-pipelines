@@ -14,6 +14,7 @@
 #
 """Unit tests for the OrchestrationPipelineBuilder."""
 
+import pytest
 import unittest
 import os
 import yaml
@@ -1365,6 +1366,43 @@ def test_build_ai_action_vertex_create_and_run_custom_job_success():
         "sa-1@project.iam.gserviceaccount.com"
     ]
     assert custom_job_spec.custom_job["displayName"] == "my_custom_job"
+
+
+def test_build_ai_action_vertex_create_and_run_custom_job_empty_custom_job_fails():
+    """Tests that building create_and_run_custom_job with empty custom_job: {} fails."""
+
+    pipeline_def = {
+        "model_version": "1.0",
+        "pipeline_id": "valid_pipeline_1",
+        "runner": "airflow",
+        "owner": "data_eng_team",
+        "defaults": {
+            "project_id": "gcp-project-default",
+            "location": "us-central1",
+        },
+        "actions": [
+            {
+                "ai": {
+                    "name": "custom_job_vertex",
+                    "agent_platform": {
+                        "project_id": "custom-project",
+                        "location": "us-central1",
+                        "create_and_run_custom_job": {
+                            "custom_job": {},
+                        },
+                    },
+                }
+            }
+        ],
+    }
+
+    expected_error = (
+        r"Error for field 'actions\[0\]\.ai\.agent_platform"
+        r"\.create_and_run_custom_job\.custom_job': "
+        r"field is required and cannot be empty\."
+    )
+    with pytest.raises(ValueError, match=expected_error):
+        OrchestrationPipelineBuilder.build(pipeline_def)
 
 
 if __name__ == "__main__":
