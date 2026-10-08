@@ -1164,6 +1164,8 @@ class ConverterV1ToInternal:
             if action.HasField("params") and action.params
             else None
         )
+        retry_policy = self._convert_action_retry_policy(action, defaults)
+
         return internal_actions.AirflowActionModel(
             name=action.name,
             type="airflow_task",
@@ -1172,6 +1174,7 @@ class ConverterV1ToInternal:
             triggerRule=self._convert_trigger_rule(action.trigger_rule),
             operator_class=action.operator_class,
             params=params,
+            retryPolicy=retry_policy,
         )
 
     def _get_labels(self, tags: list[str]):

@@ -1260,6 +1260,34 @@ class TestConverterV1ToInternal(unittest.TestCase):
             self.converter._convert_pipeline_action(dataform_service_invalid,
                                                     self.defaults)
 
+    def test_convert_airflow_task_action(self):
+        """Tests conversion of AirflowTaskAction."""
+        from google.protobuf.struct_pb2 import Struct
+        params_struct = Struct()
+        params_struct.update({"bash_command": "echo hello"})
+        action = v1_protos.AirflowTaskAction(
+            name="my-airflow-task",
+            depends_on=["task_a"],
+            trigger_rule=v1_protos.TriggerRule.all_done,
+            operator_class="airflow.operators.bash.BashOperator",
+            params=params_struct,
+            retry_policy=v1_protos.RetryPolicy(max_retries=3),
+        )
+
+        internal_model = self.converter._convert_airflow_task_action(
+            action, self.defaults, {}
+        )
+
+        self.assertEqual(internal_model.name, "my-airflow-task")
+        self.assertEqual(internal_model.type, "airflow_task")
+        self.assertEqual(internal_model.dependsOn, ["task_a"])
+        self.assertEqual(internal_model.triggerRule, "all_done")
+        self.assertEqual(
+            internal_model.operator_class, "airflow.operators.bash.BashOperator"
+        )
+        self.assertEqual(internal_model.params, {"bash_command": "echo hello"})
+        self.assertEqual(internal_model.retryPolicy.maxRetries, 3)
+
     def test_convert_pipeline_action_unknown_framework(self):
         """Tests that an unknown pipeline framework raises a TypeError."""
         unknown_framework_action = v1_protos.PipelineAction(

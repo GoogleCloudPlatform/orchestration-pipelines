@@ -49,6 +49,7 @@ from orchestration_pipelines_lib.internal_models.actions import (
     AgentPlatformBatchInferenceSpecModel,
     AgentPlatformCreateAndRunCustomJobSpecModel,
     AIActionModel,
+    AirflowActionModel,
     BigQueryDtsSpecModel,
     BqOperationActionModel,
     BqOperationConfigurationModel,
@@ -1919,13 +1920,16 @@ def test_create_airflow_task_standard_operators(
     pipeline,
 ):
     """Tests that create_airflow_task successfully instantiates common Airflow operators."""
-    action = MagicMock()
-    action.name = action_name
-    action.type = "airflow_task"
-    action.operator_class = operator_class
-    action.params = params
-    action.triggerRule = "all_done"
-    action.executionTimeout = "120s"
+    action = AirflowActionModel(
+        name=action_name,
+        type="airflow_task",
+        operator_class=operator_class,
+        params=params,
+        triggerRule="all_done",
+        executionTimeout="120s",
+        dependsOn=[],
+        retryPolicy=None,
+    )
 
     task = create_airflow_task(action, pipeline, sample_dag)
 
@@ -1938,15 +1942,38 @@ def test_create_airflow_task_standard_operators(
         assert getattr(task, param_name) == param_value
 
 
+def test_create_airflow_task_with_retry_policy(sample_dag, pipeline):
+    from orchestration_pipelines_lib.internal_models.actions import RetryPolicyModel, FixedDelayStrategyModel
+
+    action = AirflowActionModel(
+        name="test_retry_task",
+        type="airflow_task",
+        operator_class="airflow.operators.empty.EmptyOperator",
+        params={},
+        triggerRule="all_done",
+        executionTimeout=None,
+        dependsOn=[],
+        retryPolicy=RetryPolicyModel(maxRetries=5, fixedDelay=FixedDelayStrategyModel(retryDelay="60s")),
+    )
+
+    task = create_airflow_task(action, pipeline, sample_dag)
+
+    assert task.retries == 5
+    assert task.retry_delay == timedelta(seconds=60)
+
+
 def test_create_airflow_task_invalid_operator_class_raises(sample_dag, pipeline):
      """Tests that invalid operator_class raises an exception."""
-     action = MagicMock()
-     action.name = "invalid_action"
-     action.type = "airflow_task"
-     action.operator_class = "airflow.operators.non_existent.FakeOperator"
-     action.params = {}
-     action.triggerRule = "all_success"
-     action.executionTimeout = None
+     action = AirflowActionModel(
+         name="invalid_action",
+         type="airflow_task",
+         operator_class="airflow.operators.non_existent.FakeOperator",
+         params={},
+         triggerRule="all_success",
+         executionTimeout=None,
+         dependsOn=[],
+         retryPolicy=None,
+     )
 
      with pytest.raises((ModuleNotFoundError, AttributeError)):
          create_airflow_task(action, pipeline, sample_dag)

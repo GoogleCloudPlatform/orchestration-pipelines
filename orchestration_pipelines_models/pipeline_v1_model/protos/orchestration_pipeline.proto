@@ -631,4 +631,5 @@ message AirflowTaskAction {
   TriggerRule trigger_rule = 4;
   string operator_class = 5 [(pipeline_models.validation.is_required) = true];
   google.protobuf.Struct params = 6 [(pipeline_models.validation.map_key_regex) = "^[a-zA-Z0-9_-]+$"];
+  RetryPolicy retry_policy = 7;
 }
