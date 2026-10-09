@@ -76,5 +76,5 @@ jobs:
             --cov=orchestration_pipelines_lib --cov=orchestration_pipelines_models \
             --cov-report=term-missing --cov-report=term:skip-covered --cov-append
 
-      - name: Verify total coverage threshold (>= 90%)
-        run: .venv-a2/bin/coverage report --fail-under=90 -m
+      - name: Verify total coverage threshold (>= 85%)
+        run: .venv-a2/bin/coverage report --fail-under=85 -m

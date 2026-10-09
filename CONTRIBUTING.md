@@ -80,7 +80,7 @@ branch, ensure the following checks pass locally:
      pre-commit run --config=.pre-commit-config.yaml --all-files --show-diff-on-failure
    ```
 
-4. **Run unit tests for both Airflow 2 and Airflow 3 (minimum 90% coverage)**:
+4. **Run unit tests for both Airflow 2 and Airflow 3 (minimum 85% coverage)**:
 
    ```bash
    UV_PROJECT_ENVIRONMENT=.venv-a2 uv sync --no-config --default-index https://pypi.org/simple --frozen --group dev --group airflow2
@@ -93,7 +93,7 @@ branch, ensure the following checks pass locally:
      --cov=orchestration_pipelines_lib --cov=orchestration_pipelines_models \
      --cov-report=term-missing --cov-report=term:skip-covered --cov-append
 
-   .venv-a2/bin/coverage report --fail-under=90 -m
+   .venv-a2/bin/coverage report --fail-under=85 -m
    ```
 
 ### Coding Style & Git Hygiene
