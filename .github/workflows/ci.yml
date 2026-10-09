@@ -1,0 +1,80 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-format:
+    name: Lint & Format Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11.9"
+          enable-cache: true
+
+      - name: Verify uv.lock consistency
+        run: uv lock --check --no-config --default-index https://pypi.org/simple
+
+      - name: Run Ruff Linter
+        run: |
+          uv run --no-config --default-index https://pypi.org/simple --frozen --group dev \
+            ruff check orchestration_pipelines_lib orchestration_pipelines_models examples
+
+      - name: Run pre-commit (formatting, YAML, markdownlint)
+        run: |
+          PRE_COMMIT_USE_UV=1 PIP_EXTRA_INDEX_URL=https://pypi.org/simple \
+            uv run --no-config --default-index https://pypi.org/simple --frozen --group dev \
+            pre-commit run --config=.pre-commit-config.yaml --all-files --show-diff-on-failure
+
+  unit-tests:
+    name: Unit Tests & Coverage (Airflow 2 & 3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11.9"
+          enable-cache: true
+
+      - name: Create Airflow 2 environment & run tests
+        run: |
+          UV_PROJECT_ENVIRONMENT=.venv-a2 uv sync --no-config --default-index https://pypi.org/simple --frozen --group dev --group airflow2
+          PYTHONPATH=. .venv-a2/bin/pytest tests/ \
+            --cov=orchestration_pipelines_lib --cov=orchestration_pipelines_models \
+            --cov-report=term-missing --cov-report=term:skip-covered --cov-append
+
+      - name: Create Airflow 3 environment & run tests
+        run: |
+          UV_PROJECT_ENVIRONMENT=.venv-a3 uv sync --no-config --default-index https://pypi.org/simple --frozen --group dev --group airflow3
+          PYTHONPATH=. .venv-a3/bin/pytest tests/ \
+            --cov=orchestration_pipelines_lib --cov=orchestration_pipelines_models \
+            --cov-report=term-missing --cov-report=term:skip-covered --cov-append
+
+      - name: Verify total coverage threshold (>= 90%)
+        run: .venv-a2/bin/coverage report --fail-under=90 -m
