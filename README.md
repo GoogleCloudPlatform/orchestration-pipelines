@@ -125,7 +125,7 @@ See the `examples/` directory for a sample `manifest.yml` and how to use it.
 ## Contributing
 
 Contributions are welcome! Please see
-[contributing.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/contributing.md)
+[CONTRIBUTING.md](https://github.com/GoogleCloudPlatform/orchestration-pipelines/blob/main/CONTRIBUTING.md)
 for guidelines.
 
 ## License
