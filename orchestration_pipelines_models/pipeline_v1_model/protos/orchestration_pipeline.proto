@@ -95,11 +95,9 @@ message ExponentialBackoffStrategy {
     (pipeline_models.validation.is_required) = true,
     (pipeline_models.validation.is_iso8601_duration) = true
   ];
-  string max_delay = 2 [
-    (pipeline_models.validation.is_iso8601_duration) = true
-  ];
-  double multiplier = 3;      // Default: 2.0
-  bool randomize_jitter = 4;  // Default: false
+  string max_delay = 2 [(pipeline_models.validation.is_iso8601_duration) = true];
+  double multiplier = 3; // Default: 2.0
+  bool randomize_jitter = 4; // Default: false
 }
 
 message RetryPolicy {
