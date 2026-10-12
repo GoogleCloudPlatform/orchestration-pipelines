@@ -8,6 +8,13 @@ and this project adheres to
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [1.2.1] - 2026-10-12
+
+### Removed
+
+- Unused `papermill` runtime dependency (and its transitive Jupyter
+  dependencies) from the package.
+
 ## [1.2.0] - 2026-10-08
 
 ### Added
@@ -159,4 +166,5 @@ and this project adheres to
 [1.0.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v0.4.1...v1.0.0
 [1.1.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.0.0...v1.1.0
 [1.2.0]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.1.0...v1.2.0
-[Unreleased]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.2.0...main
+[1.2.1]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.2.0...v1.2.1
+[Unreleased]: https://github.com/GoogleCloudPlatform/orchestration-pipelines/compare/v1.2.1...main
