@@ -50,7 +50,7 @@ changes**, you must submit an AIP before writing the implementation code:
 
 ### Prerequisites
 
-- **Python**: `>= 3.10` (CI runs on Python `3.11.9`)
+- **Python**: `>= 3.11` (CI runs on Python `3.11.9`)
 - **uv**: Used for dependency management, lockfile verification, and running
   test/lint environments.
 

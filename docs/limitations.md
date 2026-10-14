@@ -10,8 +10,8 @@ constraints, and temporary limitations of `orchestration-pipelines`.
 - **Vertex AI CustomJob Action (`create_and_run_custom_job`):** Only valid with
   Airflow versions compatible with `apache-airflow-providers-google>=22.5.0`
   (requires Airflow 2.11.0+; not supported on Airflow 2.10.x).
-- **Python Versions:** Supported only on Python 3.10+. Older Python runtimes
-  (e.g., 3.9) are not supported.
+- **Python Versions:** Supported only on Python 3.11+. Older Python runtimes
+  (e.g., 3.10) are not supported.
 
 ## 2. Feature Limitations
 

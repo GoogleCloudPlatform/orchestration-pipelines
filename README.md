@@ -27,7 +27,7 @@ pipelines.
 
 ## Supported Python Versions
 
-Python >= 3.10
+Python >= 3.11
 
 ## Features
 
