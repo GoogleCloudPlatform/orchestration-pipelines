@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 import logging
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import yaml
@@ -56,7 +56,7 @@ if TYPE_CHECKING:
     from google.protobuf.message import Message
 
 
-class AirflowTriggerRule(str, Enum):
+class AirflowTriggerRule(StrEnum):
     """Trigger rules supported by Airflow."""
 
     ALL_SUCCESS = "all_success"

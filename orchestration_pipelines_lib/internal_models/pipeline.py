@@ -17,7 +17,7 @@
 # pylint: disable=invalid-name,missing-class-docstring
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from orchestration_pipelines_lib.internal_models.actions import (
     AIActionModel,
@@ -54,7 +54,7 @@ AnyAction = (
 AnyScheduleTrigger = ScheduleTriggerModel
 
 
-class RunnerType(str, Enum):
+class RunnerType(StrEnum):
     """Enumeration for types of runners that execute the pipeline."""
 
     CORE = "core"

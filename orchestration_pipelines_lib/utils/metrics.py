@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from datetime import timedelta
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from airflow.models import BaseOperator
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 MetricCallback = Callable[[str, dict[str, str] | None], None]
 
 
-class ParsingStatus(str, Enum):
+class ParsingStatus(StrEnum):
     """DAG parsing statuses."""
 
     SUCCESS = "SUCCESS"
@@ -44,7 +44,7 @@ class ParsingStatus(str, Enum):
         return self.value
 
 
-class ActionExecutionType(str, Enum):
+class ActionExecutionType(StrEnum):
     """Action execution types."""
 
     PYTHON = "PYTHON"
@@ -94,7 +94,7 @@ ACTION_TYPE_MAPPING = {
 }
 
 
-class ActionExecutionEngine(str, Enum):
+class ActionExecutionEngine(StrEnum):
     """Action execution engines."""
 
     BIGQUERY = "BIGQUERY"
@@ -108,7 +108,7 @@ class ActionExecutionEngine(str, Enum):
         return self.value
 
 
-class BasicStatus(str, Enum):
+class BasicStatus(StrEnum):
     """Basic status enum for the cases, where Success and Failed is enough."""
 
     SUCCESS = "SUCCESS"
@@ -135,7 +135,7 @@ class BasicStatus(str, Enum):
         return BasicStatus.FAILED
 
 
-class PipelineRunTriggerType(str, Enum):
+class PipelineRunTriggerType(StrEnum):
     """Available trigger types."""
 
     MANUAL = "MANUAL"
