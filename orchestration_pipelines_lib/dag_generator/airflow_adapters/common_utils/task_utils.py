@@ -19,7 +19,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -66,6 +67,20 @@ if TYPE_CHECKING:
     from .dag_utils import DAGKwargs
 
 
+@contextmanager
+def wrap_task_creation_error(
+    action_name: str, extra_data: str | None = None
+) -> Generator[None, None, None]:
+    """Wraps exceptions raised during task creation in a RuntimeError."""
+    try:
+        yield
+    except Exception as e:
+        extra_msg = f" from '{extra_data}'" if extra_data else ""
+        raise RuntimeError(
+            f"Failed to create task for action '{action_name}'{extra_msg}: {e}"
+        ) from e
+
+
 def create_python_script_task(
     get_operator: Callable[[], type],
     action: PythonScriptActionModel,
@@ -84,9 +99,9 @@ def create_python_script_task(
         An instantiated Airflow operator wrapped with observability.
 
     Raises:
-        Exception: If operator instantiation fails.
+        RuntimeError: If operator instantiation fails.
     """
-    try:
+    with wrap_task_creation_error(action.name, action.config.pythonCallable):
         callable_path = action.filename
         entrypoint = action.config.pythonCallable
         user_kwargs = action.config.opKwargs or {}
@@ -120,11 +135,6 @@ def create_python_script_task(
             dag=dag,
             **get_action_retry_kwargs(action),
         )
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to create task for action '{action.name}' "
-            f"from '{action.config.pythonCallable}': {e}"
-        ) from e
 
 
 def create_python_virtualenv_task(
@@ -146,10 +156,10 @@ def create_python_virtualenv_task(
         An instantiated Airflow operator wrapped with observability.
 
     Raises:
-        ValueError: If the target entrypoint does not resolve to a callable.
-        Exception: If operator instantiation fails.
+        RuntimeError: If the target entrypoint does not resolve to a callable or
+            operator instantiation fails.
     """
-    try:
+    with wrap_task_creation_error(action.name, action.config.pythonCallable):
         callable_path = action.filename
         entrypoint = action.config.pythonCallable
         python_callable = utils.import_callable(callable_path, entrypoint)
@@ -188,11 +198,6 @@ def create_python_virtualenv_task(
             dag=dag,
             **get_action_retry_kwargs(action),
         )
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to create task for action '{action.name}' "
-            f"from '{action.config.pythonCallable}': {e}"
-        ) from e
 
 
 def create_dbt_task(
@@ -213,9 +218,9 @@ def create_dbt_task(
         An instantiated Airflow operator wrapped with observability.
 
     Raises:
-        Exception: If operator instantiation fails.
+        RuntimeError: If operator instantiation fails.
     """
-    try:
+    with wrap_task_creation_error(action.name):
         op_kwargs: dict[str, Any] = {
             "project_dir": action.source.path,
             "profiles_dir": action.source.path,
@@ -246,10 +251,6 @@ def create_dbt_task(
             dag=dag,
             **get_action_retry_kwargs(action),
         )
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to create task for action '{action.name}': {e}"
-        ) from e
 
 
 def create_dataform_task(
@@ -302,9 +303,9 @@ def create_orchestration_pipeline_trigger_task(
         An instantiated Airflow operator wrapped with observability.
 
     Raises:
-        Exception: If operator instantiation fails.
+        RuntimeError: If operator instantiation fails.
     """
-    try:
+    with wrap_task_creation_error(action.name):
         wait_for_completion = action.wait_for_completion or False
 
         OrchestrationTriggerDagRunOperator = wrap_operator(
@@ -332,10 +333,6 @@ def create_orchestration_pipeline_trigger_task(
             dag=dag,
             **get_action_retry_kwargs(action),
         )
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to create task for action '{action.name}': {e}"
-        ) from e
 
 
 def get_pipeline_metadata(dag: Any) -> tuple[str, str, str]:
@@ -527,7 +524,7 @@ def create_dataproc_create_batch_operator_task(
     )
     from google.cloud import dataproc_v1
 
-    try:
+    with wrap_task_creation_error(action.name):
         job_specific_config = {}
         if action.type in ("pyspark", "notebook"):
             wrapper_uri = gcs_utils.get_run_notebook_gcs_path()
@@ -608,10 +605,6 @@ def create_dataproc_create_batch_operator_task(
             **get_action_retry_kwargs(action),
             **extra_kwargs,
         )
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to create task for action '{action.name}': {e}"
-        ) from e
 
 
 def create_bq_operation_task(
@@ -638,7 +631,7 @@ def create_bq_operation_task(
         get_pipeline_metadata,
     )
 
-    try:
+    with wrap_task_creation_error(action.name):
         if action.filename:
             file_manager = FileManager()
             query = file_manager.read(action.filename)
@@ -704,10 +697,6 @@ def create_bq_operation_task(
             dag=dag,
             **get_action_retry_kwargs(action),
         )
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to create task for action '{action.name}': {e}"
-        ) from e
 
 
 def dataproc_ephemeral_task(
@@ -731,7 +720,7 @@ def dataproc_ephemeral_task(
     )
     from airflow.utils.task_group import TaskGroup
 
-    try:
+    with wrap_task_creation_error(action.name):
         with TaskGroup(group_id=action.name, dag=dag) as task_group:
             cluster_config = action.config.cluster_config
             if action.depsBucket:
@@ -830,10 +819,6 @@ def dataproc_ephemeral_task(
             # pylint: disable=pointless-statement
             create_cluster >> submit_job >> delete_cluster
         return task_group
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to create task for action '{action.name}': {e}"
-        ) from e
 
 
 def dataproc_existing_cluster(
@@ -854,7 +839,7 @@ def dataproc_existing_cluster(
         DataprocSubmitJobOperator,
     )
 
-    try:
+    with wrap_task_creation_error(action.name):
         job = {
             "placement": {"cluster_name": action.config.cluster_name},
             "reference": {
@@ -919,10 +904,6 @@ def dataproc_existing_cluster(
             **get_action_retry_kwargs(action),
             **extra_kwargs,
         )
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to create task for action '{action.name}': {e}"
-        ) from e
 
 
 def create_schedule_trigger_task(dag_kwargs: DAGKwargs, schedule_trigger: Any):
@@ -1016,33 +997,34 @@ def create_service_dataform_task(
         DataformCreateWorkflowInvocationOperator,
     )
 
-    ObservableDataformCreateWorkflowInvocationOperator = wrap_operator(
-        DataformCreateWorkflowInvocationOperator,
-        ActionExecutionType.from_action_type(action.type),
-        ActionExecutionEngine.DATAFORM,
-        get_pipeline_metadata,
-    )
+    with wrap_task_creation_error(action.name):
+        ObservableDataformCreateWorkflowInvocationOperator = wrap_operator(
+            DataformCreateWorkflowInvocationOperator,
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.DATAFORM,
+            get_pipeline_metadata,
+        )
 
-    return ObservableDataformCreateWorkflowInvocationOperator(
-        task_id=action.name,
-        project_id=_get_config_or_default(
-            action.dataformServiceConfig, pipeline, "project_id", "project"
-        ),
-        region=_get_config_or_default(
-            action.dataformServiceConfig, pipeline, "region"
-        ),
-        execution_timeout=(
-            duration_to_timedelta(action.executionTimeout)
-            if action.executionTimeout
-            else None
-        ),
-        repository_id=action.dataformServiceConfig.repository_id,  # type: ignore
-        workflow_invocation=action.dataformServiceConfig.workflow_invocation,  # type: ignore
-        trigger_rule=action.triggerRule,
-        doc_md=json.dumps({"op_action_name": action.name}),
-        dag=dag,
-        **get_action_retry_kwargs(action),
-    )
+        return ObservableDataformCreateWorkflowInvocationOperator(
+            task_id=action.name,
+            project_id=_get_config_or_default(
+                action.dataformServiceConfig, pipeline, "project_id", "project"
+            ),
+            region=_get_config_or_default(
+                action.dataformServiceConfig, pipeline, "region"
+            ),
+            execution_timeout=(
+                duration_to_timedelta(action.executionTimeout)
+                if action.executionTimeout
+                else None
+            ),
+            repository_id=action.dataformServiceConfig.repository_id,  # type: ignore
+            workflow_invocation=action.dataformServiceConfig.workflow_invocation,  # type: ignore
+            trigger_rule=action.triggerRule,
+            doc_md=json.dumps({"op_action_name": action.name}),
+            dag=dag,
+            **get_action_retry_kwargs(action),
+        )
 
 
 def create_local_dataform_task(
@@ -1069,57 +1051,58 @@ def create_local_dataform_task(
         KubernetesPodOperator,
     )
 
-    ObservableKubernetesPodOperator = wrap_operator(
-        KubernetesPodOperator,
-        ActionExecutionType.from_action_type(action.type),
-        ActionExecutionEngine.LOCAL,
-        get_pipeline_metadata,
-    )
-
-    labels = getattr(action, "labels", None) or {}
-    params = getattr(action, "params", None) or {}
-
-    dataform_cmd = (
-        "gcloud storage cp --recursive $GCS_BUCKET_PATH/* . && "
-        "dataform run --timeout=60s"
-    )
-    if labels:
-        labels_str = ",".join(
-            shlex.quote(f"{k}={v}") for k, v in labels.items()
+    with wrap_task_creation_error(action.name):
+        ObservableKubernetesPodOperator = wrap_operator(
+            KubernetesPodOperator,
+            ActionExecutionType.from_action_type(action.type),
+            ActionExecutionEngine.LOCAL,
+            get_pipeline_metadata,
         )
-        dataform_cmd += f" --job-labels={labels_str}"
-    if params:
-        params_str = ",".join(
-            shlex.quote(f"{k}={v}") for k, v in params.items()
-        )
-        dataform_cmd += f" --vars={params_str}"
 
-    return ObservableKubernetesPodOperator(
-        task_id=action.name,
-        name="dataform-runner",
-        namespace="composer-user-workloads",
-        image="us-docker.pkg.dev/cloud-airflow-releaser/"
-        "orchestration-pipelines-basic-dataform-executor/"
-        "orchestration-pipelines-basic-dataform-executor"
-        "@sha256:fd7cd9673fda5994f1f90bfb3170ff6aa5ae8ed862d"
-        "8ea518dddc5c48f9bd8f4",
-        env_vars={"GCS_BUCKET_PATH": gcs_bucket_path_template},
-        cmds=["/bin/sh", "-c"],
-        arguments=[dataform_cmd],
-        labels=labels,
-        get_logs=True,
-        config_file="/home/airflow/composer_kube_config",
-        image_pull_policy="Always",
-        execution_timeout=(
-            duration_to_timedelta(action.executionTimeout)
-            if action.executionTimeout
-            else None
-        ),
-        trigger_rule=action.triggerRule,
-        doc_md=json.dumps({"op_action_name": action.name}),
-        dag=dag,
-        **get_action_retry_kwargs(action),
-    )
+        labels = getattr(action, "labels", None) or {}
+        params = getattr(action, "params", None) or {}
+
+        dataform_cmd = (
+            "gcloud storage cp --recursive $GCS_BUCKET_PATH/* . && "
+            "dataform run --timeout=60s"
+        )
+        if labels:
+            labels_str = ",".join(
+                shlex.quote(f"{k}={v}") for k, v in labels.items()
+            )
+            dataform_cmd += f" --job-labels={labels_str}"
+        if params:
+            params_str = ",".join(
+                shlex.quote(f"{k}={v}") for k, v in params.items()
+            )
+            dataform_cmd += f" --vars={params_str}"
+
+        return ObservableKubernetesPodOperator(
+            task_id=action.name,
+            name="dataform-runner",
+            namespace="composer-user-workloads",
+            image="us-docker.pkg.dev/cloud-airflow-releaser/"
+            "orchestration-pipelines-basic-dataform-executor/"
+            "orchestration-pipelines-basic-dataform-executor"
+            "@sha256:fd7cd9673fda5994f1f90bfb3170ff6aa5ae8ed862d"
+            "8ea518dddc5c48f9bd8f4",
+            env_vars={"GCS_BUCKET_PATH": gcs_bucket_path_template},
+            cmds=["/bin/sh", "-c"],
+            arguments=[dataform_cmd],
+            labels=labels,
+            get_logs=True,
+            config_file="/home/airflow/composer_kube_config",
+            image_pull_policy="Always",
+            execution_timeout=(
+                duration_to_timedelta(action.executionTimeout)
+                if action.executionTimeout
+                else None
+            ),
+            trigger_rule=action.triggerRule,
+            doc_md=json.dumps({"op_action_name": action.name}),
+            dag=dag,
+            **get_action_retry_kwargs(action),
+        )
 
 
 def create_bq_dts_task(
@@ -1147,7 +1130,7 @@ def create_bq_dts_task(
         iso_to_timestamp_dict,
     )
 
-    try:
+    with wrap_task_creation_error(action.name):
         with TaskGroup(group_id=action.name, dag=dag) as task_group:
             project_id = (
                 action.config.projectId
@@ -1245,10 +1228,6 @@ def create_bq_dts_task(
             start_task >> sensor_task
 
         return task_group
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to create task for action '{action.name}': {e}"
-        ) from e
 
 
 def _create_vertex_upload_model_task(
@@ -1268,7 +1247,7 @@ def _create_vertex_upload_model_task(
         UploadModelOperator,
     )
 
-    try:
+    with wrap_task_creation_error(action.name):
         project_id = action.config.project_id
         region = action.config.location
 
@@ -1306,10 +1285,6 @@ def _create_vertex_upload_model_task(
             dag=dag,
             **get_action_retry_kwargs(action),
         )
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to create task for action '{action.name}': {e}"
-        ) from e
 
 
 def _create_vertex_batch_inference_task(
@@ -1330,7 +1305,7 @@ def _create_vertex_batch_inference_task(
         CreateBatchPredictionJobOperator,
     )
 
-    try:
+    with wrap_task_creation_error(action.name):
         project_id = action.config.project_id
         region = action.config.location
 
@@ -1385,10 +1360,6 @@ def _create_vertex_batch_inference_task(
             **get_action_retry_kwargs(action),
             **extra_kwargs,
         )
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to create task for action '{action.name}': {e}"
-        ) from e
 
 
 def _create_vertex_custom_job_task(
@@ -1417,7 +1388,7 @@ def _create_vertex_custom_job_task(
             "newer version (>=22.5.0) to use this feature."
         ) from e
 
-    try:
+    with wrap_task_creation_error(action.name):
         if not isinstance(
             action.config,
             internal_actions.AgentPlatformCreateAndRunCustomJobSpecModel,
@@ -1457,10 +1428,6 @@ def _create_vertex_custom_job_task(
             dag=dag,
             **get_action_retry_kwargs(action),
         )
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to create task for action '{action.name}': {e}"
-        ) from e
 
 
 def create_ai_task(
@@ -1510,7 +1477,7 @@ def create_airflow_task(action: dict[str, Any], pipeline: dict[str, Any], dag):
     """
     import importlib
 
-    try:
+    with wrap_task_creation_error(action.name):
         module_path, class_name = action.operator_class.rsplit(".", 1)
         module = importlib.import_module(module_path)
         operator_class = getattr(module, class_name)
@@ -1537,6 +1504,3 @@ def create_airflow_task(action: dict[str, Any], pipeline: dict[str, Any], dag):
             **get_action_retry_kwargs(action),
             **params,
         )
-    except Exception:
-        logging.exception("Error creating task for action '%s'", action.name)
-        raise

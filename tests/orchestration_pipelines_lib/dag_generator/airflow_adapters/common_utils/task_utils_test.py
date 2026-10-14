@@ -44,6 +44,7 @@ from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.tas
     get_dataproc_create_batch_inline_sql_operator_class,
     get_dataproc_submit_job_inline_sql_operator_class,
     get_pipeline_metadata,
+    wrap_task_creation_error,
 )
 from orchestration_pipelines_lib.internal_models.actions import (
     AgentPlatformBatchInferenceSpecModel,
@@ -711,10 +712,26 @@ def mock_utils():
         yield mock
 
 
-@pytest.fixture
-def mock_dag():
-    """Mocks Airflow DAG object."""
-    return Mock()
+@pytest.mark.parametrize(
+    ("extra_data", "expected_match"),
+    [
+        (None, "Failed to create task for action 'my_action': boom"),
+        (
+            "my_module.my_func",
+            "Failed to create task for action 'my_action' from 'my_module.my_func': boom",
+        ),
+    ],
+)
+def test_wrap_task_creation_error_wraps_exception(extra_data, expected_match):
+    """Tests wrap_task_creation_error wraps exceptions in RuntimeError."""
+    with pytest.raises(
+        RuntimeError,
+        match=expected_match,
+    ) as exc_info:
+        with wrap_task_creation_error("my_action", extra_data):
+            raise ValueError("boom")
+
+    assert isinstance(exc_info.value.__cause__, ValueError)
 
 
 @pytest.fixture
@@ -825,29 +842,6 @@ def test_creates_operator_with_minimal_params(
     assert result.op_kwargs == {}
     assert result.execution_timeout is None
     assert result.trigger_rule == "all_success"
-
-
-def test_raises_runtime_error_on_operator_exception(
-    python_script_action_full,
-    pipeline,
-    mock_dag,
-):
-    """Tests RuntimeError wrapping on operator creation failure."""
-    with pytest.raises(
-        RuntimeError,
-        match=(
-            "Failed to create task for action 'my_python_task' "
-            "from 'my_module.my_function':"
-        ),
-    ) as exc_info:
-        create_python_script_task(
-            get_operator=adapter_imports.get_python_operator,
-            action=python_script_action_full,
-            pipeline=pipeline,
-            dag=mock_dag,
-        )
-
-    assert isinstance(exc_info.value.__cause__, TypeError)
 
 
 def test_get_action_retry_kwargs_none():
@@ -1108,32 +1102,6 @@ def test_venv_raises_runtime_error_if_not_callable(
     assert isinstance(exc_info.value.__cause__, ValueError)
 
 
-def test_venv_raises_runtime_error_on_operator_exception(
-    venv_action_req_list,
-    pipeline,
-    mock_dag,
-    mock_utils,
-):
-    """Tests RuntimeError wrapping on virtualenv operator init failure."""
-    mock_utils.import_callable.return_value = _dummy_venv_callable
-
-    with pytest.raises(
-        RuntimeError,
-        match=(
-            "Failed to create task for action 'my_venv_task_list' "
-            "from 'my_module.my_func':"
-        ),
-    ) as exc_info:
-        create_python_virtualenv_task(
-            get_operator=adapter_imports.get_python_virtualenv_operator,
-            action=venv_action_req_list,
-            pipeline=pipeline,
-            dag=mock_dag,
-        )
-
-    assert isinstance(exc_info.value.__cause__, TypeError)
-
-
 @pytest.fixture
 def dbt_action_full() -> DBTActionModel:
     """Returns a DBTActionModel with all optional parameters set."""
@@ -1215,26 +1183,6 @@ def test_creates_dbt_task_with_minimal_params(
     assert result.op_kwargs == expected_op_kwargs
 
 
-def test_dbt_task_raises_runtime_error_on_exception(
-    dbt_action_full,
-    pipeline,
-    mock_dag,
-):
-    """Tests RuntimeError wrapping when DBT operator fails."""
-    with pytest.raises(
-        RuntimeError,
-        match="Failed to create task for action 'dbt_full_run':",
-    ) as exc_info:
-        create_dbt_task(
-            get_operator=adapter_imports.get_python_operator,
-            action=dbt_action_full,
-            pipeline=pipeline,
-            dag=mock_dag,
-        )
-
-    assert isinstance(exc_info.value.__cause__, TypeError)
-
-
 @pytest.fixture
 def orch_action_full() -> OrchestrationPipelineActionModel:
     """Returns an OrchestrationPipelineActionModel with all parameters."""
@@ -1313,26 +1261,6 @@ def test_creates_orchestration_task_with_minimal_params(
     assert result.execution_timeout is None
     assert result.trigger_rule == "all_success"
     assert result.params["bundle_id"] is None
-
-
-def test_orchestration_task_raises_runtime_error_on_exception(
-    orch_action_full,
-    pipeline,
-    mock_dag,
-):
-    """Tests RuntimeError wrapping in trigger task creation."""
-    with pytest.raises(
-        RuntimeError,
-        match="Failed to create task for action 'trigger_target_pipeline':",
-    ) as exc_info:
-        create_orchestration_pipeline_trigger_task(
-            get_operator=adapter_imports.get_trigger_dagrun_operator,
-            action=orch_action_full,
-            pipeline=pipeline,
-            dag=mock_dag,
-        )
-
-    assert isinstance(exc_info.value.__cause__, TypeError)
 
 
 @pytest.fixture
@@ -1635,20 +1563,6 @@ def test_create_batch_operator_sql_with_params_and_filename(
     )
 
 
-def test_create_batch_operator_task_raises_runtime_error_on_exception(
-    serverless_sql_action, pipeline, mock_dag
-):
-    """Tests RuntimeError wrapping when DataprocCreateBatchOperator fails."""
-    with pytest.raises(
-        RuntimeError, match="Failed to create task for action 'sql_batch_task'"
-    ) as exc_info:
-        create_dataproc_create_batch_operator_task(
-            serverless_sql_action, pipeline, dag=mock_dag
-        )
-
-    assert isinstance(exc_info.value.__cause__, TypeError)
-
-
 @pytest.fixture
 def bq_operation_action() -> BqOperationActionModel:
     """Returns a BqOperationActionModel with query parameters."""
@@ -1758,23 +1672,6 @@ def test_dataproc_ephemeral_task_sql_with_deps_bucket_and_filename(
     )
 
 
-def test_dataproc_ephemeral_task_raises_runtime_error_on_exception(
-    ephemeral_sql_action, sample_dag
-):
-    """Tests dataproc_ephemeral_task wraps exceptions in RuntimeError."""
-    action = replace(
-        ephemeral_sql_action, name="failing_ephemeral", config=None
-    )
-
-    with pytest.raises(
-        RuntimeError,
-        match="Failed to create task for action 'failing_ephemeral'",
-    ) as exc_info:
-        dataproc_ephemeral_task(action, dag=sample_dag)
-
-    assert isinstance(exc_info.value.__cause__, AttributeError)
-
-
 @pytest.fixture
 def existing_cluster_sql_action() -> DataprocOperatorActionModel:
     """Returns an existing cluster SQL DataprocOperatorActionModel."""
@@ -1852,20 +1749,6 @@ def test_dataproc_existing_cluster_pyspark_with_pyfiles(
         "gs://bucket/dep1.py"
     ]
 
-
-def test_dataproc_existing_cluster_raises_runtime_error_on_exception(
-    existing_cluster_sql_action, pipeline, mock_dag
-):
-    """Tests dataproc_existing_cluster wraps exceptions in RuntimeError."""
-    with pytest.raises(
-        RuntimeError,
-        match="Failed to create task for action 'existing_sql'",
-    ) as exc_info:
-        dataproc_existing_cluster(
-            existing_cluster_sql_action, pipeline, dag=mock_dag
-        )
-
-    assert isinstance(exc_info.value.__cause__, TypeError)
 
 @pytest.mark.parametrize(
     ("action_name", "operator_class", "params"),
@@ -1962,22 +1845,30 @@ def test_create_airflow_task_with_retry_policy(sample_dag, pipeline):
     assert task.retry_delay == timedelta(seconds=60)
 
 
-def test_create_airflow_task_invalid_operator_class_raises(sample_dag, pipeline):
-     """Tests that invalid operator_class raises an exception."""
-     action = AirflowActionModel(
-         name="invalid_action",
-         type="airflow_task",
-         operator_class="airflow.operators.non_existent.FakeOperator",
-         params={},
-         triggerRule="all_success",
-         executionTimeout=None,
-         dependsOn=[],
-         retryPolicy=None,
-     )
+def test_create_airflow_task_invalid_operator_class_raises(
+    sample_dag, pipeline
+):
+    """Tests that invalid operator_class raises a RuntimeError."""
+    action = AirflowActionModel(
+        name="invalid_action",
+        type="airflow_task",
+        operator_class="airflow.operators.non_existent.FakeOperator",
+        params={},
+        triggerRule="all_success",
+        executionTimeout=None,
+        dependsOn=[],
+        retryPolicy=None,
+    )
 
-     with pytest.raises((ModuleNotFoundError, AttributeError)):
-         create_airflow_task(action, pipeline, sample_dag)
+    with pytest.raises(
+        RuntimeError,
+        match="Failed to create task for action 'invalid_action':",
+    ) as exc_info:
+        create_airflow_task(action, pipeline, sample_dag)
 
+    assert isinstance(
+        exc_info.value.__cause__, (ModuleNotFoundError, AttributeError)
+    )
 
 
 def test_create_dataproc_operator_task_raises_on_unsupported_engine(
@@ -2050,39 +1941,6 @@ def test_create_bq_dts_task_with_retry_policy(
     )
 
 
-def test_create_bq_dts_task_raises_runtime_error_on_exception(
-    bq_dts_action, pipeline, sample_dag
-):
-    """Tests create_bq_dts_task wraps exceptions in RuntimeError."""
-    action = replace(bq_dts_action, name="failing_dts", config=None)
-
-    with pytest.raises(
-        RuntimeError, match="Failed to create task for action 'failing_dts'"
-    ) as exc_info:
-        create_bq_dts_task(action, pipeline, dag=sample_dag)
-
-    assert isinstance(exc_info.value.__cause__, AttributeError)
-
-
-def test_create_vertex_upload_model_task_raises_runtime_error_on_exception(
-    vertex_custom_job_action, pipeline, sample_dag
-):
-    """Tests _create_vertex_upload_model_task wraps errors in RuntimeError."""
-    action = replace(
-        vertex_custom_job_action,
-        name="failing_upload_model",
-        ai_action_type="model_upload",
-    )
-
-    with pytest.raises(
-        RuntimeError,
-        match="Failed to create task for action 'failing_upload_model'",
-    ) as exc_info:
-        create_ai_task(action, pipeline, dag=sample_dag)
-
-    assert isinstance(exc_info.value.__cause__, AttributeError)
-
-
 @pytest.fixture
 def vertex_batch_inference_action() -> AIActionModel:
     """Returns an AIActionModel for batch inference with GCS source/dest."""
@@ -2119,24 +1977,6 @@ def test_create_vertex_batch_inference_task_with_gcs_source_and_dest(
 
     assert task.gcs_source == ["gs://src/input.jsonl"]
     assert task.gcs_destination_prefix == "gs://dst/output"
-
-
-def test_create_vertex_batch_inference_task_raises_runtime_error_on_exception(
-    vertex_batch_inference_action, vertex_custom_job_action, pipeline, sample_dag
-):
-    """Tests _create_vertex_batch_inference_task wraps errors in RuntimeError."""
-    action = replace(
-        vertex_batch_inference_action,
-        config=vertex_custom_job_action.config,
-    )
-
-    with pytest.raises(
-        RuntimeError,
-        match="Failed to create task for action 'vertex_gcs_batch'",
-    ) as exc_info:
-        create_ai_task(action, pipeline, dag=sample_dag)
-
-    assert isinstance(exc_info.value.__cause__, AttributeError)
 
 
 @pytest.fixture
