@@ -361,6 +361,7 @@ message NotebookAction {
   ];
   map<string, string> labels = 11;
   RetryPolicy retry_policy = 12;
+  repeated string py_files = 13;
 }
 
 message NotebookEngine {

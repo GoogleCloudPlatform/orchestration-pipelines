@@ -178,6 +178,8 @@ Executes a Jupyter Notebook (`.ipynb`) on Dataproc.
     - Can be `inline` (list of pip packages) or `path` to a `requirements.txt`.
   - `params` (`map<string, string>`): Parameters passed to the Notebook.
   - `labels` (`map<string, string>`): Labels to apply to the Notebook.
+  - `py_files` (`repeated string`): Additional Python files to put on
+    PYTHONPATH.
 - **Examples**:
   - [pipeline-dataproc-create-batch.yml (Serverless)](../examples/pipeline-dataproc-create-batch.yml)
 
