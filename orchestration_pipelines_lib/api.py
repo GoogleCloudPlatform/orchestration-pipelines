@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING, Any
 import yaml
 from airflow.exceptions import AirflowException
 
+MAX_MANIFEST_RETRIES = 3
+
 if TYPE_CHECKING:
     from orchestration_pipelines_lib.utils.file_manager import FileManager
     from orchestration_pipelines_lib.utils.pipeline_metadata import (
@@ -126,7 +128,13 @@ def generate_dags(
         globals_dict (Dict[str, Any], optional): The global dictionary to
             register the DAGs in. Defaults to None.
     """  # noqa: E501
-    from orchestration_pipelines_lib.utils.file_manager import FileManager
+    from orchestration_pipelines_lib.utils.file_manager import (
+        FileManager,
+        OrchestrationPipelinesFileReadError,
+    )
+    from orchestration_pipelines_lib.utils.pipeline_metadata import (
+        PipelineMetadata,
+    )
     from orchestration_pipelines_lib.utils.pipeline_repository import (
         PipelineRepository,
     )
@@ -142,7 +150,71 @@ def generate_dags(
         data_root=data_root, file_manager=base_file_manager
     )
 
-    manifest = repository.get_manifest(bundle_id)
+    current_dag_id = os.environ.get("AIRFLOW_CTX_DAG_ID")
+
+    # Worker context
+    version_id = _extract_version_id(current_dag_id, bundle_id, pipeline_id)
+    if version_id:
+        versioned_file_manager = VersionedFileManager.from_file_manager(
+            base_file_manager,
+            pipeline_id=pipeline_id,
+            current_version=version_id,
+            bundle_id=bundle_id,
+            local_data_root=data_root,
+        )
+
+        metadata = PipelineMetadata(
+            pipeline_id=pipeline_id,
+            manifest=None,
+            version_id=version_id,
+            bundle_id=bundle_id,
+        )
+
+        _generate_dag(
+            file_manager=versioned_file_manager,
+            pipeline_definition_path=f"{pipeline_id}.yml",
+            repository=repository,
+            dag_id=f"{bundle_id}__v__{version_id}__{pipeline_id}",
+            metadata=metadata,
+            data_root=data_root,
+            globals_dict=globals_dict,
+            bundle_id=bundle_id,
+            pipeline_id=pipeline_id,
+            version_id=version_id,
+        )
+        return
+
+    # DAG processor context
+    manifest = None
+    last_exception = None
+    for attempt in range(1, MAX_MANIFEST_RETRIES + 1):
+        last_exception = None
+        try:
+            manifest = repository.get_manifest(bundle_id)
+            if manifest is not None:
+                break
+        except (OSError, OrchestrationPipelinesFileReadError) as e:
+            last_exception = e
+
+        if attempt < MAX_MANIFEST_RETRIES:
+            logging.warning(
+                "Failed to read manifest for bundle '%s' (attempt %d/%d). %s. "
+                "Retrying...",
+                bundle_id,
+                attempt,
+                MAX_MANIFEST_RETRIES,
+                str(last_exception) if last_exception else "manifest is None",
+            )
+            time.sleep(attempt * 2)
+        else:
+            if last_exception:
+                raise last_exception
+
+    if manifest is None:
+        raise OrchestrationPipelinesFileReadError(
+            f"Failed to read manifest for bundle '{bundle_id}': "
+            f"{str(last_exception) if last_exception else 'manifest is None'}"
+        )
 
     versions_to_parse = get_versions_to_parse(pipeline_id, manifest)
     logging.info("Versions to parse: %s", versions_to_parse)
@@ -171,6 +243,23 @@ def generate_dags(
                 globals_dict=globals_dict,
                 file_manager=versioned_file_manager,
             )
+
+
+def _extract_version_id(
+    dag_id: str | None, bundle_id: str, pipeline_id: str
+) -> str | None:
+    """Extract version id."""
+    if not dag_id:
+        return None
+
+    prefix = f"{bundle_id}__v__"
+    suffix = f"__{pipeline_id}"
+
+    if dag_id.startswith(prefix) and dag_id.endswith(suffix):
+        version = dag_id.removeprefix(prefix).removesuffix(suffix)
+        return version if version else None
+
+    return None
 
 
 def _get_and_convert_pipeline(

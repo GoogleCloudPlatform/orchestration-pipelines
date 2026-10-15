@@ -37,6 +37,7 @@ class PipelineMetadata:
         source_filepath: str = None,
         manifest: Optional[Manifest] = None,
         version_id: Optional[str] = None,
+        bundle_id: Optional[str] = None,
     ):
         """Initializes the PipelineMetadata object.
 
@@ -45,22 +46,23 @@ class PipelineMetadata:
             source_filepath: The source file path of the pipeline definition.
             manifest: The bundle manifest.
             version_id: The version ID of the pipeline.
+            bundle_id: The bundle ID of the pipeline.
         """
         self._manifest = manifest
         self._version_id = version_id
         self._pipeline_id = pipeline_id
         self._source_filepath = source_filepath if source_filepath else ""
 
+        self._unversioned = not self._version_id and not self._manifest
+
         if self._manifest is None:
-            self._bundle_id = ""
+            self._bundle_id = bundle_id or ""
             self._is_paused = False
             self._is_current = False
-            self._unversioned = True
         else:
             self._bundle_id = self._manifest.get_bundle_id()
             self._is_paused = self._manifest.is_paused(self._pipeline_id)
             self._is_current = self._manifest.is_current(self._version_id)
-            self._unversioned = False
 
         self._extract_deployment_details()
 

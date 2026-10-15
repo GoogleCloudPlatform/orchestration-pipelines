@@ -873,3 +873,65 @@ def test_generate_vertex_ai_custom_job_pipeline() -> None:
     assert custom_job_task.region == "us-central1"
     assert custom_job_task.execution_timeout == timedelta(hours=2)
     assert custom_job_task.custom_job == expected_custom_job
+
+@patch("orchestration_pipelines_lib.utils.pipeline_repository.PipelineRepository.get_manifest")
+@patch("orchestration_pipelines_lib.utils.versions_utils.get_versions_to_parse")
+def test_generate_dag_worker_path(
+    mock_get_manifest: MagicMock, mock_get_versions: MagicMock
+) -> None:
+    """Tests that on worker path, DAG is generated
+    without reading manifest or querying DB.
+    """
+    pipeline_id = "python-script-pipeline"
+    expected_dag_id = f"{_TEST_BUNDLE_ID}__v__{_TEST_DEFAULT_VERSION_ID}__{pipeline_id}"
+    dags_folder = os.path.join(
+        _get_data_root_path(),
+        _TEST_BUNDLE_ID,
+        "versions",
+        _TEST_DEFAULT_VERSION_ID,
+    )
+    globals_dict = {}
+
+    with patch.dict(os.environ, {"DAGS_FOLDER": dags_folder,
+                                 "AIRFLOW_CTX_DAG_ID": expected_dag_id}):
+        api.generate_dags(
+            _get_data_root_path(),
+            _TEST_BUNDLE_ID,
+            pipeline_id,
+            globals_dict,
+        )
+
+    assert expected_dag_id in globals_dict
+    mock_get_manifest.assert_not_called()
+    mock_get_versions.assert_not_called()
+
+@patch("time.sleep", return_value=None)
+def test_generate_dags_retries_on_manifest_read_failure(
+    mock_sleep: MagicMock,
+):
+    """Get manifest after 3 retries."""
+    from orchestration_pipelines_lib.utils.pipeline_repository import (
+        PipelineRepository,
+    )
+
+    pipeline_id = "sql-on-dataproc-serverless"
+    real_manifest = PipelineRepository(_get_data_root_path()).get_manifest(_TEST_BUNDLE_ID)
+    globals_dict = {}
+
+    with patch.object(
+        PipelineRepository, "get_manifest"
+    ) as mock_get_manifest:
+        mock_get_manifest.side_effect = [
+            OSError(116, "Stale file handle"),
+            OSError(116, "Stale file handle"),
+            real_manifest,
+        ]
+        api.generate_dags(
+            _get_data_root_path(),
+            _TEST_BUNDLE_ID,
+            pipeline_id,
+            globals_dict,
+        )
+
+    assert mock_get_manifest.call_count == 3
+    assert len(globals_dict) > 0
