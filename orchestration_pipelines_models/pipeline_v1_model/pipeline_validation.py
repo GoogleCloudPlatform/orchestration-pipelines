@@ -238,15 +238,6 @@ class PipelineValidator:
                 raise ValueError(
                     f"Error for field '{path}': field is required."
                 )
-            if (
-                field.message_type
-                and field.message_type.full_name == "google.protobuf.Struct"
-                and not getattr(message, field.name).fields
-            ):
-                raise ValueError(
-                    f"Error for field '{path}': field is required and cannot "
-                    "be empty."
-                )
 
     @classmethod
     def _validate_regex(
