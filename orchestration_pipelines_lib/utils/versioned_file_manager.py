@@ -105,26 +105,17 @@ class VersionedFileManager(FileManager):
         """Updates the current version for path resolution."""
         self._current_version = version_id
 
-    def resolve_path(self, file_path: str) -> str:
+    def _resolve_relative_path(self, file_path: str) -> str:
         """Resolves a relative path to an absolute path based on the version.
 
-        - Relative paths are resolved to:
-          /data/<bundle_id>/versions/<version_id>/<file_path>
-        - GCS URIs ('gcs://...') are returned as-is.
-        - Absolute paths are returned as-is.
+        Overrides FileManager._resolve_relative_path.
 
         Args:
-            file_path: The relative or absolute path to resolve.
+            file_path: The relative path to resolve.
 
         Returns:
-            The resolved absolute path or GCS URI, or None if file_path is None.
+            The resolved absolute versioned path.
         """
-        if file_path is None:
-            return None
-        if self._is_gcs_blob(file_path):
-            return file_path
-        if os.path.isabs(file_path):
-            return file_path
         return path_utils.resolve_versioned_path(
             self._local_data_root,
             self.bundle_id,

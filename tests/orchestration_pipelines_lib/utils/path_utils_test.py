@@ -42,13 +42,35 @@ class TestPathUtils(unittest.TestCase):
                                                   self.dag_version)
         self.assertEqual(actual_path, expected_path)
 
+    def test_resolve_local_path(self):
+        """Tests that local paths are joined and normalized correctly."""
+        self.assertEqual(
+            path_utils.resolve_local_path(
+                "/home/airflow/gcs/dags", "./scripts/my_job.py"
+            ),
+            "/home/airflow/gcs/dags/scripts/my_job.py",
+        )
+        self.assertEqual(
+            path_utils.resolve_local_path(
+                "/home/airflow/gcs/dags", "sub/../scripts/my_job.py"
+            ),
+            "/home/airflow/gcs/dags/scripts/my_job.py",
+        )
+
     def test_resolve_versioned_path(self):
         """Tests that a versioned file path is resolved correctly."""
         file_path = "queries/my_query.sql"
         expected_path = "/data/my_test_dag/versions/v1.2.3/queries/my_query.sql"
         actual_path = path_utils.resolve_versioned_path(
-            self.local_data_root, self.dag_id, self.dag_version, file_path)
+            self.local_data_root, self.dag_id, self.dag_version, file_path
+        )
         self.assertEqual(actual_path, expected_path)
+
+        dot_file_path = "./queries/my_query.sql"
+        actual_dot_path = path_utils.resolve_versioned_path(
+            self.local_data_root, self.dag_id, self.dag_version, dot_file_path
+        )
+        self.assertEqual(actual_dot_path, expected_path)
 
 
 if __name__ == "__main__":

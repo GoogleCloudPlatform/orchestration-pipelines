@@ -17,6 +17,19 @@
 import os
 
 
+def resolve_local_path(base_dir: str, *paths: str) -> str:
+    """Joins and normalizes local path segments.
+
+    Args:
+        base_dir: The base directory path.
+        *paths: Additional path segments to join and normalize.
+
+    Returns:
+        The normalized local path.
+    """
+    return os.path.normpath(os.path.join(base_dir, *paths))
+
+
 def get_manifest_path(local_data_root: str, bundle_id: str) -> str:
     """Constructs the absolute path to a pipeline's manifest.yml file.
 
@@ -63,8 +76,6 @@ def resolve_versioned_path(
     Returns:
         The normalized absolute versioned path.
     """
-    return os.path.normpath(
-        os.path.join(
-            local_data_root, bundle_id, "versions", version_id, file_path
-        )
+    return resolve_local_path(
+        local_data_root, bundle_id, "versions", version_id, file_path
     )

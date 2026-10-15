@@ -23,6 +23,8 @@ handling various file-related errors.
 import os
 from typing import Any, Optional
 
+from orchestration_pipelines_lib.utils import path_utils
+
 _GCS_CLIENT = None
 
 
@@ -95,6 +97,14 @@ class FileManager:
             self._gcs_client = storage.Client()
         return self._gcs_client
 
+    def _resolve_relative_path(self, file_path: str) -> str:
+        """Resolves a relative local path against the data root.
+
+        Intended to be overridden by subclasses (e.g., VersionedFileManager)
+        that customize relative path resolution.
+        """
+        return path_utils.resolve_local_path(self._data_root, file_path)
+
     def resolve_path(self, file_path: str) -> Optional[str]:
         """Resolves a file path.
 
@@ -111,7 +121,7 @@ class FileManager:
         if self._is_gcs_blob(file_path):
             return file_path
 
-        return os.path.join(self._data_root, file_path)
+        return self._resolve_relative_path(file_path)
 
     def extract_relative_path(
         self, full_path: str, local_data_root: str = "/"

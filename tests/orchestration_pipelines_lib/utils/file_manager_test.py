@@ -332,15 +332,23 @@ class TestFileManager(unittest.TestCase):
         test_cases = [
             (
                 "gs://my-bucket/dags/some/file.txt",
-                "gs://my-bucket/dags/some/file.txt"
+                "gs://my-bucket/dags/some/file.txt",
             ),
             (
                 "/home/airflow/gcs/dags/some/file.txt",
-                "/home/airflow/gcs/dags/some/file.txt"
+                "/home/airflow/gcs/dags/some/file.txt",
             ),
             (
                 "some/file.txt",
-                "/home/airflow/gcs/dags/some/file.txt"
+                "/home/airflow/gcs/dags/some/file.txt",
+            ),
+            (
+                "./some/file.txt",
+                "/home/airflow/gcs/dags/some/file.txt",
+            ),
+            (
+                "./sub/../some/file.txt",
+                "/home/airflow/gcs/dags/some/file.txt",
             ),
         ]
 
