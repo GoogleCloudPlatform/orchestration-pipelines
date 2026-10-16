@@ -325,6 +325,21 @@ class FileManager:
         ):  # Includes GCS errors and invalid paths
             return False
 
+    def resolve_to_gcs_uri(self, file_path: str) -> str | None:
+        """Resolves a path and converts it to a verified GCS blob URI.
+
+        Args:
+            file_path: The local relative path, absolute path, or GCS URI.
+
+        Returns:
+            The corresponding GCS blob URI, or None if file_path cannot be resolved.
+        """
+        resolved_path = self.resolve_path(file_path)
+        if resolved_path is None:
+            return None
+
+        return self.get_blob_reference(resolved_path)
+
     def get_blob_reference(self, resolved_path: str) -> str:
         """Returns a GCS blob URI for a given resolved path.
 
@@ -354,6 +369,33 @@ class FileManager:
         if self._is_gcs_blob(resolved_path):
             return resolved_path
 
+        blob_reference = self.to_gcs_uri(resolved_path)
+        if not self.exists(blob_reference):
+            raise OrchestrationPipelinesInvalidPathError(
+                f"Corresponding GCS object '{blob_reference}' for local path "
+                f"'{resolved_path}' does not exist."
+            )
+
+        return blob_reference
+
+    def to_gcs_uri(self, resolved_path: str) -> str:
+        """Converts a resolved path into a GCS URI without checking existence.
+
+        Args:
+            resolved_path: The resolved absolute local path or full GCS URI.
+
+        Returns:
+            The corresponding GCS blob URI.
+
+        Raises:
+            OrchestrationPipelinesInvalidPathError: If a local path cannot be
+                converted to a GCS URI.
+            OrchestrationPipelinesInitializationError: If GCS_BUCKET env var
+                is not set.
+        """
+        if self._is_gcs_blob(resolved_path):
+            return resolved_path
+
         gcs_bucket = os.environ.get("GCS_BUCKET")
         if not gcs_bucket:
             raise OrchestrationPipelinesInitializationError(
@@ -365,9 +407,7 @@ class FileManager:
         mount_point = "/home/airflow/gcs/"
         if resolved_path.startswith(mount_point):
             blob_name = resolved_path.removeprefix(mount_point)
-            blob_reference = f"gs://{gcs_bucket}/{blob_name}"
-            if self.exists(blob_reference):
-                return blob_reference
+            return f"gs://{gcs_bucket}/{blob_name}"
 
         raise OrchestrationPipelinesInvalidPathError(
             f"Cannot determine GCS reference for local path '{resolved_path}'. "

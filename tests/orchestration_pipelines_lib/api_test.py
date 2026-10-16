@@ -176,6 +176,16 @@ def _assert_successful_generation(
     )
 
 
+def _mock_blob_ref(path: str) -> str | None:
+    match path:
+        case str() if path.startswith("gs://"):
+            return path
+        case str() if path:
+            return f"gs://example-bucket/{os.path.basename(path)}"
+        case _:
+            return None
+
+
 @pytest.fixture(autouse=True)
 def mock_get_blob_ref() -> Iterator[MagicMock]:
     """Patches FileManager.get_blob_reference with default GCS bucket URI."""
@@ -183,9 +193,7 @@ def mock_get_blob_ref() -> Iterator[MagicMock]:
         "orchestration_pipelines_lib.utils.file_manager.FileManager."
         "get_blob_reference"
     ) as mock:
-        mock.side_effect = lambda path: (
-            f"gs://example-bucket/{os.path.basename(path)}" if path else None
-        )
+        mock.side_effect = _mock_blob_ref
         yield mock
 
 

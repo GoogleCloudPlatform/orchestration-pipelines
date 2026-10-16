@@ -13,10 +13,11 @@
 # limitations under the License.
 #
 """Unit tests for the FileManager class."""
+
 import unittest
-import os
 from unittest.mock import MagicMock, mock_open, patch
 
+import pytest
 from google.api_core import exceptions as gcp_exceptions
 
 from orchestration_pipelines_lib.utils.file_manager import (
@@ -360,6 +361,82 @@ class TestFileManager(unittest.TestCase):
 
         for input_path, expected_output in test_cases:
             self.assertEqual(actual_outputs[input_path], expected_output)
+
+
+@pytest.fixture
+def file_manager() -> FileManager:
+    """Provides a FileManager instance with a mocked GCS client."""
+    return FileManager(
+        gcs_client=MagicMock(), data_root="/home/airflow/gcs/dags"
+    )
+
+
+@pytest.mark.parametrize(
+    ("resolved_path", "expected_uri"),
+    [
+        ("gs://example-bucket/dags/file.txt", "gs://example-bucket/dags/file.txt"),
+        ("/home/airflow/gcs/dags/file.txt", "gs://example-bucket/dags/file.txt"),
+    ],
+)
+def test_to_gcs_uri_success(
+    file_manager: FileManager,
+    monkeypatch: pytest.MonkeyPatch,
+    resolved_path: str,
+    expected_uri: str,
+) -> None:
+    """Tests that to_gcs_uri converts resolved paths without checking existence."""
+    monkeypatch.setenv("GCS_BUCKET", "example-bucket")
+
+    result = file_manager.to_gcs_uri(resolved_path)
+
+    assert result == expected_uri
+
+
+def test_to_gcs_uri_missing_bucket_env_raises_error(
+    file_manager: FileManager,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tests that to_gcs_uri raises OrchestrationPipelinesInitializationError when GCS_BUCKET is unset."""
+    monkeypatch.delenv("GCS_BUCKET", raising=False)
+
+    with pytest.raises(OrchestrationPipelinesInitializationError) as exc_info:
+        file_manager.to_gcs_uri("/home/airflow/gcs/dags/file.txt")
+
+    assert "GCS_BUCKET environment variable not set" in str(exc_info.value)
+
+
+def test_to_gcs_uri_outside_mount_point_raises_error(
+    file_manager: FileManager,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tests that to_gcs_uri raises OrchestrationPipelinesInvalidPathError for paths outside mount point."""
+    monkeypatch.setenv("GCS_BUCKET", "example-bucket")
+
+    with pytest.raises(OrchestrationPipelinesInvalidPathError) as exc_info:
+        file_manager.to_gcs_uri("/other/path/file.txt")
+
+    assert "Cannot determine GCS reference for local path" in str(
+        exc_info.value
+    )
+
+
+def test_resolve_to_gcs_uri_delegates_to_resolve_path_and_get_blob_reference(
+    file_manager: FileManager,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tests that resolve_to_gcs_uri resolves the path and returns its verified blob reference."""
+    mock_get_blob_ref = MagicMock(
+        return_value="gs://example-bucket/dags/my_file.txt"
+    )
+    monkeypatch.setattr(file_manager, "get_blob_reference", mock_get_blob_ref)
+
+    result = file_manager.resolve_to_gcs_uri("my_file.txt")
+
+    assert result == "gs://example-bucket/dags/my_file.txt"
+    mock_get_blob_ref.assert_called_once_with(
+        "/home/airflow/gcs/dags/my_file.txt"
+    )
+
 
 if __name__ == "__main__":
     unittest.main()

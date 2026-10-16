@@ -16,10 +16,12 @@
 
 import re
 from datetime import datetime
-from typing import Any, Dict, Type
+from typing import Any, Dict, Type, TypeVar
 
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.message import Message
+
+T = TypeVar("T")
 
 
 def to_snake_case(key: str) -> str:
@@ -54,7 +56,9 @@ def struct_to_dict(struct_msg: Message) -> Dict:
     return MessageToDict(struct_msg, preserving_proto_field_name=True)
 
 
-def normalize_struct(struct_msg: Message, target_message_class: Type[Message]):
+def normalize_struct(
+    struct_msg: Message, target_message_class: Type[T]
+) -> T | None:
     """Normalizes a protobuf Struct message into a specific message class.
 
     Converts the input struct into a dictionary and then parses it into
@@ -82,8 +86,8 @@ def normalize_struct(struct_msg: Message, target_message_class: Type[Message]):
 
 
 def dict_to_struct(
-    message_dict: Dict[str, Any], target_message_class: Type[Message]
-):
+    message_dict: Dict[str, Any], target_message_class: Type[T]
+) -> T:
     """Parses a dictionary into a protobuf Message instance.
 
     Args:

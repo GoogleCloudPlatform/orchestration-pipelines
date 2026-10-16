@@ -15,6 +15,7 @@
 """Unit tests for the v1_model_converter module."""
 
 import unittest
+from functools import partial
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -38,18 +39,42 @@ from orchestration_pipelines_models.pipeline_v1_model.protos import (
 )
 
 
+def _mock_resolve_path(prefix: str, path: str) -> str | None:
+    match path:
+        case str() if path.startswith("gs://"):
+            return path
+        case str() if path:
+            return f"{prefix}{path}"
+        case _:
+            return None
+
+
+def _create_mock_file_manager() -> MagicMock:
+    file_manager = MagicMock(spec=FileManager)
+    file_manager.resolve_path.side_effect = partial(
+        _mock_resolve_path, "resolved/"
+    )
+    file_manager.resolve_to_gcs_uri.side_effect = partial(
+        _mock_resolve_path, "gs://bucket/resolved/"
+    )
+    file_manager.get_blob_reference.side_effect = partial(
+        _mock_resolve_path, "gs://bucket/"
+    )
+    file_manager.to_gcs_uri.side_effect = partial(
+        _mock_resolve_path, "gs://bucket/"
+    )
+    file_manager.extract_relative_path.side_effect = lambda path: (
+        path.removeprefix("resolved/") if path else None
+    )
+    return file_manager
+
+
 class TestConverterV1ToInternal(unittest.TestCase):
     """Test suite for the v1 to internal model converter."""
 
     def setUp(self):
         """Set up the test case."""
-        self.file_manager = MagicMock()
-        self.file_manager.resolve_path.side_effect = (
-            lambda path: f"resolved/{path}" if path else None)
-        self.file_manager.get_blob_reference.side_effect = (
-            lambda path: f"gs://bucket/{path}" if path else None)
-        self.file_manager.extract_relative_path.side_effect = (
-            lambda path: path.removeprefix("resolved/") if path else None)
+        self.file_manager = _create_mock_file_manager()
         self.converter = ConverterV1ToInternal(self.file_manager)
         self.defaults = v1_protos.Defaults(
             project_id="default-project",
@@ -1430,7 +1455,6 @@ class TestConverterV1ToInternal(unittest.TestCase):
                 data_ingestion_action, self.defaults, self.labels
             )
 
-
     def test_convert_ai_action_vertex_upload_model(self):
         """Tests converting AIAction with Vertex AI model_upload config."""
         ai_action = v1_protos.AIAction(
@@ -1981,10 +2005,8 @@ class TestConverterV1ToInternal(unittest.TestCase):
 
 @pytest.fixture
 def converter() -> ConverterV1ToInternal:
-    """Returns a ConverterV1ToInternal instance with a real FileManager."""
-    return ConverterV1ToInternal(
-        file_manager=FileManager(gcs_client=object(), data_root=".")
-    )
+    """Returns a ConverterV1ToInternal instance with a mocked FileManager."""
+    return ConverterV1ToInternal(file_manager=_create_mock_file_manager())
 
 
 @pytest.fixture

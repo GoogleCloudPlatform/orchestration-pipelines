@@ -607,17 +607,15 @@ class ConverterV1ToInternal:
 
         filename = None
         if action.main_file_path:
-            resolved_main_path = self.file_manager.resolve_path(
+            filename = self.file_manager.resolve_to_gcs_uri(
                 action.main_file_path
             )
-            filename = self.file_manager.get_blob_reference(resolved_main_path)
 
-        py_files = [
-            self.file_manager.get_blob_reference(
-                self.file_manager.resolve_path(p)
-            )
-            for p in getattr(action, "py_files", [])
-        ]
+        resolved_py_files = (
+            self.file_manager.resolve_to_gcs_uri(file)
+            for file in getattr(action, "py_files", [])
+        )
+        py_files = [file for file in resolved_py_files if file is not None]
 
         archives = [
             self._resolve_archive_uri(uri)
@@ -653,8 +651,7 @@ class ConverterV1ToInternal:
         if not archive_uri:
             return ""
         path, sep, alias = archive_uri.partition("#")
-        resolved_path = self.file_manager.resolve_path(path)
-        blob_ref = self.file_manager.get_blob_reference(resolved_path)
+        blob_ref = self.file_manager.resolve_to_gcs_uri(path)
         return f"{blob_ref}{sep}{alias}" if sep else blob_ref
 
     def _convert_sql_action(
@@ -673,11 +670,12 @@ class ConverterV1ToInternal:
             query = action.query.inline
 
         elif query_type == "path":
-            resolved_path = self.file_manager.resolve_path(action.query.path)
             if engine_type in ["dataproc_serverless", "dataproc_on_gce"]:
-                filename = self.file_manager.get_blob_reference(resolved_path)
+                filename = self.file_manager.resolve_to_gcs_uri(
+                    action.query.path
+                )
             else:
-                filename = resolved_path
+                filename = self.file_manager.resolve_path(action.query.path)
 
         else:
             raise TypeError(f"Unknown SQL query type: {query_type}")
@@ -860,10 +858,8 @@ class ConverterV1ToInternal:
                     triggerRule=self._convert_trigger_rule(action.trigger_rule),
                     type="dataform_pipeline",
                     executionMode="local",
-                    dataform_project_path=self.file_manager.get_blob_reference(
-                        self.file_manager.resolve_path(
-                            airflow_worker.project_directory_path
-                        )
+                    dataform_project_path=self.file_manager.resolve_to_gcs_uri(
+                        airflow_worker.project_directory_path
                     ),
                     labels=merged_labels,
                     params=params,
