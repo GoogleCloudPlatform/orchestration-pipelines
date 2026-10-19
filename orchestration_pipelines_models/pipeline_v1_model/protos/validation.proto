@@ -63,4 +63,7 @@ extend google.protobuf.FieldOptions {
 
   // For map values:
   string map_value_regex = 50012;
+
+  // Specifies whether the field can be parameterized at runtime via ${...}.
+  bool is_parameterizable = 50013;
 }

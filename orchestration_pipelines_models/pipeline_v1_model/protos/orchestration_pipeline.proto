@@ -46,6 +46,30 @@ message OrchestrationPipeline {
   // Each tag should match: ^[a-zA-Z0-9_-]{1,32}$
   repeated string tags = 9; // Can be empty.
   Notification notifications = 10;
+  // Parameters that can be passed to the pipeline when triggered at runtime.
+  map<string, Parameter> parameters = 11;
+  // Dynamic CEL expression bindings keyed by field path.
+  map<string, string> dynamic_bindings = 12;
+}
+
+message Parameter {
+  enum Type {
+    type_undefined = 0;
+    string = 1;
+    number = 2;
+    boolean = 3;
+    array = 4;
+  }
+  // The expected data type of the parameter.
+  Type type = 1 [(pipeline_models.validation.disallow_zero_enum) = true];
+  // The default value to use if the parameter is not provided during trigger.
+  // google.protobuf.Value is used to support polymorphic types (string, number, bool, list).
+  google.protobuf.Value default_value = 2 [
+    json_name = "default",
+    (pipeline_models.validation.is_required) = true
+  ];
+  // An optional description of what the parameter is used for.
+  string description = 3;
 }
 
 enum PipelineRunner {
@@ -64,8 +88,14 @@ enum TriggerRule {
 }
 
 message Defaults {
-  string project_id = 1 [(pipeline_models.validation.is_required) = true];
-  string location = 2 [(pipeline_models.validation.is_required) = true];
+  string project_id = 1 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
+  string location = 2 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
   ExecutionConfig execution_config = 3 [deprecated = true];
   RetryPolicy retry_policy = 4;
 }
@@ -75,7 +105,8 @@ message ExecutionConfig {
   // cannot be truly 'required'. The `min_value` option is used instead.
   int32 retries = 1 [
     deprecated = true,
-    (pipeline_models.validation.min_value) = 0
+    (pipeline_models.validation.min_value) = 0,
+    (pipeline_models.validation.is_parameterizable) = true
   ];
 }
 
@@ -86,25 +117,31 @@ message FixedDelayStrategy {
   // ISO 8601 duration or standard time string (e.g., "30s", "5m").
   string retry_delay = 1 [
     (pipeline_models.validation.is_required) = true,
-    (pipeline_models.validation.is_iso8601_duration) = true
+    (pipeline_models.validation.is_iso8601_duration) = true,
+    (pipeline_models.validation.is_parameterizable) = true
   ];
 }
 
 message ExponentialBackoffStrategy {
   string initial_delay = 1 [
     (pipeline_models.validation.is_required) = true,
-    (pipeline_models.validation.is_iso8601_duration) = true
+    (pipeline_models.validation.is_iso8601_duration) = true,
+    (pipeline_models.validation.is_parameterizable) = true
   ];
-  string max_delay = 2 [(pipeline_models.validation.is_iso8601_duration) = true];
-  double multiplier = 3; // Default: 2.0
-  bool randomize_jitter = 4; // Default: false
+  string max_delay = 2 [
+    (pipeline_models.validation.is_iso8601_duration) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
+  double multiplier = 3 [(pipeline_models.validation.is_parameterizable) = true]; // Default: 2.0
+  bool randomize_jitter = 4 [(pipeline_models.validation.is_parameterizable) = true]; // Default: false
 }
 
 message RetryPolicy {
   // Hard ceiling on maximum retry attempts across all strategies.
   optional int32 max_retries = 1 [
     (pipeline_models.validation.is_required) = true,
-    (pipeline_models.validation.min_value) = 0
+    (pipeline_models.validation.min_value) = 0,
+    (pipeline_models.validation.is_parameterizable) = true
   ];
 
   oneof strategy {
@@ -114,11 +151,11 @@ message RetryPolicy {
 }
 
 message OnPipelineFailure {
-  repeated string email = 1;
+  repeated string email = 1 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 message OnPipelineSuccess {
-  repeated string email = 1;
+  repeated string email = 1 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 message Notification {
@@ -157,9 +194,9 @@ message Trigger {
 message LocalEngine {}
 
 message BigQueryEngine {
-  string location = 1;
-  string destination_table = 2;
-  repeated string impersonation_chain = 3;
+  string location = 1 [(pipeline_models.validation.is_parameterizable) = true];
+  string destination_table = 2 [(pipeline_models.validation.is_parameterizable) = true];
+  repeated string impersonation_chain = 3 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 message DataprocOnGceEngine {
@@ -170,20 +207,26 @@ message DataprocOnGceEngine {
 }
 
 message DataprocExistingClusterConfiguration {
-  string cluster_name = 1 [(pipeline_models.validation.is_required) = true];
-  string location = 2;
-  string project_id = 3;
-  repeated string impersonation_chain = 4;
-  map<string, string> properties = 5;
+  string cluster_name = 1 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
+  string location = 2 [(pipeline_models.validation.is_parameterizable) = true];
+  string project_id = 3 [(pipeline_models.validation.is_parameterizable) = true];
+  repeated string impersonation_chain = 4 [(pipeline_models.validation.is_parameterizable) = true];
+  map<string, string> properties = 5 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 message DataprocEphemeralConfiguration {
-  string cluster_name = 1 [(pipeline_models.validation.is_required) = true];
-  string location = 2;
-  string project_id = 3;
+  string cluster_name = 1 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
+  string location = 2 [(pipeline_models.validation.is_parameterizable) = true];
+  string project_id = 3 [(pipeline_models.validation.is_parameterizable) = true];
   DataprocClusterResourceProfile resource_profile = 4 [(pipeline_models.validation.is_required) = true];
-  map<string, string> properties = 5;
-  repeated string impersonation_chain = 6;
+  map<string, string> properties = 5 [(pipeline_models.validation.is_parameterizable) = true];
+  repeated string impersonation_chain = 6 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 message DataprocClusterResourceProfile {
@@ -195,13 +238,13 @@ message DataprocClusterResourceProfile {
 
       // A Dataproc cluster config.
       // See: https://docs.cloud.google.com/dataproc/docs/reference/rest/v1/ClusterConfig
-      google.protobuf.Struct config = 2;
+      google.protobuf.Struct config = 2 [(pipeline_models.validation.is_parameterizable) = true];
     }
   }
   oneof config {
     InlineConfig inline = 1;
-    string path = 2;
-    string external_config_path = 3;
+    string path = 2 [(pipeline_models.validation.is_parameterizable) = true];
+    string external_config_path = 3 [(pipeline_models.validation.is_parameterizable) = true];
   }
   // Overrides are applied with deep merge onto the provided config. Works with inline, path and external config path.
   InlineConfig overrides = 4;
@@ -211,24 +254,24 @@ message DataprocBatchResourceProfile {
   message InlineConfig {
     // A Dataproc runtime config for a batch job.
     // See: https://docs.cloud.google.com/dataproc-serverless/docs/reference/rest/v1/RuntimeConfig
-    google.protobuf.Struct runtime_config = 1;
+    google.protobuf.Struct runtime_config = 1 [(pipeline_models.validation.is_parameterizable) = true];
     // A Dataproc environment config for a batch job.
     // See: https://docs.cloud.google.com/dataproc-serverless/docs/reference/rest/v1/EnvironmentConfig
-    google.protobuf.Struct environment_config = 2;
+    google.protobuf.Struct environment_config = 2 [(pipeline_models.validation.is_parameterizable) = true];
   }
   oneof config {
     InlineConfig inline = 1;
-    string path = 2;
-    string external_config_path = 3;
+    string path = 2 [(pipeline_models.validation.is_parameterizable) = true];
+    string external_config_path = 3 [(pipeline_models.validation.is_parameterizable) = true];
   }
   // Overrides are applied with deep merge onto the provided config. Works with inline, path and external config path.
   InlineConfig overrides = 4;
 }
 
 message DataprocServerlessBatchEngine {
-  string location = 1;
+  string location = 1 [(pipeline_models.validation.is_parameterizable) = true];
   DataprocBatchResourceProfile resource_profile = 2 [(pipeline_models.validation.is_required) = true];
-  repeated string impersonation_chain = 3;
+  repeated string impersonation_chain = 3 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 /////////////////////////
@@ -259,14 +302,19 @@ message PythonAction {
     (pipeline_models.validation.max_len) = 64
   ];
   repeated string depends_on = 2;
-  string execution_timeout = 3 [(pipeline_models.validation.is_iso8601_duration) = true];
+  string execution_timeout = 3 [
+    (pipeline_models.validation.is_iso8601_duration) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
   string main_file_path = 4 [(pipeline_models.validation.is_required) = true];
   string python_callable = 5 [(pipeline_models.validation.is_required) = true];
-  google.protobuf.Struct op_kwargs = 6;
+  google.protobuf.Struct op_kwargs = 6 [(pipeline_models.validation.is_parameterizable) = true];
   PythonEnvironment environment = 7;
   PythonEngine engine = 8 [(pipeline_models.validation.is_required) = true];
   TriggerRule trigger_rule = 9; // Default: all_success.
   RetryPolicy retry_policy = 10;
+  map<string, string> dynamic_bindings = 11;
+  string run_if = 12 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 message PythonEnvironment {
@@ -301,20 +349,26 @@ message PysparkAction {
     (pipeline_models.validation.max_len) = 64
   ];
   repeated string depends_on = 2;
-  string execution_timeout = 3 [(pipeline_models.validation.is_iso8601_duration) = true];
+  string execution_timeout = 3 [
+    (pipeline_models.validation.is_iso8601_duration) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
   PysparkEngine engine = 4 [(pipeline_models.validation.is_required) = true];
   string main_file_path = 5 [(pipeline_models.validation.is_required) = true];
   repeated string archive_uris = 6;
-  string staging_bucket = 7;
+  string staging_bucket = 7 [(pipeline_models.validation.is_parameterizable) = true];
   repeated string py_files = 8;
   PysparkEnvironment environment = 9;
   TriggerRule trigger_rule = 10; // Default: all_success.
   map<string, string> params = 11 [
     (pipeline_models.validation.map_key_regex) = "^[a-zA-Z0-9_-]+$",
-    (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$"
+    (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$",
+    (pipeline_models.validation.is_parameterizable) = true
   ];
-  map<string, string> labels = 12;
+  map<string, string> labels = 12 [(pipeline_models.validation.is_parameterizable) = true];
   RetryPolicy retry_policy = 13;
+  map<string, string> dynamic_bindings = 14;
+  string run_if = 15 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 message PysparkEngine {
@@ -348,20 +402,26 @@ message NotebookAction {
     (pipeline_models.validation.max_len) = 64
   ];
   repeated string depends_on = 2;
-  string execution_timeout = 3 [(pipeline_models.validation.is_iso8601_duration) = true];
+  string execution_timeout = 3 [
+    (pipeline_models.validation.is_iso8601_duration) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
   NotebookEngine engine = 4 [(pipeline_models.validation.is_required) = true];
   string main_file_path = 5 [(pipeline_models.validation.is_required) = true];
   repeated string archive_uris = 6;
-  string staging_bucket = 7;
+  string staging_bucket = 7 [(pipeline_models.validation.is_parameterizable) = true];
   NotebookEnvironment environment = 8;
   TriggerRule trigger_rule = 9; // Default: all_success.
   map<string, string> params = 10 [
     (pipeline_models.validation.map_key_regex) = "^[a-zA-Z0-9_-]+$",
-    (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$"
+    (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$",
+    (pipeline_models.validation.is_parameterizable) = true
   ];
-  map<string, string> labels = 11;
+  map<string, string> labels = 11 [(pipeline_models.validation.is_parameterizable) = true];
   RetryPolicy retry_policy = 12;
   repeated string py_files = 13;
+  map<string, string> dynamic_bindings = 14;
+  string run_if = 15 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 message NotebookEngine {
@@ -395,16 +455,22 @@ message SqlAction {
     (pipeline_models.validation.max_len) = 64
   ];
   repeated string depends_on = 2;
-  string execution_timeout = 3 [(pipeline_models.validation.is_iso8601_duration) = true];
+  string execution_timeout = 3 [
+    (pipeline_models.validation.is_iso8601_duration) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
   SqlEngine engine = 4 [(pipeline_models.validation.is_required) = true];
   Query query = 5 [(pipeline_models.validation.is_required) = true];
   TriggerRule trigger_rule = 6; // Default: all_success.
   map<string, string> params = 7 [
     (pipeline_models.validation.map_key_regex) = "^[a-zA-Z0-9_-]+$",
-    (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$"
+    (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$",
+    (pipeline_models.validation.is_parameterizable) = true
   ];
-  map<string, string> labels = 8;
+  map<string, string> labels = 8 [(pipeline_models.validation.is_parameterizable) = true];
   RetryPolicy retry_policy = 9;
+  map<string, string> dynamic_bindings = 10;
+  string run_if = 11 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 message Query {
@@ -433,18 +499,24 @@ message PipelineAction {
     (pipeline_models.validation.max_len) = 64
   ];
   repeated string depends_on = 2;
-  string execution_timeout = 3 [(pipeline_models.validation.is_iso8601_duration) = true];
+  string execution_timeout = 3 [
+    (pipeline_models.validation.is_iso8601_duration) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
   PipelineFramework framework = 4 [(pipeline_models.validation.is_required) = true];
   TriggerRule trigger_rule = 5; // Default: all_success.
 
   // Note: 'params' is currently not supported when executing Dataform using Dataform Service.
   map<string, string> params = 6 [
     (pipeline_models.validation.map_key_regex) = "^[a-zA-Z0-9_-]+$",
-    (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$"
+    (pipeline_models.validation.map_value_regex) = "^[^';|`&]+$",
+    (pipeline_models.validation.is_parameterizable) = true
   ];
   // Note: 'labels' is currently not supported when executing DBT or Dataform using Dataform Service.
-  map<string, string> labels = 7;
+  map<string, string> labels = 7 [(pipeline_models.validation.is_parameterizable) = true];
   RetryPolicy retry_policy = 8;
+  map<string, string> dynamic_bindings = 9;
+  string run_if = 10 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 message PipelineFramework {
@@ -472,12 +544,15 @@ message DataformFrameworkSpec {
 
 // Configuration for executing on Dataform Service.
 message DataformServiceExecution {
-  string location = 1;
-  string project_id = 2;
-  string repository_id = 3 [(pipeline_models.validation.is_required) = true];
+  string location = 1 [(pipeline_models.validation.is_parameterizable) = true];
+  string project_id = 2 [(pipeline_models.validation.is_parameterizable) = true];
+  string repository_id = 3 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
   // Configuration for the workflow invocation, which specifies which actions to run.
   // See: https://docs.cloud.google.com/php/docs/reference/cloud-dataform/latest/V1beta1.WorkflowInvocation
-  google.protobuf.Struct workflow_invocation = 4;
+  google.protobuf.Struct workflow_invocation = 4 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 // Configuration for executing DBT on Airflow Worker.
@@ -485,8 +560,8 @@ message DbtAirflowExecution {
   // Relative path to folder containing DBT project.
   string project_directory_path = 1 [(pipeline_models.validation.is_required) = true];
   // List of models to include in the run (equivalent to dbt --select).
-  repeated string select_models = 2;
-  repeated string tags = 3;
+  repeated string select_models = 2 [(pipeline_models.validation.is_parameterizable) = true];
+  repeated string tags = 3 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 // Configuration for executing Dataform on Airflow Worker.
@@ -505,34 +580,51 @@ message DataIngestionAction {
     (pipeline_models.validation.max_len) = 64
   ];
   repeated string depends_on = 2;
-  string execution_timeout = 3 [(pipeline_models.validation.is_iso8601_duration) = true];
+  string execution_timeout = 3 [
+    (pipeline_models.validation.is_iso8601_duration) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
 
   oneof config {
     BigQueryDtsSpec bigquery_dts = 4;
   }
   TriggerRule trigger_rule = 5; // Default: all_success.
   RetryPolicy retry_policy = 6;
+  map<string, string> dynamic_bindings = 7;
+  string run_if = 8 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 message BigQueryDtsSpec {
   oneof transfer_config {
-    string transfer_config_id = 1 [(pipeline_models.validation.is_required) = true];
+    string transfer_config_id = 1 [
+      (pipeline_models.validation.is_required) = true,
+      (pipeline_models.validation.is_parameterizable) = true
+    ];
   }
   google.protobuf.Struct runtime_params = 2 [deprecated = true];
 
   message TimeRange {
-    string start_time = 1 [(pipeline_models.validation.is_iso8601_timestamp) = true];
-    string end_time = 2 [(pipeline_models.validation.is_iso8601_timestamp) = true];
+    string start_time = 1 [
+      (pipeline_models.validation.is_iso8601_timestamp) = true,
+      (pipeline_models.validation.is_parameterizable) = true
+    ];
+    string end_time = 2 [
+      (pipeline_models.validation.is_iso8601_timestamp) = true,
+      (pipeline_models.validation.is_parameterizable) = true
+    ];
   }
   oneof time {
     // See: https://docs.cloud.google.com/bigquery/docs/reference/datatransfer/rpc/google.cloud.bigquery.datatransfer.v1#timerange
     TimeRange requested_time_range = 6;
-    string requested_run_time = 7 [(pipeline_models.validation.is_iso8601_timestamp) = true];
+    string requested_run_time = 7 [
+      (pipeline_models.validation.is_iso8601_timestamp) = true,
+      (pipeline_models.validation.is_parameterizable) = true
+    ];
   }
 
-  repeated string impersonation_chain = 3;
-  string project_id = 4;
-  string location = 5;
+  repeated string impersonation_chain = 3 [(pipeline_models.validation.is_parameterizable) = true];
+  string project_id = 4 [(pipeline_models.validation.is_parameterizable) = true];
+  string location = 5 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 /////////////////////////////////////
@@ -546,7 +638,10 @@ message OrchestrationPipelineAction {
     (pipeline_models.validation.max_len) = 64
   ];
   repeated string depends_on = 2;
-  string execution_timeout = 3 [(pipeline_models.validation.is_iso8601_duration) = true];
+  string execution_timeout = 3 [
+    (pipeline_models.validation.is_iso8601_duration) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
 
   string pipeline_id = 4 [
     (pipeline_models.validation.is_required) = true,
@@ -555,9 +650,12 @@ message OrchestrationPipelineAction {
     (pipeline_models.validation.max_len) = 64
   ];
   string bundle_id = 5;
-  bool wait_for_completion = 6; // Default: false.
+  bool wait_for_completion = 6 [(pipeline_models.validation.is_parameterizable) = true]; // Default: false.
   TriggerRule trigger_rule = 7; // Default: all_success.
   RetryPolicy retry_policy = 8;
+  google.protobuf.Struct params = 9 [(pipeline_models.validation.is_parameterizable) = true];
+  map<string, string> dynamic_bindings = 10;
+  string run_if = 11 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 /////////////////////////
@@ -571,20 +669,25 @@ message AIAction {
     (pipeline_models.validation.max_len) = 64
   ];
   repeated string depends_on = 2;
-  string execution_timeout = 3 [(pipeline_models.validation.is_iso8601_duration) = true];
+  string execution_timeout = 3 [
+    (pipeline_models.validation.is_iso8601_duration) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
   TriggerRule trigger_rule = 4; // Default: all_success.
 
   oneof provider {
     AgentPlatform agent_platform = 5;
   }
 
-  map<string, string> labels = 6;
+  map<string, string> labels = 6 [(pipeline_models.validation.is_parameterizable) = true];
   RetryPolicy retry_policy = 7;
+  map<string, string> dynamic_bindings = 8;
+  string run_if = 9 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 message AgentPlatform {
-  string project_id = 1;
-  string location = 2;
+  string project_id = 1 [(pipeline_models.validation.is_parameterizable) = true];
+  string location = 2 [(pipeline_models.validation.is_parameterizable) = true];
 
   oneof type {
     AgentPlatformModelUpload model_upload = 3;
@@ -594,28 +697,46 @@ message AgentPlatform {
 }
 
 message AgentPlatformModelUpload {
-  string model_name = 1 [(pipeline_models.validation.is_required) = true];
-  string description = 2;
-  string model_artifact_uri = 3 [(pipeline_models.validation.is_required) = true];
+  string model_name = 1 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
+  string description = 2 [(pipeline_models.validation.is_parameterizable) = true];
+  string model_artifact_uri = 3 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
   string serving_container_image_uri = 4 [(pipeline_models.validation.is_required) = true];
 }
 
 message AgentPlatformBatchInference {
-  string job_display_name = 1 [(pipeline_models.validation.is_required) = true];
-  string model_name = 2 [(pipeline_models.validation.is_required) = true];
-  string instances_format = 3;
-  string predictions_format = 4;
-  string bigquery_source = 5;
-  repeated string gcs_source = 6;
-  string bigquery_destination_prefix = 7;
-  string gcs_destination_prefix = 8;
-  repeated string impersonation_chain = 12;
+  string job_display_name = 1 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
+  string model_name = 2 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
+  string instances_format = 3 [(pipeline_models.validation.is_parameterizable) = true];
+  string predictions_format = 4 [(pipeline_models.validation.is_parameterizable) = true];
+  string bigquery_source = 5 [(pipeline_models.validation.is_parameterizable) = true];
+  repeated string gcs_source = 6 [(pipeline_models.validation.is_parameterizable) = true];
+  string bigquery_destination_prefix = 7 [(pipeline_models.validation.is_parameterizable) = true];
+  string gcs_destination_prefix = 8 [(pipeline_models.validation.is_parameterizable) = true];
+  repeated string impersonation_chain = 12 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 message AgentPlatformCreateAndRunCustomJob {
-  google.protobuf.Struct custom_job = 1 [(pipeline_models.validation.is_required) = true];
-  string execution_timeout = 2 [(pipeline_models.validation.is_iso8601_duration) = true];
-  repeated string impersonation_chain = 3;
+  google.protobuf.Struct custom_job = 1 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
+  string execution_timeout = 2 [
+    (pipeline_models.validation.is_iso8601_duration) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
+  repeated string impersonation_chain = 3 [(pipeline_models.validation.is_parameterizable) = true];
 }
 
 message AirflowTaskAction {
@@ -626,9 +747,17 @@ message AirflowTaskAction {
     (pipeline_models.validation.max_len) = 64
   ];
   repeated string depends_on = 2;
-  string execution_timeout = 3 [(pipeline_models.validation.is_iso8601_duration) = true];
+  string execution_timeout = 3 [
+    (pipeline_models.validation.is_iso8601_duration) = true,
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
   TriggerRule trigger_rule = 4;
   string operator_class = 5 [(pipeline_models.validation.is_required) = true];
-  google.protobuf.Struct params = 6 [(pipeline_models.validation.map_key_regex) = "^[a-zA-Z0-9_-]+$"];
+  google.protobuf.Struct params = 6 [
+    (pipeline_models.validation.map_key_regex) = "^[a-zA-Z0-9_-]+$",
+    (pipeline_models.validation.is_parameterizable) = true
+  ];
   RetryPolicy retry_policy = 7;
+  map<string, string> dynamic_bindings = 8;
+  string run_if = 9 [(pipeline_models.validation.is_parameterizable) = true];
 }
