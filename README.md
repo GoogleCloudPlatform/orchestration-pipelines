@@ -2,14 +2,12 @@
 
 [![PyPI version](https://badge.fury.io/py/orchestration-pipelines.svg)](https://badge.fury.io/py/orchestration-pipelines)
 [![Python Versions](https://img.shields.io/pypi/pyversions/orchestration-pipelines.svg)](https://pypi.org/project/orchestration-pipelines/)
-[![Support Status](https://img.shields.io/badge/support-preview-orange.svg)](https://github.com/GoogleCloudPlatform/orchestration-pipelines)
+[![Support Status](https://img.shields.io/badge/support-GA-brightgreen.svg)](https://github.com/GoogleCloudPlatform/orchestration-pipelines)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 A library for defining and generating Apache Airflow DAGs declaratively using
 YAML. Currently focused on orchestration of GCP resources (Dataproc, BigQuery,
 Dataform) and DBT...
-
-> [!NOTE] This library is currently in **Preview**.
 
 ## Overview
 
