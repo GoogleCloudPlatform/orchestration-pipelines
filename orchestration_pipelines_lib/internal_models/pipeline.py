@@ -18,6 +18,7 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 
 from orchestration_pipelines_lib.internal_models.actions import (
     AIActionModel,
@@ -112,6 +113,15 @@ class NotificationModel:
 
 
 @dataclass
+class ParameterModel:
+    """Model for a pipeline-level runtime parameter."""
+
+    type: str
+    default: Any
+    description: str | None = None
+
+
+@dataclass
 class PipelineModel:
     """The root model representing a full orchestration pipeline."""
 
@@ -121,3 +131,5 @@ class PipelineModel:
     triggers: list[AnyScheduleTrigger]
     actions: list[AnyAction]
     notifications: NotificationModel | None = None
+    parameters: dict[str, ParameterModel] | None = None
+    dynamicBindings: dict[str, str] | None = None

@@ -16,6 +16,7 @@
 
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.airflow_3.adapter_imports import (  # noqa: E501
     get_imports,
+    get_param_class,
     get_python_operator,
     get_python_virtualenv_operator,
     get_trigger_dagrun_operator,
@@ -35,6 +36,7 @@ def test_get_imports_returns_adapter_import_getters():
         get_python_virtualenv_operator=get_python_virtualenv_operator,
         get_trigger_dagrun_operator=get_trigger_dagrun_operator,
         get_variable_class=get_variable_class,
+        get_param_class=get_param_class,
     )
 
 
@@ -68,3 +70,9 @@ def test_get_trigger_dagrun_operator_returns_airflow_3_operator():
     )
 
     assert get_trigger_dagrun_operator() is TriggerDagRunOperator
+
+
+def test_get_param_class_returns_airflow_3_param():
+    from airflow.sdk import Param
+
+    assert get_param_class() is Param

@@ -45,11 +45,15 @@ def adapters():
     def get_variable() -> type:
         return type
 
+    def get_param() -> type:
+        return type
+
     adapter_imports = registry.AdapterImports(
         get_python_operator=get_python_op,
         get_python_virtualenv_operator=get_venv_op,
         get_trigger_dagrun_operator=get_trigger_op,
         get_variable_class=get_variable,
+        get_param_class=get_param,
     )
 
     return adapter_imports

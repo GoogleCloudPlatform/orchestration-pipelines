@@ -71,7 +71,9 @@ def pipeline_setup():
     mock_metadata = MagicMock(
         pipelineId="test_pipe", description="Desc", owner="team"
     )
-    mock_pipeline = MagicMock(metadata=mock_metadata, defaults=mock_defaults)
+    mock_pipeline = MagicMock(
+        metadata=mock_metadata, defaults=mock_defaults, parameters=None
+    )
 
     return {
         "pipeline": mock_pipeline,
@@ -92,6 +94,7 @@ def mock_pipeline():
     pipeline.triggers = []
     pipeline.notifications = None
     pipeline.actions = []
+    pipeline.parameters = None
 
     return pipeline
 
@@ -163,6 +166,7 @@ def test_build_dag_kwargs_with_data_root_returns_kwargs_with_template_searchpath
         pipeline_setup["pipeline_id"],
         mock_emails_callback,
         resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
+        get_param_class=MagicMock,
     )
 
     assert result == expected_kwargs
@@ -189,6 +193,7 @@ def test_build_dag_kwargs_without_data_root_returns_kwargs_without_template_sear
         pipeline_setup["pipeline_id"],
         mock_emails_callback,
         resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
+        get_param_class=MagicMock,
     )
 
     assert result.get("template_searchpath") == []
@@ -213,6 +218,7 @@ def test_build_dag_kwargs_without_notifications_adds_only_finish_callback(
         pipeline_id=pipeline_setup["pipeline_id"],
         emails_callback=MagicMock(),
         resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
+        get_param_class=MagicMock,
     )
 
     assert len(result["on_failure_callback"]) == 1  # type: ignore
@@ -240,6 +246,7 @@ def test_build_dag_kwargs_without_on_pipeline_failure_adds_only_finish_callback(
         pipeline_id=pipeline_setup["pipeline_id"],
         emails_callback=MagicMock(),
         resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
+        get_param_class=MagicMock,
     )
 
     assert len(result["on_failure_callback"]) == 1  # type: ignore
@@ -268,6 +275,7 @@ def test_build_dag_kwargs_with_emails_configures_emails_callback(
         pipeline_id=pipeline_setup["pipeline_id"],
         emails_callback=mock_emails_callback,
         resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
+        get_param_class=MagicMock,
     )
 
     failure_callbacks = result["on_failure_callback"]
@@ -307,6 +315,7 @@ def test_build_dag_kwargs_with_only_on_pipeline_failure_configures_only_failure_
         pipeline_id=pipeline_setup["pipeline_id"],
         emails_callback=mock_emails_callback,
         resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
+        get_param_class=MagicMock,
     )
 
     assert len(result["on_failure_callback"]) == 2  # type: ignore
@@ -336,6 +345,7 @@ def test_build_dag_kwargs_with_only_on_pipeline_success_configures_only_success_
         pipeline_id=pipeline_setup["pipeline_id"],
         emails_callback=mock_emails_callback,
         resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
+        get_param_class=MagicMock,
     )
 
     assert len(result["on_failure_callback"]) == 1  # type: ignore
@@ -373,6 +383,7 @@ def test_build_dag_kwargs_with_retry_policy_sets_default_args_and_custom_key(
         pipeline_id=pipeline_setup["pipeline_id"],
         emails_callback=mock_emails_callback,
         resolve_latest_pipeline_dag_id=mock_resolve_dag_id,
+        get_param_class=MagicMock,
     )
 
     assert result["default_args"]["retries"] == 5
@@ -820,6 +831,7 @@ def test_generate_with_valid_pipeline_orchestrates_dag_creation(
         pipeline_id,
         mock_emails_callback,
         mock_resolve_dag_id,
+        mock_adapter_imports.get_param_class,
     )
     mock_configure_dag_schedule.assert_called_once_with(
         mock_kwargs_in, mock_pipeline.triggers
@@ -1185,3 +1197,45 @@ def test_extract_additional_notes_without_allowed_keys_returns_empty_string():
     result = extract_additional_notes(input_content)
 
     assert result == ""
+
+
+def test_build_dag_kwargs_with_parameters_registers_airflow_params(
+    pipeline_setup,
+):
+    from orchestration_pipelines_lib.internal_models.pipeline import (
+        ParameterModel,
+    )
+
+    pipeline = pipeline_setup["pipeline"]
+    pipeline.parameters = {
+        "env": ParameterModel(
+            type="string", default="prod", description="Target env"
+        ),
+        "batch_size": ParameterModel(type="number", default=100),
+    }
+    mock_param_cls = MagicMock(side_effect=lambda **kwargs: kwargs)
+
+    result = _build_dag_kwargs(
+        pipeline,
+        ["tag1"],
+        "notes",
+        "/data",
+        pipeline_setup["bundle_id"],
+        pipeline_setup["pipeline_id"],
+        MagicMock(),
+        MagicMock(),
+        get_param_class=lambda: mock_param_cls,
+    )
+
+    assert result["params"] == {
+        "env": {
+            "default": "prod",
+            "type": "string",
+            "description": "Target env",
+        },
+        "batch_size": {
+            "default": 100,
+            "type": "number",
+            "description": None,
+        },
+    }

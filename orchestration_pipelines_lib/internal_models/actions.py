@@ -56,6 +56,8 @@ class ActionBaseModel:
     executionTimeout: str | None
     triggerRule: str | None
     retryPolicy: RetryPolicyModel | None = None
+    runIf: str | None = None
+    dynamicBindings: dict[str, str] | None = None
 
 
 @dataclass
@@ -128,6 +130,7 @@ class BqOperationActionModel(ActionBaseModel):
     labels: dict[str, str] | None = None
     impersonationChain: str | list[str] | None = None
     params: dict[str, str] | None = None
+    fetchOutputValue: bool = False
 
 
 @dataclass
@@ -268,6 +271,7 @@ class OrchestrationPipelineActionModel(ActionBaseModel):
     pipeline_id: str
     bundle_id: str | None = None
     wait_for_completion: bool | None = None
+    params: dict[str, Any] | None = None
 
 
 @dataclass

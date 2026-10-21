@@ -19,7 +19,7 @@ from functools import partial
 from unittest.mock import MagicMock, patch
 
 import pytest
-from google.protobuf import struct_pb2
+from google.protobuf import json_format, struct_pb2
 
 from orchestration_pipelines_lib.internal_models import (
     actions as internal_actions,
@@ -2231,6 +2231,176 @@ def test_convert_ai_action_vertex_create_and_run_custom_job_defaults(
     assert internal_ai.config.custom_job == {
         "display_name": "default_custom_job"
     }
+
+
+def test_convert_to_internal_model_with_parameters_and_dynamic_bindings(
+    converter,
+):
+    pipeline_proto = json_format.ParseDict(
+        {
+            "model_version": "1.0",
+            "pipeline_id": "param-pipe",
+            "runner": "airflow",
+            "defaults": {"project_id": "", "location": "us-central1"},
+            "dynamic_bindings": {"defaults.project_id": "parameters.proj"},
+            "parameters": {
+                "proj": {
+                    "type": "string",
+                    "default": "my-proj",
+                    "description": "GCP project",
+                },
+                "retries": {"type": "number", "default": 3},
+                "ratio": {"type": "number", "default": 1.5},
+                "dry_run": {"type": "boolean", "default": False},
+                "tags": {
+                    "type": "array",
+                    "default": ["a", 2, {"env": "prod"}],
+                },
+            },
+            "actions": [
+                {
+                    "python": {
+                        "name": "py_task",
+                        "main_file_path": "script.py",
+                        "python_callable": "run",
+                        "run_if": "!parameters.dry_run",
+                        "dynamic_bindings": {"execution_timeout": "'10m'"},
+                    }
+                }
+            ],
+        },
+        v1_protos.OrchestrationPipeline(),
+    )
+
+    internal = converter.convert_to_internal_model(pipeline_proto)
+
+    assert internal.dynamicBindings == {
+        "defaults.project_id": "parameters.proj"
+    }
+    assert internal.parameters == {
+        "proj": internal_pipeline.ParameterModel(
+            type="string", default="my-proj", description="GCP project"
+        ),
+        "retries": internal_pipeline.ParameterModel(type="number", default=3),
+        "ratio": internal_pipeline.ParameterModel(type="number", default=1.5),
+        "dry_run": internal_pipeline.ParameterModel(
+            type="boolean", default=False
+        ),
+        "tags": internal_pipeline.ParameterModel(
+            type="array", default=["a", 2, {"env": "prod"}]
+        ),
+    }
+    assert internal.actions[0].runIf == "!parameters.dry_run"
+    assert internal.actions[0].dynamicBindings == {
+        "execution_timeout": "'10m'"
+    }
+
+
+def test_convert_orchestration_pipeline_action_with_params_and_bindings(
+    converter, default_proto
+):
+    action_proto = json_format.ParseDict(
+        {
+            "orchestration_pipeline": {
+                "name": "trigger_child",
+                "pipeline_id": "child_pipe",
+                "wait_for_completion": True,
+                "params": {"target_date": "2026-01-01", "limit": 50},
+                "run_if": "true",
+                "dynamic_bindings": {"params.target_date": "run.trigger_date"},
+            }
+        },
+        v1_protos.Action(),
+    )
+
+    internal = converter.convert_action(action_proto, default_proto, {})
+
+    assert isinstance(internal, internal_actions.OrchestrationPipelineActionModel)
+    assert internal.params == {"target_date": "2026-01-01", "limit": 50.0}
+    assert internal.runIf == "true"
+    assert internal.dynamicBindings == {
+        "params.target_date": "run.trigger_date"
+    }
+
+
+def test_deferred_resource_profile_paths_skip_static_file_read(converter):
+    gce_profile = json_format.ParseDict(
+        {
+            "path": "",
+            "overrides": {"config": {"config_bucket": "override-bucket"}},
+        },
+        v1_protos.DataprocClusterResourceProfile(),
+    )
+    serverless_profile = json_format.ParseDict(
+        {
+            "external_config_path": "",
+            "overrides": {"runtime_config": {"version": "2.1"}},
+        },
+        v1_protos.DataprocBatchResourceProfile(),
+    )
+    converter.file_manager.read.reset_mock()
+
+    gce_config = converter._get_gce_cluster_config(gce_profile)
+    serverless_config = converter._get_serverless_resource_profile(
+        serverless_profile
+    )
+
+    converter.file_manager.read.assert_not_called()
+    assert gce_config == {"config_bucket": "override-bucket"}
+    assert serverless_config.runtimeConfig == {"version": "2.1"}
+    merged_raw = converter._merge_proto(
+        v1_protos.Defaults(project_id="a"), v1_protos.Defaults(location="b")
+    )
+    assert (merged_raw.project_id, merged_raw.location) == ("a", "b")
+
+
+@pytest.mark.parametrize(
+    ("action_name", "downstream_expr", "expected_fetch"),
+    [
+        ("bq_query", "outputs.bq_query.value.cnt > 0", True),
+        ("bq_query", "outputs . bq_query . value > 0", True),
+        ("bq_query", "has(outputs.bq_query.value)", True),
+        ("bq-query", "outputs [ 'bq-query' ] . value.cnt > 0", True),
+        ("bq_query", "outputs.bq_query.metadata.job_id != ''", False),
+        ("bq_query", "'outputs.bq_query.value' != ''", False),
+        ("bq_query", "", False),
+    ],
+)
+def test_bq_sql_action_fetch_output_value_set_on_demand(
+    converter, action_name, downstream_expr, expected_fetch
+):
+    pipeline_proto = v1_protos.OrchestrationPipeline(
+        model_version="1.0",
+        pipeline_id="bq-value-pipe",
+        runner=v1_protos.PipelineRunner.airflow,
+        defaults=v1_protos.Defaults(
+            project_id="test-proj", location="us-central1"
+        ),
+        actions=[
+            v1_protos.Action(
+                sql=v1_protos.SqlAction(
+                    name=action_name,
+                    query=v1_protos.Query(inline="SELECT 1 AS cnt"),
+                    engine=v1_protos.SqlEngine(
+                        bigquery=v1_protos.BigQueryEngine()
+                    ),
+                )
+            ),
+            v1_protos.Action(
+                python=v1_protos.PythonAction(
+                    name="downstream",
+                    depends_on=[action_name],
+                    main_file_path="script.py",
+                    python_callable="run",
+                    run_if=downstream_expr,
+                )
+            ),
+        ],
+    )
+
+    internal = converter.convert_to_internal_model(pipeline_proto)
+
+    assert internal.actions[0].fetchOutputValue is expected_fetch
 
 
 if __name__ == "__main__":

@@ -19,10 +19,13 @@
 from __future__ import annotations
 
 import logging
+import re
+from collections.abc import Iterable, Mapping
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import yaml
+from google.protobuf import json_format
 
 from orchestration_pipelines_lib.internal_models import (
     actions as internal_actions,
@@ -38,6 +41,7 @@ from orchestration_pipelines_lib.internal_models.actions import (
 )
 from orchestration_pipelines_lib.utils.dict_utils import (
     dict_to_struct,
+    normalize_proto_json,
     normalize_struct,
     struct_to_dict,
 )
@@ -75,6 +79,13 @@ _TRIGGER_RULE_MAPPING = {
     v1_pipeline_protos.TriggerRule.one_success: AirflowTriggerRule.ONE_SUCCESS,
     v1_pipeline_protos.TriggerRule.always: AirflowTriggerRule.ALWAYS,
 }
+
+_OUTPUT_VALUE_REF_RE = re.compile(
+    r"'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\""
+    r"|(?<![.\w])outputs\s*"
+    r"(?:\.\s*([A-Za-z0-9_-]+)|\[\s*(?:'([^'\\]+)'|\"([^\"\\]+)\")\s*\])\s*"
+    r"(?:\.\s*value\b|\[\s*['\"]value['\"]\s*\])"
+)
 
 
 class ConverterV1ToInternal:
@@ -163,6 +174,75 @@ class ConverterV1ToInternal:
             )
         return mapped_val.value
 
+    def _base_action_kwargs(
+        self,
+        action: Any,
+        defaults: v1_pipeline_protos.Defaults | None = None,
+        execution_timeout: str | None = None,
+    ) -> dict[str, Any]:
+        """Builds common ActionBaseModel keyword arguments."""
+        return {
+            "name": action.name,
+            "executionTimeout": (
+                execution_timeout
+                if execution_timeout is not None
+                else (action.execution_timeout or None)
+            ),
+            "dependsOn": list(action.depends_on),
+            "triggerRule": self._convert_trigger_rule(action.trigger_rule),
+            "retryPolicy": self._convert_action_retry_policy(action, defaults),
+            "runIf": action.run_if or None,
+            "dynamicBindings": dict(action.dynamic_bindings) or None,
+        }
+
+    def _convert_parameters(
+        self, parameters: Mapping[str, v1_pipeline_protos.Parameter]
+    ) -> dict[str, internal_pipeline.ParameterModel] | None:
+        """Converts Parameter protobuf map to internal ParameterModel dict."""
+        if not parameters:
+            return None
+        return {
+            name: internal_pipeline.ParameterModel(
+                type=v1_pipeline_protos.Parameter.Type.Name(param.type),
+                default=normalize_proto_json(
+                    json_format.MessageToDict(param.default_value)
+                ),
+                description=param.description or None,
+            )
+            for name, param in parameters.items()
+        }
+
+    @staticmethod
+    def _get_value_referenced_actions(
+        actions: Iterable[v1_pipeline_protos.Action],
+    ) -> set[str]:
+        """Returns action names whose '.value' output is referenced in CEL."""
+        referenced: set[str] = set()
+        for wrapper in actions:
+            if not (action_type := wrapper.WhichOneof("action")):
+                continue
+            actual = getattr(wrapper, action_type)
+            for expr in filter(
+                None, (*actual.dynamic_bindings.values(), actual.run_if)
+            ):
+                for match in _OUTPUT_VALUE_REF_RE.finditer(expr):
+                    if name := (
+                        match.group(1) or match.group(2) or match.group(3)
+                    ):
+                        referenced.add(name)
+        return referenced
+
+    @staticmethod
+    def _merge_proto(base: Any, override: Any) -> Any:
+        if not override:
+            return base
+        if base:
+            getattr(base, "_pb", base).MergeFrom(
+                getattr(override, "_pb", override)
+            )
+            return base
+        return override
+
     def _normalize_environment_config(
         self, environment_config_msg: Message
     ) -> EnvironmentConfig:
@@ -222,30 +302,31 @@ class ConverterV1ToInternal:
                 if config_type == "path"
                 else resource_profile_msg.external_config_path
             )
-            path_to_read = self.file_manager.resolve_path(path)
-            cluster_config_dict = yaml.safe_load(
-                self.file_manager.read(path_to_read)
-            )
-            config_data = {}
-            if (
-                isinstance(cluster_config_dict, dict)
-                and "definition" in cluster_config_dict
-                and isinstance(cluster_config_dict["definition"], dict)
-                and "config" in cluster_config_dict["definition"]
-            ):
-                config_data = cluster_config_dict["definition"]["config"]
+            if path:
+                path_to_read = self.file_manager.resolve_path(path)
+                cluster_config_dict = yaml.safe_load(
+                    self.file_manager.read(path_to_read)
+                )
+                config_data = {}
+                if (
+                    isinstance(cluster_config_dict, dict)
+                    and "definition" in cluster_config_dict
+                    and isinstance(cluster_config_dict["definition"], dict)
+                    and "config" in cluster_config_dict["definition"]
+                ):
+                    config_data = cluster_config_dict["definition"]["config"]
 
-            cluster_config = dict_to_struct(config_data, ClusterConfig)
+                cluster_config = dict_to_struct(config_data, ClusterConfig)
         overrides = resource_profile_msg.overrides
-        if cluster_config and overrides:
+        if overrides:
             overrides_struct = (
                 overrides.config
                 if overrides.config
                 else overrides.cluster_config
             )
-            normalized_config = self._normalize_cluster_config(overrides_struct)
-            if normalized_config:
-                cluster_config._pb.MergeFrom(normalized_config._pb)
+            cluster_config = self._merge_proto(
+                cluster_config, self._normalize_cluster_config(overrides_struct)
+            )
 
         return struct_to_dict(cluster_config._pb) if cluster_config else {}
 
@@ -278,26 +359,27 @@ class ConverterV1ToInternal:
                 if config_type == "path"
                 else resource_profile_msg.external_config_path
             )
-            resolved_path = self.file_manager.resolve_path(path)
-            resolved_config = yaml.safe_load(
-                self.file_manager.read(resolved_path)
-            )
-            config_definition = resolved_config.get("definition") or {}
-            runtime_config_struct = struct_pb2.Struct()
-            runtime_config_struct.update(
-                config_definition.get("runtimeConfig")
-                or config_definition.get("runtime_config")
-                or {}
-            )
-            runtime_config_msg = runtime_config_struct
+            if path:
+                resolved_path = self.file_manager.resolve_path(path)
+                resolved_config = yaml.safe_load(
+                    self.file_manager.read(resolved_path)
+                )
+                config_definition = resolved_config.get("definition") or {}
+                runtime_config_struct = struct_pb2.Struct()
+                runtime_config_struct.update(
+                    config_definition.get("runtimeConfig")
+                    or config_definition.get("runtime_config")
+                    or {}
+                )
+                runtime_config_msg = runtime_config_struct
 
-            environment_config_struct = struct_pb2.Struct()
-            environment_config_struct.update(
-                config_definition.get("environmentConfig")
-                or config_definition.get("environment_config")
-                or {}
-            )
-            environment_config_msg = environment_config_struct
+                environment_config_struct = struct_pb2.Struct()
+                environment_config_struct.update(
+                    config_definition.get("environmentConfig")
+                    or config_definition.get("environment_config")
+                    or {}
+                )
+                environment_config_msg = environment_config_struct
 
         runtime_config = self._normalize_runtime_config(runtime_config_msg)
         environment_config = self._normalize_environment_config(
@@ -306,24 +388,18 @@ class ConverterV1ToInternal:
 
         overrides = resource_profile_msg.overrides
         if overrides:
-            runtime_overrides = overrides.runtime_config
-            environment_overrides = overrides.environment_config
-            if runtime_overrides and runtime_config:
-                normalized_runtime_overrides = self._normalize_runtime_config(
-                    runtime_overrides
+            if overrides.runtime_config:
+                runtime_config = self._merge_proto(
+                    runtime_config,
+                    self._normalize_runtime_config(overrides.runtime_config),
                 )
-                if normalized_runtime_overrides:
-                    runtime_config._pb.MergeFrom(
-                        normalized_runtime_overrides._pb
-                    )
-            if environment_overrides and environment_config:
-                normalized_environment_overrides = (
-                    self._normalize_environment_config(environment_overrides)
+            if overrides.environment_config:
+                environment_config = self._merge_proto(
+                    environment_config,
+                    self._normalize_environment_config(
+                        overrides.environment_config
+                    ),
                 )
-                if normalized_environment_overrides:
-                    environment_config._pb.MergeFrom(
-                        normalized_environment_overrides._pb
-                    )
 
         return internal_actions.ResourceProfile(
             runtimeConfig=(
@@ -334,6 +410,21 @@ class ConverterV1ToInternal:
                 if environment_config
                 else {}
             ),
+        )
+
+    def convert_defaults(
+        self, v1_defaults: v1_pipeline_protos.Defaults
+    ) -> internal_pipeline.DefaultsModel:
+        """Converts Defaults protobuf to internal DefaultsModel."""
+        retry_policy = self._convert_defaults_retry_policy(
+            v1_defaults
+        ) or internal_actions.RetryPolicyModel(maxRetries=0)
+        return internal_pipeline.DefaultsModel(
+            cloudDefault=internal_pipeline.CloudDefaultsModel(
+                project=v1_defaults.project_id, region=v1_defaults.location
+            ),
+            executionConfigDefault=None,
+            retryPolicy=retry_policy,
         )
 
     def convert_to_internal_model(
@@ -351,27 +442,19 @@ class ConverterV1ToInternal:
             self.convert_trigger(t) for t in v1_pipeline_model.triggers
         ]
         labels = self._get_labels(v1_pipeline_model.tags)
-        internal_actions_list = [
-            self.convert_action(a, v1_pipeline_model.defaults, labels)
-            for a in v1_pipeline_model.actions
-        ]
-
-        v1_defaults = v1_pipeline_model.defaults
-        internal_cloud_defaults = internal_pipeline.CloudDefaultsModel(
-            project=v1_defaults.project_id, region=v1_defaults.location
+        value_referenced = self._get_value_referenced_actions(
+            v1_pipeline_model.actions
         )
+        internal_actions_list = []
+        for raw_act in v1_pipeline_model.actions:
+            act = self.convert_action(
+                raw_act, v1_pipeline_model.defaults, labels
+            )
+            if isinstance(act, internal_actions.BqOperationActionModel):
+                act.fetchOutputValue = act.name in value_referenced
+            internal_actions_list.append(act)
 
-        internal_retry_policy = self._convert_defaults_retry_policy(
-            v1_defaults
-        ) or internal_actions.RetryPolicyModel(
-            maxRetries=0,
-        )
-
-        internal_defaults = internal_pipeline.DefaultsModel(
-            cloudDefault=internal_cloud_defaults,
-            executionConfigDefault=None,
-            retryPolicy=internal_retry_policy,
-        )
+        internal_defaults = self.convert_defaults(v1_pipeline_model.defaults)
 
         internal_metadata = internal_pipeline.MetaDataModel(
             pipelineId=v1_pipeline_model.pipeline_id,
@@ -395,6 +478,8 @@ class ConverterV1ToInternal:
             triggers=internal_triggers_list,
             actions=internal_actions_list,
             notifications=internal_notifications,
+            parameters=self._convert_parameters(v1_pipeline_model.parameters),
+            dynamicBindings=dict(v1_pipeline_model.dynamic_bindings) or None,
         )
 
     def convert_notifications(
@@ -442,41 +527,44 @@ class ConverterV1ToInternal:
         shared_labels: dict[str, str],
     ) -> internal_pipeline.AnyAction:
         """Converts Action protobuf to internal action model."""
-        action_type = action.WhichOneof("action")
-
-        if action_type == "python":
-            return self._convert_python_action(action.python, defaults)
-        if action_type == "pyspark":
-            return self._convert_dataproc_action(
-                action.pyspark, "pyspark", defaults, shared_labels
-            )
-        if action_type == "notebook":
-            return self._convert_dataproc_action(
-                action.notebook, "notebook", defaults, shared_labels
-            )
-        if action_type == "sql":
-            return self._convert_sql_action(action.sql, defaults, shared_labels)
-        if action_type == "pipeline":
-            return self._convert_pipeline_action(
-                action.pipeline, defaults, shared_labels
-            )
-        if action_type == "data_ingestion":
-            return self._convert_data_ingestion_action(
-                action.data_ingestion, defaults, shared_labels
-            )
-        if action_type == "orchestration_pipeline":
-            return self._convert_orchestration_pipeline_action(
-                action.orchestration_pipeline, defaults
-            )
-        if action_type == "ai":
-            return self._convert_ai_action(action.ai, defaults, shared_labels)
-
-        if action_type == "airflow_task":
-            return self._convert_airflow_task_action(
-                action.airflow_task, defaults, shared_labels
-            )
-
-        raise TypeError(f"Unknown action type: {action_type}")
+        match action_type := action.WhichOneof("action"):
+            case "python":
+                model = self._convert_python_action(action.python, defaults)
+            case "pyspark":
+                model = self._convert_dataproc_action(
+                    action.pyspark, "pyspark", defaults, shared_labels
+                )
+            case "notebook":
+                model = self._convert_dataproc_action(
+                    action.notebook, "notebook", defaults, shared_labels
+                )
+            case "sql":
+                model = self._convert_sql_action(
+                    action.sql, defaults, shared_labels
+                )
+            case "pipeline":
+                model = self._convert_pipeline_action(
+                    action.pipeline, defaults, shared_labels
+                )
+            case "data_ingestion":
+                model = self._convert_data_ingestion_action(
+                    action.data_ingestion, defaults, shared_labels
+                )
+            case "orchestration_pipeline":
+                model = self._convert_orchestration_pipeline_action(
+                    action.orchestration_pipeline, defaults
+                )
+            case "ai":
+                model = self._convert_ai_action(
+                    action.ai, defaults, shared_labels
+                )
+            case "airflow_task":
+                model = self._convert_airflow_task_action(
+                    action.airflow_task, defaults, shared_labels
+                )
+            case _:
+                raise TypeError(f"Unknown action type: {action_type}")
+        return model
 
     def _convert_python_action(
         self,
@@ -488,7 +576,7 @@ class ConverterV1ToInternal:
             if action.HasField("op_kwargs") and action.op_kwargs
             else None
         )
-        retry_policy = self._convert_action_retry_policy(action, defaults)
+        base_kwargs = self._base_action_kwargs(action, defaults)
 
         if action.HasField("environment"):
             env = action.environment
@@ -505,12 +593,9 @@ class ConverterV1ToInternal:
                     )
 
             return internal_actions.PythonVirtualenvActionModel(
-                name=action.name,
+                **base_kwargs,
                 type="python-virtual-env",
                 filename=self.file_manager.resolve_path(action.main_file_path),
-                executionTimeout=action.execution_timeout or None,
-                dependsOn=list(action.depends_on),
-                triggerRule=self._convert_trigger_rule(action.trigger_rule),
                 config=internal_actions.PythonVirtualenvConfigurationModel(
                     pythonCallable=action.python_callable,
                     opKwargs=op_kwargs,
@@ -518,22 +603,16 @@ class ConverterV1ToInternal:
                     requirements=requirements,
                     systemSitePackages=env.system_site_packages,
                 ),
-                retryPolicy=retry_policy,
             )
-        else:
-            return internal_actions.PythonScriptActionModel(
-                name=action.name,
-                type="script",
-                filename=self.file_manager.resolve_path(action.main_file_path),
-                executionTimeout=action.execution_timeout or None,
-                dependsOn=list(action.depends_on),
-                triggerRule=self._convert_trigger_rule(action.trigger_rule),
-                config=internal_actions.PythonScriptConfigurationModel(
-                    pythonCallable=action.python_callable,
-                    opKwargs=op_kwargs,
-                ),
-                retryPolicy=retry_policy,
-            )
+        return internal_actions.PythonScriptActionModel(
+            **base_kwargs,
+            type="script",
+            filename=self.file_manager.resolve_path(action.main_file_path),
+            config=internal_actions.PythonScriptConfigurationModel(
+                pythonCallable=action.python_callable,
+                opKwargs=op_kwargs,
+            ),
+        )
 
     def _convert_dataproc_action(
         self,
@@ -561,7 +640,7 @@ class ConverterV1ToInternal:
                 internal_config = DataprocGceExistingClusterConfigurationModel(
                     cluster_name=config.cluster_name,
                     project_id=config.project_id or defaults.project_id,
-                    properties=config.properties,
+                    properties=dict(config.properties),
                 )
             elif config_type == "ephemeral_cluster":
                 config = gce_engine.ephemeral_cluster
@@ -580,7 +659,7 @@ class ConverterV1ToInternal:
                         project_id=config.project_id or defaults.project_id,
                         cluster_name=config.cluster_name,
                         cluster_config=cluster_config,
-                        properties=config.properties,
+                        properties=dict(config.properties),
                     )
                 )
         elif engine_type == "dataproc_serverless":
@@ -622,17 +701,12 @@ class ConverterV1ToInternal:
             for uri in getattr(action, "archive_uris", [])
         ]
 
-        retry_policy = self._convert_action_retry_policy(action, defaults)
-
         return internal_actions.DataprocOperatorActionModel(
-            name=action.name,
+            **self._base_action_kwargs(action, defaults),
             type=action_type,
             filename=filename,
             pyFiles=py_files,
             query=None,
-            executionTimeout=action.execution_timeout or None,
-            dependsOn=list(action.depends_on),
-            triggerRule=self._convert_trigger_rule(action.trigger_rule),
             region=region,
             labels=merged_labels,
             params=params,
@@ -641,7 +715,6 @@ class ConverterV1ToInternal:
             depsBucket=action.staging_bucket,
             engine=internal_engine,
             config=internal_config,
-            retryPolicy=retry_policy,
         )
 
     def _resolve_archive_uri(self, archive_uri: str) -> str:
@@ -685,28 +758,24 @@ class ConverterV1ToInternal:
             merged_labels.update(dict(action.labels))
 
         params = dict(action.params) if action.params else None
-        retry_policy = self._convert_action_retry_policy(action, defaults)
+        base_kwargs = self._base_action_kwargs(action, defaults)
 
         if engine_type == "bigquery":
             bq_engine = action.engine.bigquery
 
             return internal_actions.BqOperationActionModel(
-                name=action.name,
+                **base_kwargs,
                 type="operation",
                 engine="bq",
                 query=query,
                 filename=filename,
                 labels=merged_labels,
-                executionTimeout=action.execution_timeout or None,
-                dependsOn=list(action.depends_on),
-                triggerRule=self._convert_trigger_rule(action.trigger_rule),
                 impersonationChain=list(bq_engine.impersonation_chain),
                 params=params,
                 config=internal_actions.BqOperationConfigurationModel(
                     location=bq_engine.location or defaults.location,
                     destinationTable=bq_engine.destination_table,
                 ),
-                retryPolicy=retry_policy,
             )
 
         if engine_type == "dataproc_serverless":
@@ -726,20 +795,16 @@ class ConverterV1ToInternal:
             )
 
             return internal_actions.DataprocOperatorActionModel(
-                name=action.name,
+                **base_kwargs,
                 type="sql",
                 filename=filename,
                 query=query,
                 labels=merged_labels,
-                executionTimeout=action.execution_timeout or None,
-                dependsOn=list(action.depends_on),
-                triggerRule=self._convert_trigger_rule(action.trigger_rule),
                 region=region,
                 impersonationChain=impersonation_chain,
                 engine=internal_engine,
                 params=params,
                 config=internal_config,
-                retryPolicy=retry_policy,
             )
 
         if engine_type == "dataproc_on_gce":
@@ -760,7 +825,7 @@ class ConverterV1ToInternal:
                 internal_config = DataprocGceExistingClusterConfigurationModel(
                     cluster_name=config.cluster_name,
                     project_id=config.project_id or defaults.project_id,
-                    properties=config.properties,
+                    properties=dict(config.properties),
                 )
             elif config_type == "ephemeral_cluster":
                 config = gce_engine.ephemeral_cluster
@@ -779,25 +844,21 @@ class ConverterV1ToInternal:
                         project_id=config.project_id or defaults.project_id,
                         cluster_name=config.cluster_name,
                         cluster_config=cluster_config,
-                        properties=config.properties,
+                        properties=dict(config.properties),
                     )
                 )
 
             return internal_actions.DataprocOperatorActionModel(
-                name=action.name,
+                **base_kwargs,
                 type="sql",
                 filename=filename,
                 query=query,
                 labels=merged_labels,
-                executionTimeout=action.execution_timeout or None,
-                dependsOn=list(action.depends_on),
-                triggerRule=self._convert_trigger_rule(action.trigger_rule),
                 region=region,
                 impersonationChain=impersonation_chain,
                 engine=internal_engine,
                 params=params,
                 config=internal_config,
-                retryPolicy=retry_policy,
             )
 
         raise TypeError(f"Unknown SQL engine type: {engine_type}")
@@ -828,7 +889,7 @@ class ConverterV1ToInternal:
         defaults: v1_pipeline_protos.Defaults,
         shared_labels: dict[str, str] | None = None,
     ) -> internal_pipeline.AnyAction:
-        retry_policy = self._convert_action_retry_policy(action, defaults)
+        base_kwargs = self._base_action_kwargs(action, defaults)
         framework_type = action.framework.WhichOneof("framework")
         if framework_type == "dbt":
             dbt = action.framework.dbt
@@ -859,10 +920,7 @@ class ConverterV1ToInternal:
                         )
                     ]
                 return internal_actions.DBTActionModel(
-                    name=action.name,
-                    executionTimeout=action.execution_timeout or None,
-                    dependsOn=list(action.depends_on),
-                    triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                    **base_kwargs,
                     type="dbt_pipeline",
                     engine="dbt",
                     executionMode="local",
@@ -874,7 +932,6 @@ class ConverterV1ToInternal:
                     params=params,
                     invocations=invocations,
                     output_gcs_uri=dbt.output_gcs_uri or None,
-                    retryPolicy=retry_policy,
                 )
         elif framework_type == "dataform":
             dataform = action.framework.dataform
@@ -887,10 +944,7 @@ class ConverterV1ToInternal:
                 if action.labels:
                     merged_labels.update(dict(action.labels))
                 return internal_actions.DataformActionModel(
-                    name=action.name,
-                    executionTimeout=action.execution_timeout or None,
-                    dependsOn=list(action.depends_on),
-                    triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                    **base_kwargs,
                     type="dataform_pipeline",
                     executionMode="local",
                     dataform_project_path=self.file_manager.resolve_to_gcs_uri(
@@ -898,10 +952,12 @@ class ConverterV1ToInternal:
                     ),
                     labels=merged_labels,
                     params=params,
-                    retryPolicy=retry_policy,
                 )
             if execution_type == "dataform_service":
-                if action.params:
+                if action.params or any(
+                    k == "params" or k.startswith("params.")
+                    for k in action.dynamic_bindings
+                ):
                     raise ValueError(
                         f"Action {action.name}: `params` are not supported "
                         "when executing Dataform using Dataform Service. "
@@ -920,22 +976,20 @@ class ConverterV1ToInternal:
                     service.workflow_invocation
                 )
                 return internal_actions.DataformActionModel(
-                    name=action.name,
-                    executionTimeout=action.execution_timeout or None,
-                    dependsOn=list(action.depends_on),
-                    triggerRule=self._convert_trigger_rule(action.trigger_rule),
+                    **base_kwargs,
                     type="dataform_pipeline",
                     executionMode="service",
                     dataformServiceConfig=internal_actions.DataformServiceModel(
                         project_id=service.project_id or defaults.project_id,
                         region=service.location or defaults.location,
                         repository_id=service.repository_id,
-                        workflow_invocation=struct_to_dict(
-                            workflow_invocation._pb
+                        workflow_invocation=(
+                            struct_to_dict(workflow_invocation._pb)
+                            if workflow_invocation
+                            else {}
                         ),
                     ),
                     labels=shared_labels,
-                    retryPolicy=retry_policy,
                 )
         raise TypeError(f"Unknown pipeline framework: {framework_type}")
 
@@ -981,17 +1035,11 @@ class ConverterV1ToInternal:
                 location=dts_spec.location or defaults.location,
             )
 
-            retry_policy = self._convert_action_retry_policy(action, defaults)
-
             return internal_actions.DataIngestionActionModel(
-                name=action.name,
+                **self._base_action_kwargs(action, defaults),
                 type="data_ingestion",
-                executionTimeout=action.execution_timeout or None,
-                dependsOn=list(action.depends_on),
-                triggerRule=self._convert_trigger_rule(action.trigger_rule),
                 labels=shared_labels,
                 config=spec_model,
-                retryPolicy=retry_policy,
             )
         raise TypeError(
             f"Unknown DataIngestionAction config type: {config_type}"
@@ -1002,17 +1050,18 @@ class ConverterV1ToInternal:
         action: v1_pipeline_protos.OrchestrationPipelineAction,
         defaults: v1_pipeline_protos.Defaults,
     ) -> internal_pipeline.AnyAction:
-        retry_policy = self._convert_action_retry_policy(action, defaults)
+        params = (
+            normalize_proto_json(struct_to_dict(action.params))
+            if action.HasField("params") and action.params
+            else None
+        )
         return internal_actions.OrchestrationPipelineActionModel(
-            name=action.name,
+            **self._base_action_kwargs(action, defaults),
             type="orchestration_pipeline",
-            executionTimeout=action.execution_timeout or None,
-            dependsOn=list(action.depends_on),
-            triggerRule=self._convert_trigger_rule(action.trigger_rule),
             pipeline_id=action.pipeline_id,
             bundle_id=action.bundle_id,
             wait_for_completion=action.wait_for_completion,
-            retryPolicy=retry_policy,
+            params=params,
         )
 
     def _convert_ai_action(
@@ -1056,8 +1105,6 @@ class ConverterV1ToInternal:
         defaults: v1_pipeline_protos.Defaults,
         merged_labels: dict[str, str],
     ):
-        retry_policy = self._convert_action_retry_policy(action, defaults)
-
         agent_platform = action.agent_platform
         upload_spec = agent_platform.model_upload
 
@@ -1071,16 +1118,12 @@ class ConverterV1ToInternal:
         )
 
         return internal_actions.AIActionModel(
-            name=action.name,
+            **self._base_action_kwargs(action, defaults),
             type="ai",
             provider="agent_platform",
             ai_action_type="model_upload",
-            executionTimeout=action.execution_timeout or None,
-            dependsOn=list(action.depends_on),
-            triggerRule=self._convert_trigger_rule(action.trigger_rule),
             labels=merged_labels,
             config=spec_model,
-            retryPolicy=retry_policy,
         )
 
     def _convert_batch_inference_ai_action(
@@ -1089,8 +1132,6 @@ class ConverterV1ToInternal:
         defaults: v1_pipeline_protos.Defaults,
         merged_labels: dict[str, str],
     ):
-        retry_policy = self._convert_action_retry_policy(action, defaults)
-
         agent_platform = action.agent_platform
         inference_spec = agent_platform.batch_inference
 
@@ -1121,16 +1162,12 @@ class ConverterV1ToInternal:
         )
 
         return internal_actions.AIActionModel(
-            name=action.name,
+            **self._base_action_kwargs(action, defaults),
             type="ai",
             provider="agent_platform",
             ai_action_type="batch_inference",
-            executionTimeout=action.execution_timeout or None,
-            dependsOn=list(action.depends_on),
-            triggerRule=self._convert_trigger_rule(action.trigger_rule),
             labels=merged_labels,
             config=spec_model,
-            retryPolicy=retry_policy,
         )
 
     def _convert_create_and_run_custom_job_ai_action(
@@ -1142,8 +1179,6 @@ class ConverterV1ToInternal:
         from google.cloud.aiplatform_v1.types import (
             custom_job as aiplatform_custom_job,
         )
-
-        retry_policy = self._convert_action_retry_policy(action, defaults)
 
         agent_platform = action.agent_platform
         job_spec = agent_platform.create_and_run_custom_job
@@ -1172,16 +1207,14 @@ class ConverterV1ToInternal:
         )
 
         return internal_actions.AIActionModel(
-            name=action.name,
+            **self._base_action_kwargs(
+                action, defaults, execution_timeout=execution_timeout
+            ),
             type="ai",
             provider="agent_platform",
             ai_action_type="create_and_run_custom_job",
-            executionTimeout=execution_timeout,
-            dependsOn=list(action.depends_on),
-            triggerRule=self._convert_trigger_rule(action.trigger_rule),
             labels=merged_labels,
             config=spec_model,
-            retryPolicy=retry_policy,
         )
 
     def _convert_airflow_task_action(
@@ -1195,17 +1228,12 @@ class ConverterV1ToInternal:
             if action.HasField("params") and action.params
             else None
         )
-        retry_policy = self._convert_action_retry_policy(action, defaults)
 
         return internal_actions.AirflowActionModel(
-            name=action.name,
+            **self._base_action_kwargs(action, defaults),
             type="airflow_task",
-            executionTimeout=action.execution_timeout or None,
-            dependsOn=list(action.depends_on),
-            triggerRule=self._convert_trigger_rule(action.trigger_rule),
             operator_class=action.operator_class,
             params=params,
-            retryPolicy=retry_policy,
         )
 
     def _get_labels(self, tags: list[str]):

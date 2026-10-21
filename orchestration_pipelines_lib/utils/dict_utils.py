@@ -112,3 +112,14 @@ def iso_to_timestamp_dict(iso_str: str) -> Dict[str, int]:
         return None
     dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
     return {"seconds": int(dt.timestamp())}
+
+
+def normalize_proto_json(val: Any) -> Any:
+    """Converts integer-valued floats in parsed protobuf JSON to `int`."""
+    if isinstance(val, float) and val.is_integer():
+        return int(val)
+    if isinstance(val, list):
+        return [normalize_proto_json(x) for x in val]
+    if isinstance(val, dict):
+        return {k: normalize_proto_json(x) for k, x in val.items()}
+    return val

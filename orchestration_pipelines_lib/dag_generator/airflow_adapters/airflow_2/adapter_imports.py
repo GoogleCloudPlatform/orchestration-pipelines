@@ -21,6 +21,7 @@ from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.act
 )
 
 if TYPE_CHECKING:
+    from airflow.models.param import Param
     from airflow.models.variable import Variable
     from airflow.operators.python import (
         PythonOperator,
@@ -36,6 +37,7 @@ def get_imports() -> AdapterImports:
         get_python_virtualenv_operator=get_python_virtualenv_operator,
         get_trigger_dagrun_operator=get_trigger_dagrun_operator,
         get_variable_class=get_variable_class,
+        get_param_class=get_param_class,
     )
 
 
@@ -65,3 +67,10 @@ def get_trigger_dagrun_operator() -> "type[TriggerDagRunOperator]":
     from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
     return TriggerDagRunOperator
+
+
+def get_param_class() -> "type[Param]":
+    """Returns the Param class."""
+    from airflow.models.param import Param
+
+    return Param

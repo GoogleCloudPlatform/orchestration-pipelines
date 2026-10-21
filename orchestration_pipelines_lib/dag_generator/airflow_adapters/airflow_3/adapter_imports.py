@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from airflow.providers.standard.operators.trigger_dagrun import (
         TriggerDagRunOperator,
     )
-    from airflow.sdk import Variable
+    from airflow.sdk import Param, Variable
 
 
 def get_imports() -> AdapterImports:
@@ -38,6 +38,7 @@ def get_imports() -> AdapterImports:
         get_python_virtualenv_operator=get_python_virtualenv_operator,
         get_trigger_dagrun_operator=get_trigger_dagrun_operator,
         get_variable_class=get_variable_class,
+        get_param_class=get_param_class,
     )
 
 
@@ -71,3 +72,10 @@ def get_trigger_dagrun_operator() -> "type[TriggerDagRunOperator]":
     )
 
     return TriggerDagRunOperator
+
+
+def get_param_class() -> "type[Param]":
+    """Returns the Param class."""
+    from airflow.sdk import Param
+
+    return Param

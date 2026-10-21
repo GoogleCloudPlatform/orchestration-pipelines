@@ -44,6 +44,7 @@ class AdapterImports:
     get_python_virtualenv_operator: Callable[[], type]
     get_trigger_dagrun_operator: Callable[[], type]
     get_variable_class: Callable[[], type]
+    get_param_class: Callable[[], type]
 
 
 def get_action_handlers(

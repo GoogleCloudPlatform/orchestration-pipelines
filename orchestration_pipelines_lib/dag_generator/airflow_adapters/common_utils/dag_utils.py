@@ -71,6 +71,7 @@ class DAGKwargs(TypedDict, total=False):
     on_success_callback: (
         "DagStateChangeCallback | list[DagStateChangeCallback] | None"
     )
+    params: dict[str, Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,6 +131,7 @@ def generate(
         pipeline_id,
         versioned_deps.emails_callback,
         versioned_deps.resolve_latest_pipeline_dag_id,
+        adapter_imports.get_param_class,
     )
     _configure_dag_schedule(dag_kwargs, pipeline.triggers)
 
@@ -160,6 +162,7 @@ def _build_dag_kwargs(
     pipeline_id: str,
     emails_callback: Callable[[list[str], bool, "Context"], None],
     resolve_latest_pipeline_dag_id: Callable[[str, str | None], str],
+    get_param_class: Callable[[], type],
 ) -> DAGKwargs:
     finish_callback = pipeline_run_callback(bundle_id, pipeline_id)
     on_failure_callbacks = [finish_callback]
@@ -176,7 +179,7 @@ def _build_dag_kwargs(
             on_success_callback = partial(emails_callback, emails, True)
             on_success_callbacks.append(on_success_callback)
 
-    return {
+    dag_kwargs: DAGKwargs = {
         "dag_id": pipeline.metadata.pipelineId,
         "description": pipeline.metadata.description,
         "default_args": {
@@ -192,6 +195,19 @@ def _build_dag_kwargs(
         "on_failure_callback": on_failure_callbacks,
         "on_success_callback": on_success_callbacks,
     }
+
+    if pipeline.parameters:
+        param_cls = get_param_class()
+        dag_kwargs["params"] = {
+            name: param_cls(
+                default=param.default,
+                type=param.type,
+                description=param.description,
+            )
+            for name, param in pipeline.parameters.items()
+        }
+
+    return dag_kwargs
 
 
 def _configure_dag_schedule(
