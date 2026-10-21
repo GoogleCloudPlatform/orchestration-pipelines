@@ -17,11 +17,34 @@ including logic to skip tests based on the installed Airflow version.
 """
 
 import importlib.metadata
+from collections.abc import Iterator
+from unittest.mock import patch
 
+import google.auth.exceptions
+import pytest
 from packaging.version import parse
+
+from orchestration_pipelines_lib.utils import file_manager
 
 airflow_version = parse(importlib.metadata.version("apache-airflow"))
 IS_AIRFLOW_2 = airflow_version.major == 2
+
+
+@pytest.fixture(autouse=True)
+def block_default_gcp_credentials() -> Iterator[None]:
+    """Prevents unit tests from using real local/GCE Application Default
+    Credentials and resets the cached GCS client between tests.
+    """
+    file_manager._GCS_CLIENT = None
+    with patch(
+        "google.auth.default",
+        side_effect=google.auth.exceptions.DefaultCredentialsError(
+            "Default credentials are blocked in unit tests. "
+            "Mock the GCP client or credentials explicitly."
+        ),
+    ):
+        yield
+    file_manager._GCS_CLIENT = None
 
 
 def pytest_ignore_collect(collection_path, config) -> bool:

@@ -81,7 +81,7 @@ class FileManager:
             gcs_client: An optional pre-configured GCS client instance.
             data_root: Folder with dags
         """
-        self._gcs_client = gcs_client or _get_gcs_client()
+        self._gcs_client = gcs_client
         if data_root is not None:
             self._data_root = data_root
         else:
@@ -92,9 +92,7 @@ class FileManager:
     def _get_gcs_client(self):
         """Lazily initializes the GCS client."""
         if self._gcs_client is None:
-            from google.cloud import storage
-
-            self._gcs_client = storage.Client()
+            self._gcs_client = _get_gcs_client()
         return self._gcs_client
 
     def _resolve_relative_path(self, file_path: str) -> str:
@@ -300,7 +298,7 @@ class FileManager:
         try:
             if self._is_gcs_blob(file_path):
                 bucket_name, blob_path = self._parse_gcs_uri(file_path)
-                bucket = self._gcs_client.get_bucket(bucket_name)
+                bucket = self._get_gcs_client().get_bucket(bucket_name)
 
                 # A GCS path can refer to a blob or a "folder" (prefix).
                 # 1. Check if a blob exists at the exact path.
