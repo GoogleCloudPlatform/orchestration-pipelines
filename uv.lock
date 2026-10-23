@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -40,7 +40,7 @@ dependencies = [
     { name = "parsedatetime" },
     { name = "python-slugify" },
     { name = "pytimeparse" },
-    { name = "tzdata", marker = "sys_platform == 'win32' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/29/77/6f5df1c68bf056f5fdefc60ccc616303c6211e71cd6033c830c12735f605/agate-1.9.1.tar.gz", hash = "sha256:bc60880c2ee59636a2a80cd8603d63f995be64526abf3cbba12f00767bcd5b3d", size = 202303, upload-time = "2023-12-21T20:05:24.316Z" }
 wheels = [
@@ -76,7 +76,7 @@ dependencies = [
     { name = "frozenlist" },
     { name = "multidict" },
     { name = "propcache" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
     { name = "yarl" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/58/d9/22ce5786ac0c1653ae8b6c23bded02c1686d11f0dbb45b31ce128e0df985/aiohttp-3.14.3.tar.gz", hash = "sha256:9491196535a88924a60afd5b5f434b5b203b6cc616250878dbdb223a8f7844bc", size = 7971213, upload-time = "2026-07-23T01:57:27.037Z" }
@@ -214,7 +214,7 @@ version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "frozenlist" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/61/62/06741b579156360248d1ec624842ad0edf697050bbaf7c3e46394e106ad1/aiosignal-1.4.0.tar.gz", hash = "sha256:f47eecd9468083c2029cc99945502cb7708b082c232f9aca65da147157b251c7", size = 25007, upload-time = "2025-07-03T22:54:43.528Z" }
 wheels = [
@@ -246,7 +246,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "mako" },
     { name = "sqlalchemy", version = "1.4.54", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "sqlalchemy", version = "2.0.52", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "sqlalchemy", version = "2.0.52", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
     { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/34/10/181eecdd552217d0342492bd6f3b8a96e973083379aace3d3402830ddc03/alembic-1.19.2.tar.gz", hash = "sha256:297950a8a91f6770eb82bfbce9bea55c728b90a5386c6e81430191a319d138b0", size = 2082643, upload-time = "2026-09-04T17:10:11.212Z" }
@@ -278,7 +278,7 @@ version = "4.15.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "idna" },
-    { name = "typing-extensions", marker = "python_full_version < '3.15' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.15'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a9/d2/f4d173e22df740bc37b1db102b386ba719b66e95b0f0d751f556b387e6d2/anyio-4.15.1.tar.gz", hash = "sha256:9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94", size = 276966, upload-time = "2026-09-05T10:42:39.44Z" }
 wheels = [
@@ -397,8 +397,8 @@ resolution-markers = [
     "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "apache-airflow-core", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow-task-sdk", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "apache-airflow-core", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "apache-airflow-task-sdk", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/05/f4/025fc6e41878ae075bfd50136542071abaac5ead6a967b53a878b4efbca8/apache_airflow-3.3.1.tar.gz", hash = "sha256:a62ee9c46b7b8c919a46a88ee9346e0b36bc4ff10d6f9ac7cde5a6165da52164", size = 31054, upload-time = "2026-08-12T08:10:24.808Z" }
 wheels = [
@@ -424,71 +424,71 @@ name = "apache-airflow-core"
 version = "3.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "a2wsgi", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "aiosqlite", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "alembic", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow-providers-common-compat", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow-providers-common-io", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow-providers-common-sql", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow-providers-smtp", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow-providers-standard", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow-task-sdk", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "argcomplete", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "asgiref", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "attrs", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "cachetools", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "cadwyn", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "colorlog", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "cron-descriptor", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "croniter", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "cryptography", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "deprecated", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "dill", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "fastapi", extra = ["standard-no-fastapi-cloud-cli"], marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "httpx", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "importlib-metadata", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "isoduration", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "itsdangerous", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "jinja2", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "jsonschema", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "lazy-object-proxy", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "libcst", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "linkify-it-py", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "lockfile", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "methodtools", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "msgspec", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "natsort", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "opentelemetry-api", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "opentelemetry-exporter-otlp", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "opentelemetry-proto", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "packaging", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pathspec", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pendulum", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pluggy", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "psutil", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pydantic", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pygments", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pygtrie", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pyjwt", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "python-daemon", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "python-dateutil", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "python-slugify", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pyyaml", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "requests", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "rich", version = "15.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "rich-argparse", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "setproctitle", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "sqlalchemy", version = "2.0.52", source = { registry = "https://pypi.org/simple" }, extra = ["asyncio"], marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "starlette", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "structlog", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "svcs", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "tabulate", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "tenacity", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "termcolor", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "typing-extensions", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "universal-pathlib", version = "0.3.10", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "uuid6", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "uvicorn", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "a2wsgi", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "aiosqlite", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "alembic", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "apache-airflow-providers-common-compat", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "apache-airflow-providers-common-io", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "apache-airflow-providers-common-sql", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "apache-airflow-providers-smtp", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "apache-airflow-providers-standard", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "apache-airflow-task-sdk", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "argcomplete", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "asgiref", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "attrs", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "cachetools", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "cadwyn", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "colorlog", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "cron-descriptor", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "croniter", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "cryptography", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "deprecated", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "dill", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "fastapi", extra = ["standard-no-fastapi-cloud-cli"], marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "httpx", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "importlib-metadata", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "isoduration", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "itsdangerous", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "jinja2", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "jsonschema", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "lazy-object-proxy", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "libcst", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "linkify-it-py", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "lockfile", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "methodtools", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "msgspec", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "natsort", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "opentelemetry-api", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "opentelemetry-exporter-otlp", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "opentelemetry-proto", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "packaging", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pathspec", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pendulum", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pluggy", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "psutil", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pydantic", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pygments", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pygtrie", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pyjwt", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "python-daemon", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "python-dateutil", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "python-slugify", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pyyaml", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "requests", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "rich", version = "15.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "rich-argparse", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "setproctitle", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "sqlalchemy", version = "2.0.52", source = { registry = "https://pypi.org/simple" }, extra = ["asyncio"], marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "starlette", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "structlog", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "svcs", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "tabulate", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "tenacity", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "termcolor", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "typing-extensions", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "universal-pathlib", version = "0.3.10", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "uuid6", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "uvicorn", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/37/42/d1d5f2e6172398ed4b5864a3f262eddd89008f8445678934c94eabdcee9d/apache_airflow_core-3.3.1.tar.gz", hash = "sha256:0c4ae4f3aea72dc2087b615305ea97ff0247b266bf6fa6661877ce1e1d9a951b", size = 7373613, upload-time = "2026-08-12T08:10:26.454Z" }
 wheels = [
@@ -502,7 +502,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
     { name = "apache-airflow", version = "2.11.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
     { name = "apache-airflow-providers-common-compat" },
     { name = "asgiref" },
     { name = "cryptography" },
@@ -521,7 +521,7 @@ version = "1.18.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apache-airflow", version = "2.11.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
     { name = "asgiref" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/69/ab/c2c58f105e16ba2e75371121e72d657189af32fd2bee0b505bc82bc8fbe6/apache_airflow_providers_common_compat-1.18.0.tar.gz", hash = "sha256:30dbdd9a2bd931469b32c180792630f5e6b84e0e908dfc18da51b4beb7dd521f", size = 43604, upload-time = "2026-08-08T03:17:07.126Z" }
@@ -535,7 +535,7 @@ version = "1.8.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apache-airflow", version = "2.11.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
     { name = "apache-airflow-providers-common-compat" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/cc/16/b3bce1c50f830e614d02926ecff99b0d55a5c1fe5bb79bcbe693443d06ee/apache_airflow_providers_common_io-1.8.0.tar.gz", hash = "sha256:174a8a1d1d140a647a1f6457337d75217ae4c68ea2540cb0de47afa949cf80b5", size = 28658, upload-time = "2026-07-04T18:17:24.917Z" }
@@ -549,7 +549,7 @@ version = "2.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apache-airflow", version = "2.11.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
     { name = "apache-airflow-providers-common-compat" },
     { name = "methodtools" },
     { name = "more-itertools" },
@@ -598,7 +598,7 @@ version = "22.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apache-airflow", version = "2.11.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
     { name = "apache-airflow-providers-common-compat" },
     { name = "apache-airflow-providers-common-sql" },
     { name = "asgiref" },
@@ -662,9 +662,9 @@ dependencies = [
     { name = "pandas-gbq" },
     { name = "proto-plus" },
     { name = "pyarrow" },
-    { name = "pydantic", marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "pydantic", marker = "python_full_version >= '3.14'" },
     { name = "python-slugify" },
-    { name = "ray", extra = ["default"], marker = "python_full_version < '3.15' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "ray", extra = ["default"], marker = "python_full_version < '3.15'" },
     { name = "sqlalchemy-bigquery" },
     { name = "sqlalchemy-spanner" },
     { name = "tenacity" },
@@ -682,7 +682,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "apache-airflow", version = "2.11.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
     { name = "apache-airflow-providers-common-compat" },
     { name = "asgiref" },
     { name = "pydantic" },
@@ -714,7 +714,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiosmtplib" },
     { name = "apache-airflow", version = "2.11.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
     { name = "apache-airflow-providers-common-compat" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b0/c5/8b3d7a91512c79ebde0c9c1d30132b98463f1a327ad72ac382d499d2fea1/apache_airflow_providers_smtp-3.0.3.tar.gz", hash = "sha256:3f72dfbe41d5e0a04da2bc9d94c92a52d3625c58108345dbb9d281e55cd27d9d", size = 48239, upload-time = "2026-08-08T03:17:32.926Z" }
@@ -740,8 +740,8 @@ name = "apache-airflow-providers-standard"
 version = "1.18.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow-providers-common-compat", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "apache-airflow-providers-common-compat", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/a2/44d6c56565531ecd0daec5448729a6f9bb65784b4a633af2dcf9023c1ec2/apache_airflow_providers_standard-1.18.0.tar.gz", hash = "sha256:80ddb3753d6be70410897dc635dfc4c12003a872c47bdfda45b8978b3c21a8a5", size = 224052, upload-time = "2026-08-23T20:08:46.167Z" }
 wheels = [
@@ -753,32 +753,32 @@ name = "apache-airflow-task-sdk"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "apache-airflow-core", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "asgiref", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "attrs", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "babel", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "colorlog", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "fsspec", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "greenback", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "httpx", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "apache-airflow-core", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "asgiref", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "attrs", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "babel", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "colorlog", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "fsspec", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "greenback", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "httpx", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
     { name = "importlib-metadata", marker = "(python_full_version < '3.12' and extra != 'group-23-orchestration-pipelines-airflow2') or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "isoduration", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "jinja2", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "jsonschema", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "methodtools", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "msgspec", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "opentelemetry-api", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "packaging", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pathspec", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pendulum", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pluggy", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "psutil", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pydantic", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pygtrie", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "python-dateutil", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "structlog", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "tenacity", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "typing-extensions", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "isoduration", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "jinja2", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "jsonschema", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "methodtools", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "msgspec", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "opentelemetry-api", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "packaging", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pathspec", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pendulum", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pluggy", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "psutil", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pydantic", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pygtrie", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "python-dateutil", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "structlog", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "tenacity", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "typing-extensions", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/64/cb/00745b7e24958923d6422fc43deb3df94577dc3916edfa6330e3047dcdad/apache_airflow_task_sdk-1.3.1.tar.gz", hash = "sha256:21c1086c133ede94defde2b455541cadadf564f7e6d189d1af22c6ef186bb6e3", size = 1707061, upload-time = "2026-08-12T08:10:41.99Z" }
 wheels = [
@@ -816,8 +816,8 @@ name = "arrow"
 version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "python-dateutil", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "tzdata", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "python-dateutil", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "tzdata", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b9/33/032cdc44182491aa708d06a68b62434140d8c50820a087fac7af37703357/arrow-1.4.0.tar.gz", hash = "sha256:ed0cc050e98001b8779e84d461b0098c4ac597e88704a655582b21d116e526d7", size = 152931, upload-time = "2025-10-18T17:46:46.761Z" }
 wheels = [
@@ -883,12 +883,12 @@ name = "cadwyn"
 version = "7.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "fastapi", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "jinja2", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pydantic", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "starlette", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "typing-extensions", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "typing-inspection", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "fastapi", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "jinja2", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pydantic", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "starlette", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "typing-extensions", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "typing-inspection", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/80/31/9a986a9fe20c6b52bde0dd23c9fc002388ab0c8f7b30a37217b07aa1875f/cadwyn-7.0.0.tar.gz", hash = "sha256:3b57549a37e218dffb55ac5d188639de0516207f05642b084f23627c5a44d614", size = 662353, upload-time = "2026-06-06T16:34:39.492Z" }
 wheels = [
@@ -922,7 +922,7 @@ name = "cffi"
 version = "2.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pycparser", marker = "implementation_name != 'PyPy' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "pycparser", marker = "implementation_name != 'PyPy'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9e/ef/008a1939e372c06329a3fce4279c02f328488f3526744906eeec3da7ad5f/cffi-2.1.1.tar.gz", hash = "sha256:dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be", size = 530807, upload-time = "2026-08-03T21:21:18.939Z" }
 wheels = [
@@ -1263,7 +1263,7 @@ name = "colorful"
 version = "0.5.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/82/31/109ef4bedeb32b4202e02ddb133162457adc4eb890a9ed9c05c9dd126ed0/colorful-0.5.8.tar.gz", hash = "sha256:bb16502b198be2f1c42ba3c52c703d5f651d826076817185f0294c1a549a7445", size = 209361, upload-time = "2025-10-29T11:53:21.663Z" }
 wheels = [
@@ -1275,7 +1275,7 @@ name = "colorlog"
 version = "6.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/8c/55/ba79756cb90c8d69d599d57785398ac87bba7b19c80e87f4e8a562197c93/colorlog-6.12.0.tar.gz", hash = "sha256:2a7924c1dadf18b22a0eb8b06d1c7b01d5341707ec1641eb6fcc4fde0c3e8e5f", size = 18151, upload-time = "2026-07-23T13:40:40.71Z" }
 wheels = [
@@ -1431,7 +1431,7 @@ wheels = [
 
 [package.optional-dependencies]
 toml = [
-    { name = "tomli", marker = "python_full_version <= '3.11' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "tomli", marker = "python_full_version <= '3.11'" },
 ]
 
 [[package]]
@@ -1463,7 +1463,7 @@ name = "cryptography"
 version = "50.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cffi", marker = "platform_python_implementation != 'PyPy' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "cffi", marker = "platform_python_implementation != 'PyPy'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/bb/ad/5d6702db60b1e40b41ef513b6967ff5848f307d50f8449baf1634f5908f1/cryptography-50.0.1.tar.gz", hash = "sha256:5dd9bda1c12b4162f6ff568eeb5e0ff956c28d14406e875cfe8a63a2d414ff20", size = 880381, upload-time = "2026-08-25T19:45:45.499Z" }
 wheels = [
@@ -1528,8 +1528,8 @@ name = "db-dtypes"
 version = "1.7.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "packaging" },
     { name = "pandas" },
     { name = "pyarrow" },
@@ -1764,11 +1764,11 @@ name = "fastapi"
 version = "0.136.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "annotated-doc", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pydantic", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "starlette", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "typing-extensions", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "typing-inspection", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "annotated-doc", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pydantic", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "starlette", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "typing-extensions", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "typing-inspection", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/81/2d/ff8d91d7b564d464629a0fd50a4489c97fcb836ac230bf3a7269232a9b1f/fastapi-0.136.3.tar.gz", hash = "sha256:e487fae93ad408e6f47641ee4dfe389864fd7bec92e547ea8498fc13f43e83ab", size = 396410, upload-time = "2026-05-23T18:53:15.192Z" }
 wheels = [
@@ -1777,14 +1777,14 @@ wheels = [
 
 [package.optional-dependencies]
 standard-no-fastapi-cloud-cli = [
-    { name = "email-validator", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "fastapi-cli", extra = ["standard-no-fastapi-cloud-cli"], marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "httpx", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "jinja2", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pydantic-extra-types", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pydantic-settings", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "python-multipart", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "uvicorn", extra = ["standard"], marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "email-validator", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "fastapi-cli", extra = ["standard-no-fastapi-cloud-cli"], marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "httpx", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "jinja2", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pydantic-extra-types", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pydantic-settings", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "python-multipart", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "uvicorn", extra = ["standard"], marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 
 [[package]]
@@ -1792,9 +1792,9 @@ name = "fastapi-cli"
 version = "0.0.32"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "rich-toolkit", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "typer", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "uvicorn", extra = ["standard"], marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "rich-toolkit", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "typer", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "uvicorn", extra = ["standard"], marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/33/eb/3b534c6f8e157f9ddbf2a153512307c886cad0b258739c200dd8ff8c4452/fastapi_cli-0.0.32.tar.gz", hash = "sha256:38024d2345275e1b37ce8848727a580d84901b570e96b3256d9d36a9a5039424", size = 26636, upload-time = "2026-07-16T12:16:58.678Z" }
 wheels = [
@@ -1803,7 +1803,7 @@ wheels = [
 
 [package.optional-dependencies]
 standard-no-fastapi-cloud-cli = [
-    { name = "uvicorn", extra = ["standard"], marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "uvicorn", extra = ["standard"], marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 
 [[package]]
@@ -2350,8 +2350,8 @@ wheels = [
 [package.optional-dependencies]
 evaluation = [
     { name = "jsonschema" },
-    { name = "litellm", version = "1.85.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "litellm", version = "1.96.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "litellm", version = "1.85.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14'" },
+    { name = "litellm", version = "1.96.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14'" },
     { name = "pandas" },
     { name = "pyyaml" },
     { name = "ruamel-yaml" },
@@ -3237,9 +3237,9 @@ name = "greenback"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "greenlet", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "outcome", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "sniffio", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "greenlet", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "outcome", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "sniffio", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/3b/d2/3b70d0f03a1e0f48d4f2348de435fa282e5530ae60812fef672cabc40a28/greenback-1.3.0.tar.gz", hash = "sha256:d1441f542ec9c6efb32a9250dd954a5b1cc1eb789294c19b1eb747f49cab818c", size = 8070613, upload-time = "2025-12-23T01:49:33.582Z" }
 wheels = [
@@ -3569,12 +3569,12 @@ name = "httpx2"
 version = "2.13.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "anyio", marker = "sys_platform != 'emscripten' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "httpcore2", marker = "sys_platform != 'emscripten' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "httpx2-jsfetch", marker = "(python_full_version >= '3.12' and sys_platform == 'emscripten') or (python_full_version < '3.12' and extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3') or (sys_platform != 'emscripten' and extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "anyio", marker = "sys_platform != 'emscripten'" },
+    { name = "httpcore2", marker = "sys_platform != 'emscripten'" },
+    { name = "httpx2-jsfetch", marker = "python_full_version >= '3.12' and sys_platform == 'emscripten'" },
     { name = "idna" },
-    { name = "truststore", marker = "sys_platform != 'emscripten' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "truststore", marker = "sys_platform != 'emscripten'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d5/44/474bef2a0e9d90f1715d32cb98b0738695ca17ba324095fb2497ed7fbd59/httpx2-2.13.1.tar.gz", hash = "sha256:e48744a19e3af5ee48313d0ce5fe941d5422fae5705ea922a4aabf94d7800dfa", size = 100405, upload-time = "2026-09-23T07:47:23.052Z" }
 wheels = [
@@ -3598,7 +3598,7 @@ dependencies = [
     { name = "click" },
     { name = "filelock" },
     { name = "fsspec" },
-    { name = "hf-xet", marker = "platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "hf-xet", marker = "platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'" },
     { name = "httpx" },
     { name = "packaging" },
     { name = "pyyaml" },
@@ -3681,7 +3681,7 @@ name = "isoduration"
 version = "20.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "arrow", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "arrow", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7c/1a/3c8edc664e06e6bd06cce40c6b22da5f1429aa4224d0c590f3be21c91ead/isoduration-20.11.0.tar.gz", hash = "sha256:ac2f9015137935279eac671f94f89eb00584f940f5dc49462a0c4ee692ba1bd9", size = 11649, upload-time = "2020-11-01T11:00:00.312Z" }
 wheels = [
@@ -4029,18 +4029,18 @@ resolution-markers = [
     "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "aiohttp", marker = "python_full_version < '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "click", marker = "python_full_version < '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "fastuuid", marker = "python_full_version < '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "httpx", marker = "python_full_version < '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "importlib-metadata", marker = "python_full_version < '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "jinja2", marker = "python_full_version < '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "jsonschema", marker = "python_full_version < '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "openai", marker = "python_full_version < '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "pydantic", marker = "python_full_version < '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "python-dotenv", marker = "python_full_version < '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "tiktoken", marker = "python_full_version < '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "tokenizers", marker = "python_full_version < '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "aiohttp" },
+    { name = "click" },
+    { name = "fastuuid" },
+    { name = "httpx" },
+    { name = "importlib-metadata" },
+    { name = "jinja2" },
+    { name = "jsonschema" },
+    { name = "openai" },
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "tiktoken" },
+    { name = "tokenizers" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0d/59/364fa090acef716effd88e6432d3442982b1f965b2d291f1528db0e6aabb/litellm-1.85.7.tar.gz", hash = "sha256:461cc5d5a6c7d5086b67f06f1d5a00c40d6fb0240099764cb040dc4a28452938", size = 15363830, upload-time = "2026-06-24T04:54:55.115Z" }
 wheels = [
@@ -4057,19 +4057,19 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "aiohttp", marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "click", marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "fastuuid", marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "httpx", marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "importlib-metadata", marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "jinja2", marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "jsonschema", marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "openai", marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "pydantic", marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "pydantic-settings", marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "python-dotenv", marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "tiktoken", marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "tokenizers", marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "aiohttp" },
+    { name = "click" },
+    { name = "fastuuid" },
+    { name = "httpx" },
+    { name = "importlib-metadata" },
+    { name = "jinja2" },
+    { name = "jsonschema" },
+    { name = "openai" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "python-dotenv" },
+    { name = "tiktoken" },
+    { name = "tokenizers" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/79/fe/d03be8a6be6914fabacef29457a2b3d02128c52c448cc6f3019b8e63488b/litellm-1.96.2.tar.gz", hash = "sha256:80d477ae092b05ce023b5084542cb3cb75999b52b1dd2e4d834fb348effc9399", size = 17682558, upload-time = "2026-08-11T21:12:24.117Z" }
 wheels = [
@@ -5150,7 +5150,7 @@ name = "orchestration-pipelines"
 source = { editable = "." }
 dependencies = [
     { name = "apache-airflow", version = "2.11.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "apache-airflow", version = "3.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
     { name = "apache-airflow-client" },
     { name = "apache-airflow-providers-cncf-kubernetes" },
     { name = "apache-airflow-providers-google" },
@@ -5160,8 +5160,8 @@ dependencies = [
     { name = "google-cloud-dataform" },
     { name = "google-cloud-dataproc" },
     { name = "google-cloud-storage" },
-    { name = "litellm", version = "1.85.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "litellm", version = "1.96.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "litellm", version = "1.85.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14'" },
+    { name = "litellm", version = "1.96.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14'" },
     { name = "protobuf" },
     { name = "pytz" },
     { name = "pyyaml" },
@@ -5246,7 +5246,7 @@ name = "outcome"
 version = "1.3.0.post0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "attrs", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "attrs", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/98/df/77698abfac98571e65ffeb0c1fba8ffd692ab8458d617a0eed7d9a8d38f2/outcome-1.3.0.post0.tar.gz", hash = "sha256:9dcf02e65f2971b80047b377468e72a268e15c0af3cf1238e6ff14f7f91143b8", size = 21060, upload-time = "2023-10-26T04:26:04.361Z" }
 wheels = [
@@ -5267,10 +5267,10 @@ name = "pandas"
 version = "3.0.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "python-dateutil" },
-    { name = "tzdata", marker = "sys_platform == 'emscripten' or sys_platform == 'win32' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "tzdata", marker = "sys_platform == 'emscripten' or sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/be/4f/5f3422a2afec5ffc46308b79e53291365a93748b498ac2e58bead0197916/pandas-3.0.5.tar.gz", hash = "sha256:dca3734d6ab7c906e6730f0788b0a1dbb9f2467731f9711f77995c8e9d62d712", size = 4658219, upload-time = "2026-07-22T22:19:28.819Z" }
 wheels = [
@@ -5327,8 +5327,8 @@ dependencies = [
     { name = "google-auth" },
     { name = "google-auth-oauthlib" },
     { name = "google-cloud-bigquery" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "packaging" },
     { name = "pandas" },
     { name = "psutil" },
@@ -5859,8 +5859,8 @@ name = "pydantic-extra-types"
 version = "2.11.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pydantic", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "typing-extensions", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "pydantic", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "typing-extensions", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/66/71/dba38ee2651f84f7842206adbd2233d8bbdb59fb85e9fa14232486a8c471/pydantic_extra_types-2.11.1.tar.gz", hash = "sha256:46792d2307383859e923d8fcefa82108b1a141f8a9c0198982b3832ab5ef1049", size = 172002, upload-time = "2026-03-16T08:08:03.92Z" }
 wheels = [
@@ -5872,9 +5872,9 @@ name = "pydantic-settings"
 version = "2.15.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pydantic", marker = "python_full_version >= '3.14' or extra != 'group-23-orchestration-pipelines-airflow2' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "python-dotenv", marker = "python_full_version >= '3.14' or extra != 'group-23-orchestration-pipelines-airflow2' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "typing-inspection", marker = "python_full_version >= '3.14' or extra != 'group-23-orchestration-pipelines-airflow2' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "pydantic", marker = "python_full_version >= '3.14' or extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "python-dotenv", marker = "python_full_version >= '3.14' or extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "typing-inspection", marker = "python_full_version >= '3.14' or extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/68/ca/31c57507b13119d7d3cfa1576dad2911a4861e3be07b579395f4e9d393f9/pydantic_settings-2.15.0.tar.gz", hash = "sha256:694b793e84f766ba76a90ebdefc01d0a9a045dab0382bee70393da93712ad117", size = 261253, upload-time = "2026-08-07T09:24:57.419Z" }
 wheels = [
@@ -5936,7 +5936,7 @@ name = "pytest"
 version = "9.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
     { name = "iniconfig" },
     { name = "packaging" },
     { name = "pluggy" },
@@ -5987,14 +5987,14 @@ wheels = [
 
 [[package]]
 name = "python-discovery"
-version = "1.6.0"
+version = "1.6.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/91/96/0f93e27c9f60a650838f2118159aa115fd5732c0716247917b7ba7ede665/python_discovery-1.6.0.tar.gz", hash = "sha256:6393b4eae1be8b2182670635e7baff89ac21cb9f8e86fd1ff40c7b1144febb4c", size = 82849, upload-time = "2026-08-28T17:30:02.366Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/ee/cf608372c88ce2c136ee13c69ab6f667dbc0d0c1176af188b4ddc8853e66/python_discovery-1.6.4.tar.gz", hash = "sha256:bc70d31f0ec5de11eda13d4d64c16e24b3506a65984684f2b6c98cb83b2ea9df", size = 89883, upload-time = "2026-10-19T01:45:14.855Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/43/5e/21abf578182fb15006a57faf3711a1e659e29d600d19b6e557eae908c81d/python_discovery-1.6.0-py3-none-any.whl", hash = "sha256:d4e244cf17b8b29819ed78003d55fbacf86eda23425b075454fff9271b79377a", size = 38451, upload-time = "2026-08-28T17:30:01.236Z" },
+    { url = "https://files.pythonhosted.org/packages/60/91/1aa70d3dfcab0dbcf88a2cbc3bce7f7c69562287a90216e617eaa4937e25/python_discovery-1.6.4-py3-none-any.whl", hash = "sha256:530179cc51a1816d512b15635b3dc931295ae12efb183783ad31190a5d425d2b", size = 39385, upload-time = "2026-10-19T01:45:13.668Z" },
 ]
 
 [[package]]
@@ -6302,7 +6302,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "rpds-py" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/22/f5/df4e9027acead3ecc63e50fe1e36aca1523e1719559c499951bb4b53188f/referencing-0.37.0.tar.gz", hash = "sha256:44aefc3142c5b842538163acb373e24cce6632bd54bdb01b21ad5863489f50d8", size = 78036, upload-time = "2025-10-13T15:30:48.871Z" }
 wheels = [
@@ -6527,8 +6527,8 @@ resolution-markers = [
     "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "markdown-it-py", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pygments", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "markdown-it-py", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pygments", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c0/8f/0722ca900cc807c13a6a0c696dacf35430f72e0ec571c4275d2371fca3e9/rich-15.0.0.tar.gz", hash = "sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36", size = 230680, upload-time = "2026-04-12T08:24:00.75Z" }
 wheels = [
@@ -6541,7 +6541,7 @@ version = "1.8.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "rich", version = "13.9.4", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "rich", version = "15.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "rich", version = "15.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/6a/e5/1064c43203a357d668cd42435f7a15fe6af51512d85b2104fecb937aa861/rich_argparse-1.8.0.tar.gz", hash = "sha256:679df3d832fa94ad6e4bdb07ded088cd7ea2dddc58ae9b2b46346a40b06cbc0c", size = 38940, upload-time = "2026-05-01T15:18:43.604Z" }
 wheels = [
@@ -6553,9 +6553,9 @@ name = "rich-toolkit"
 version = "0.20.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "click", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "rich", version = "15.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "typing-extensions", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "click", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "rich", version = "15.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "typing-extensions", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9f/1c/f134352beb393cc17e6241ecf0bf4dd41a6759e2e3971a69a6ad185b87a2/rich_toolkit-0.20.5.tar.gz", hash = "sha256:0c9e1c414ffb0720be26285d472e263d1e704b71d31a7e13274b9996db4969e1", size = 213207, upload-time = "2026-09-08T16:13:12.007Z" }
 wheels = [
@@ -6738,10 +6738,10 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "joblib" },
     { name = "narwhals" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "threadpoolctl" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/fa/6f/37092bdb25f712817231799fc5674d8e704066a8a70c1d2d40517e18b4ab/scikit_learn-1.9.0.tar.gz", hash = "sha256:8833266989d3a5110178a9fae30783675460724d0e1efb13b14901d2c660c557", size = 7750767, upload-time = "2026-06-02T11:54:32.706Z" }
@@ -6788,7 +6788,7 @@ resolution-markers = [
     "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7a/97/5a3609c4f8d58b039179648e62dd220f89864f56f7357f5d4f45c29eb2cc/scipy-1.17.1.tar.gz", hash = "sha256:95d8e012d8cb8816c226aef832200b1d45109ed4464303e997c5b13122b297c0", size = 30573822, upload-time = "2026-02-23T00:26:24.851Z" }
 wheels = [
@@ -6870,7 +6870,7 @@ resolution-markers = [
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7e/74/66de6258867beb2ef08f35f9f2ac017a52cacd5081714d239ff1a442d458/scipy-1.18.1.tar.gz", hash = "sha256:52c4b7422442aba924d03ad4019852b08a92e64ea187b933135687bfe2747307", size = 30781235, upload-time = "2026-08-21T23:28:50.599Z" }
 wheels = [
@@ -7123,7 +7123,7 @@ resolution-markers = [
 ]
 dependencies = [
     { name = "greenlet", marker = "(platform_machine == 'AMD64' and extra != 'group-23-orchestration-pipelines-airflow2') or (platform_machine == 'WIN32' and extra != 'group-23-orchestration-pipelines-airflow2') or (platform_machine == 'aarch64' and extra != 'group-23-orchestration-pipelines-airflow2') or (platform_machine == 'amd64' and extra != 'group-23-orchestration-pipelines-airflow2') or (platform_machine == 'ppc64le' and extra != 'group-23-orchestration-pipelines-airflow2') or (platform_machine == 'win32' and extra != 'group-23-orchestration-pipelines-airflow2') or (platform_machine == 'x86_64' and extra != 'group-23-orchestration-pipelines-airflow2') or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "typing-extensions", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "typing-extensions", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/3b/21/77b4c147963073040dc3c3a5cb7a8c3001a1893c0209432cb77f9df836aa/sqlalchemy-2.0.52.tar.gz", hash = "sha256:5e2d46356ac2ccb7d268ab6c2319ac6a2b42f1b8d5fd8bd3d46855cd82abee97", size = 9945637, upload-time = "2026-08-11T19:07:09.829Z" }
 wheels = [
@@ -7161,7 +7161,7 @@ wheels = [
 
 [package.optional-dependencies]
 asyncio = [
-    { name = "greenlet", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "greenlet", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 
 [[package]]
@@ -7174,7 +7174,7 @@ dependencies = [
     { name = "google-cloud-bigquery" },
     { name = "packaging" },
     { name = "sqlalchemy", version = "1.4.54", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "sqlalchemy", version = "2.0.52", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "sqlalchemy", version = "2.0.52", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7a/14/e0dc54b28640cc771a46038926f0c9334496d2799118e5bfd191c2e2c251/sqlalchemy_bigquery-1.17.2.tar.gz", hash = "sha256:32f7893c16546d5cc5dc939fb7cf74f51505766a16422f21dd2e7e78ea8ec849", size = 119920, upload-time = "2026-08-06T06:24:56.558Z" }
 wheels = [
@@ -7201,7 +7201,7 @@ dependencies = [
     { name = "alembic" },
     { name = "google-cloud-spanner" },
     { name = "sqlalchemy", version = "1.4.54", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "sqlalchemy", version = "2.0.52", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "sqlalchemy", version = "2.0.52", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/06/bd/12799120e3e23d1c825ecd9a1afcb8c612b00bcae18b4aed5f7104e14f7c/sqlalchemy_spanner-1.20.1.tar.gz", hash = "sha256:73537add78fe258752545d1e2d3e13be081ba278b0612cbd671b26f6c24fad64", size = 83277, upload-time = "2026-09-03T22:31:23.33Z" }
 wheels = [
@@ -7243,7 +7243,7 @@ name = "starlette"
 version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "anyio", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "anyio", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
     { name = "typing-extensions", marker = "(python_full_version < '3.13' and extra != 'group-23-orchestration-pipelines-airflow2') or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b5/b4/205b0d5241d934e8add0c38aa924c4f9fb7330834ff11e5444db964ec3f9/starlette-1.6.0.tar.gz", hash = "sha256:d4e3ac5e546444960c710297a3c9fc3f7ebae1b7e963f3d36173b49da535be9b", size = 2716969, upload-time = "2026-08-08T18:27:57.512Z" }
@@ -7265,7 +7265,7 @@ name = "svcs"
 version = "26.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "attrs", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "attrs", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
     { name = "typing-extensions", marker = "(python_full_version < '3.15' and extra != 'group-23-orchestration-pipelines-airflow2') or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9b/5e/89463bf7613fe723801b8f7000f37c4c36486adcda0d115ca417e513c7cc/svcs-26.2.0.tar.gz", hash = "sha256:129efb89586c2c52295ee00b00562af7d85d5535dad149534993e25fccbd76a6", size = 915193, upload-time = "2026-08-24T12:54:16.474Z" }
@@ -7465,7 +7465,7 @@ name = "tqdm"
 version = "4.70.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/21/3b/6c24bec5be5e743ffd99576daa5cc077722fc7d5bbc00bd133fa0c698dc6/tqdm-4.70.0.tar.gz", hash = "sha256:55b0b0dbd97462d06ebee91e4dac24ed4d4702be82b24f07e6c1d27e08cea220", size = 795438, upload-time = "2026-07-27T11:33:15.271Z" }
 wheels = [
@@ -7486,10 +7486,10 @@ name = "typer"
 version = "0.27.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "annotated-doc", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "annotated-doc", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
     { name = "colorama", marker = "(sys_platform == 'win32' and extra != 'group-23-orchestration-pipelines-airflow2') or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "rich", version = "15.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "shellingham", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "rich", version = "15.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "shellingham", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/16/f7/57713ba479fd405eb76de31404b2c744c289e336b2d999511ebf51e496f7/typer-0.27.2.tar.gz", hash = "sha256:269b7eb9d3c202ca84b4bc9618cb04ebb43d3d4d1e567e4c768607232c05f945", size = 204045, upload-time = "2026-08-28T10:26:55.046Z" }
 wheels = [
@@ -7580,8 +7580,8 @@ resolution-markers = [
     "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "fsspec", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pathlib-abc", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "fsspec", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pathlib-abc", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/3d/6e/d997a70ee8f4c61f9a7e2f4f8af721cf072a3326848fc881b05187e52558/universal_pathlib-0.3.10.tar.gz", hash = "sha256:4487cbc90730a48cfb64f811d99e14b6faed6d738420cd5f93f59f48e6930bfb", size = 261110, upload-time = "2026-02-22T14:40:58.87Z" }
 wheels = [
@@ -7620,8 +7620,8 @@ name = "uvicorn"
 version = "0.52.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "click", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "h11", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "click", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "h11", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f2/0f/3f86e61397dd33bf2ccf28188c40db6a740658aeebbbf6e7dbc101a1f487/uvicorn-0.52.4.tar.gz", hash = "sha256:73acfee47a0b133c5de13d219492d62d8a31e935f4fe6e41a232451a15379f86", size = 100627, upload-time = "2026-08-19T06:27:41.821Z" }
 wheels = [
@@ -7630,12 +7630,12 @@ wheels = [
 
 [package.optional-dependencies]
 standard = [
-    { name = "httptools", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "python-dotenv", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "pyyaml", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "httptools", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "python-dotenv", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "pyyaml", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
     { name = "uvloop", marker = "(platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32' and extra != 'group-23-orchestration-pipelines-airflow2') or (extra == 'group-23-orchestration-pipelines-airflow2' and extra == 'group-23-orchestration-pipelines-airflow3')" },
-    { name = "watchfiles", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
-    { name = "websockets", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "watchfiles", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
+    { name = "websockets", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 
 [[package]]
@@ -7678,17 +7678,18 @@ wheels = [
 
 [[package]]
 name = "virtualenv"
-version = "21.7.9"
+version = "21.14.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "distlib" },
     { name = "filelock" },
+    { name = "packaging" },
     { name = "platformdirs" },
     { name = "python-discovery" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/52/5c/ba82fdd0da13ade01453fc08277a70abc79128101319549f55f2e13f8f83/virtualenv-21.7.9.tar.gz", hash = "sha256:a7e42d81d779dec8afd7dc4be71640fb959ea861bccfa5980cb4ad9f92e30675", size = 5348882, upload-time = "2026-09-09T01:03:27.752Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d0/04/2f69ba1207ce59630ecea8ebfdaf5c8f9a14726f2408ccd145a18d1ef619/virtualenv-21.14.9.tar.gz", hash = "sha256:4d1bee354cd81c820da3bee56e38be3426490f8d1fc54e10ea5b2072ebad8ef8", size = 5500672, upload-time = "2026-10-17T16:09:42.345Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/85/fc/888c80b8da917bfc48a41887eca244f995d190bd3c01175727089fcaf27e/virtualenv-21.7.9-py3-none-any.whl", hash = "sha256:ba3b0bb41063c848d84d76a9fe3fb7711aaa0f2fe78708e8f3cd9714770e4eac", size = 5324667, upload-time = "2026-09-09T01:03:26.023Z" },
+    { url = "https://files.pythonhosted.org/packages/64/e5/9a3918219745e8bdd64fe0fd9a2d7ce4fffde9268fbc791634b7d4779de9/virtualenv-21.14.9-py3-none-any.whl", hash = "sha256:ac51744da66ae56ff814b087d65096c94de698ec520adc624b108b679655809b", size = 5494452, upload-time = "2026-10-17T16:09:40.584Z" },
 ]
 
 [[package]]
@@ -7696,7 +7697,7 @@ name = "watchfiles"
 version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "anyio", marker = "extra == 'group-23-orchestration-pipelines-airflow3' or extra != 'group-23-orchestration-pipelines-airflow2'" },
+    { name = "anyio", marker = "extra != 'group-23-orchestration-pipelines-airflow2' or extra == 'group-23-orchestration-pipelines-airflow3'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/cd/41/5e1a4bb12aac5f1493fa1bdc11154eca3b258ca4eba65d39c473fe19d8e9/watchfiles-1.2.0.tar.gz", hash = "sha256:c995fba777f1ea992f090f9236e9284cf7a5d1a0130dd5a3d82c598cacd76838", size = 108252, upload-time = "2026-05-18T04:32:04.251Z" }
 wheels = [
