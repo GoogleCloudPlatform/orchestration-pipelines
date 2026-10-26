@@ -15,11 +15,13 @@
 """Unit tests for the OrchestrationPipelineBuilder."""
 
 import unittest
-import os
+
+import pytest
 import yaml
 
 from orchestration_pipelines_models.pipeline_v1_model.orchestration_pipeline_builder import (
-    OrchestrationPipelineBuilder, )
+    OrchestrationPipelineBuilder,
+)
 from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipeline_pb2 import (
     OrchestrationPipeline,
     PipelineRunner,
@@ -1416,6 +1418,192 @@ def test_build_ai_action_vertex_create_and_run_custom_job_success():
         "sa-1@project.iam.gserviceaccount.com"
     ]
     assert custom_job_spec.custom_job["displayName"] == "my_custom_job"
+
+
+def _make_pipeline(**overrides):
+    return {
+        "model_version": "1.0",
+        "pipeline_id": "test_pipeline",
+        "runner": "airflow",
+        "owner": "data_eng_team",
+        "defaults": {"project_id": "proj", "location": "us-central1"},
+        **overrides,
+    }
+
+
+def test_build_extracts_root_and_action_dynamic_bindings():
+    pipeline_def = _make_pipeline(
+        parameters={
+            "env_project": {"type": "string", "default": "default-proj"},
+            "max_retries": {"type": "number", "default": 2},
+            "wait_flag": {"type": "boolean", "default": True},
+            "alert_emails": {"type": "array", "default": ["a@example.com"]},
+        },
+        defaults={
+            "project_id": "${ parameters.env_project }",
+            "location": "us-central1",
+            "retry_policy": {
+                "max_retries": "${ parameters.max_retries }",
+                "fixed_delay": {"retry_delay": "1m"},
+            },
+        },
+        notifications={
+            "on_pipeline_failure": {"email": "${ parameters.alert_emails }"}
+        },
+        actions=[
+            {
+                "python": {
+                    "name": "extract-batch",
+                    "main_file_path": "scripts/extract.py",
+                    "python_callable": "run",
+                    "run_if": "${ parameters.wait_flag }",
+                    "execution_timeout": "${ parameters.wait_flag ? '30m' : '15m' }",
+                    "op_kwargs": {
+                        "run_date": "${ run.trigger_date }",
+                        "nested": {"project": "${ parameters.env_project }"},
+                    },
+                    "engine": {"local": {}},
+                }
+            },
+            {
+                "orchestration_pipeline": {
+                    "name": "trigger_child",
+                    "depends_on": ["extract-batch"],
+                    "pipeline_id": "child_pipeline",
+                    "bundle_id": "child_bundle",
+                    "wait_for_completion": "${ parameters.wait_flag }",
+                    "run_if": "${ has(outputs['extract-batch'].value) && outputs['extract-batch'].value.count > 0 }",
+                    "params": {
+                        "batch_id": "${ has(outputs.extract-batch.value) ? outputs.extract-batch.value.default : 'none' }"
+                    },
+                }
+            },
+        ],
+    )
+
+    with pytest.warns(UserWarning, match=r'outputs\["extract-batch"\]'):
+        pipeline = OrchestrationPipelineBuilder.build(pipeline_def)
+
+    assert pipeline_def["defaults"]["project_id"] == "${ parameters.env_project }"
+    assert dict(pipeline.dynamic_bindings) == {
+        "defaults.project_id": "parameters.env_project",
+        "defaults.retry_policy.max_retries": "parameters.max_retries",
+        "notifications.on_pipeline_failure.email": "parameters.alert_emails",
+    }
+    assert pipeline.defaults.project_id == ""
+    assert pipeline.defaults.retry_policy.max_retries == 0
+    assert list(pipeline.notifications.on_pipeline_failure.email) == []
+    assert dict(pipeline.actions[0].python.dynamic_bindings) == {
+        "execution_timeout": "parameters.wait_flag ? '30m' : '15m'",
+        "op_kwargs.run_date": "run.trigger_date",
+        "op_kwargs.nested.project": "parameters.env_project",
+    }
+    child_action = pipeline.actions[1].orchestration_pipeline
+    assert child_action.wait_for_completion is False
+    assert (
+        child_action.run_if
+        == "has(outputs['extract-batch'].value) && outputs['extract-batch'].value.count > 0"
+    )
+    assert dict(child_action.dynamic_bindings) == {
+        "wait_for_completion": "parameters.wait_flag",
+        "params.batch_id": "has(outputs.extract-batch.value) ? outputs.extract-batch.value.default : 'none'",
+    }
+
+
+@pytest.mark.parametrize(
+    ("overrides", "error_pattern"),
+    [
+        (
+            {"actions": [{"pyspark": {"name": "s", "main_file_path": "gs://b/j.py", "engine": {"dataproc_serverless": {}}, "staging_bucket": "gs://${parameters.bucket}/tmp"}}]},
+            r"Error for field 'actions\[0\]\.pyspark\.staging_bucket': Mid-string interpolation is not supported",
+        ),
+        (
+            {"actions": [{"pyspark": {"name": "s", "main_file_path": "gs://b/j.py", "engine": {"dataproc_serverless": {"impersonation_chain": ["${ parameters.bucket }"]}}}}]},
+            r"Error for field 'actions\[0\]\.pyspark\.engine\.dataproc_serverless\.impersonation_chain': individual list elements cannot be parameterized",
+        ),
+        (
+            {"actions": [{"pyspark": {"name": "s", "main_file_path": "gs://b/j.py", "engine": {"dataproc_serverless": {}}, "depends_on": ["${ parameters.bucket }"]}}]},
+            r"Error for field 'actions\[0\]\.pyspark\.depends_on': field is not parameterizable",
+        ),
+        (
+            {"triggers": ["${ parameters.bucket }"], "actions": [{"pyspark": {"name": "s", "main_file_path": "gs://b/j.py", "engine": {"dataproc_serverless": {}}}}]},
+            r"Error for field 'triggers': field is not parameterizable",
+        ),
+        (
+            {"parameters": {"bucket": {"type": "string", "default": "${ parameters.other }"}}, "actions": [{"python": {"name": "s", "main_file_path": "gs://b/j.py", "python_callable": "run", "engine": {"local": {}}}}]},
+            "parameter definitions cannot contain dynamic",
+        ),
+        (
+            {"actions": [{"ai": {"name": "v", "agent_platform": {"create_and_run_custom_job": {"custom_job": {"jobSpec": {"workerPoolSpecs": [{"containerSpec": {"args": ["--a", "${ parameters.bucket }"]}}]}}}}}}]},
+            r"Error for field 'actions\[0\]\.ai\..*\.args': individual list elements cannot be parameterized",
+        ),
+    ],
+)
+def test_build_rejects_invalid_preprocessing_cases(overrides, error_pattern):
+    pipeline_def = _make_pipeline(
+        **{"parameters": {"bucket": {"type": "string", "default": "b"}}, **overrides}
+    )
+
+    with pytest.raises(ValueError, match=error_pattern):
+        OrchestrationPipelineBuilder.build(pipeline_def)
+
+
+def test_build_preserves_non_cel_external_variables_and_struct_list_dicts():
+    custom_job = {
+        "displayName": "train_job",
+        "jobSpec": {
+            "workerPoolSpecs": [
+                {
+                    "machineSpec": {"machineType": "${ parameters.machine_type }"},
+                    "containerSpec": {
+                        "imageUri": "us-docker.pkg.dev/img:latest",
+                        "env": [
+                            {"name": "MODEL_DIR", "value": "${AIP_MODEL_DIR}"},
+                            {"name": "SUBDIR", "value": "${HOME}/out"},
+                        ],
+                        "args": "${ parameters.train_args }",
+                    },
+                }
+            ]
+        },
+    }
+    pipeline_def = _make_pipeline(
+        description="Uses ${AIP_MODEL_DIR} and ${HOME}",
+        parameters={
+            "machine_type": {"type": "string", "default": "n1-standard-4", "description": "Overrides ${MACHINE_TYPE}"},
+            "train_args": {"type": "array", "default": ["--epochs", "5"]},
+        },
+        actions=[
+            {"ai": {"name": "train_vertex", "agent_platform": {"create_and_run_custom_job": {"custom_job": custom_job}}}},
+            {
+                "airflow_task": {
+                    "name": "run_bash",
+                    "operator_class": "airflow.operators.bash.BashOperator",
+                    "params": {
+                        "bash_command": "echo ${HOME:-/tmp} && echo ${USER}",
+                        "env": {"SPARK_LOG": "${spark.yarn.app.container.log.dir}"},
+                    },
+                }
+            },
+        ],
+    )
+
+    pipeline = OrchestrationPipelineBuilder.build(pipeline_def)
+
+    ai_action = pipeline.actions[0].ai
+    prefix = "agent_platform.create_and_run_custom_job.custom_job.jobSpec.workerPoolSpecs[0]"
+    assert dict(ai_action.dynamic_bindings) == {
+        f"{prefix}.machineSpec.machineType": "parameters.machine_type",
+        f"{prefix}.containerSpec.args": "parameters.train_args",
+    }
+    pool0 = ai_action.agent_platform.create_and_run_custom_job.custom_job["jobSpec"]["workerPoolSpecs"][0]
+    assert pool0["containerSpec"]["env"][0]["value"] == "${AIP_MODEL_DIR}"
+    assert pool0["containerSpec"]["env"][1]["value"] == "${HOME}/out"
+
+    bash_action = pipeline.actions[1].airflow_task
+    assert dict(bash_action.dynamic_bindings) == {}
+    assert bash_action.params["bash_command"] == "echo ${HOME:-/tmp} && echo ${USER}"
+    assert bash_action.params["env"]["SPARK_LOG"] == "${spark.yarn.app.container.log.dir}"
 
 
 if __name__ == "__main__":

@@ -39,12 +39,14 @@ from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipel
     AgentPlatformCreateAndRunCustomJob,
     AgentPlatformModelUpload,
     AIAction,
+    BigQueryEngine,
     Defaults,
     ExecutionConfig,
     ExponentialBackoffStrategy,
     FixedDelayStrategy,
     LocalEngine,
     OrchestrationPipeline,
+    Parameter,
     PipelineRunner,
     PysparkAction,
     PythonAction,
@@ -55,6 +57,7 @@ from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipel
     SqlAction,
     SqlEngine,
     Trigger,
+    TriggerRule,
 )
 
 
@@ -1044,6 +1047,147 @@ def test_ai_action_create_and_run_custom_job_missing_custom_job_fails(
     )
     with pytest.raises(ValueError, match=expected_error):
         PipelineValidator.validate(valid_pipeline_for_custom_job)
+
+
+@pytest.fixture
+def base_pipeline():
+    """Provides a minimal valid OrchestrationPipeline with two actions."""
+    return OrchestrationPipeline(
+        model_version="1.0",
+        pipeline_id="valid-pipeline-id",
+        runner=PipelineRunner.airflow,
+        owner="valid-owner",
+        parameters={
+            "env": Parameter(
+                type=Parameter.Type.string,
+                default_value=struct_pb2.Value(string_value="prod"),
+            )
+        },
+        defaults=Defaults(project_id="test-project", location="us-central1"),
+        actions=[
+            Action(
+                python=PythonAction(
+                    name="step_1",
+                    main_file_path="step1.py",
+                    python_callable="main",
+                    engine=PythonEngine(local=LocalEngine()),
+                )
+            ),
+            Action(
+                python=PythonAction(
+                    name="step_2",
+                    depends_on=["step_1"],
+                    main_file_path="step2.py",
+                    python_callable="main",
+                    engine=PythonEngine(local=LocalEngine()),
+                )
+            ),
+        ],
+    )
+
+
+@pytest.mark.parametrize(
+    ("param_name", "param_type", "default_value", "error_pattern"),
+    [
+        ("invalid-name", Parameter.Type.string, struct_pb2.Value(string_value="v"), r"Error for field 'parameters\['invalid-name'\]': invalid parameter name"),
+        ("param", Parameter.Type.type_undefined, struct_pb2.Value(string_value="v"), r"Error for field 'parameters\['param'\]\.type': must not be the default enum value"),
+        ("param", Parameter.Type.string, None, r"Error for field 'parameters\['param'\]\.default_value': field is required"),
+        ("param", Parameter.Type.string, struct_pb2.Value(null_value=struct_pb2.NULL_VALUE), r"Error for field 'parameters\['param'\]\.default_value': non-null default value is required"),
+        ("param", Parameter.Type.number, struct_pb2.Value(string_value="not-a-number"), r"default value kind 'string_value' does not match parameter type 'number'"),
+        (
+            "param",
+            Parameter.Type.array,
+            struct_pb2.Value(list_value=struct_pb2.ListValue(values=[struct_pb2.Value(null_value=struct_pb2.NULL_VALUE)])),
+            r"array parameter defaults must contain only non-null primitive values",
+        ),
+    ],
+)
+def test_parameter_definitions_invalid(
+    base_pipeline, param_name, param_type, default_value, error_pattern
+):
+    base_pipeline.parameters[param_name].CopyFrom(
+        Parameter(type=param_type, default_value=default_value)
+    )
+
+    with pytest.raises(ValueError, match=error_pattern):
+        PipelineValidator.validate(base_pipeline)
+
+
+@pytest.mark.parametrize(
+    ("root_bindings", "action_bindings", "error_pattern"),
+    [
+        ({"pipeline_id": "parameters.env"}, {}, "Error for field 'pipeline_id': field is not parameterizable"),
+        ({"actions[0].python.execution_timeout": "parameters.env"}, {}, "action-level binding .* must be defined in the action's own 'dynamic_bindings'"),
+        ({"triggers[0]": "parameters.env"}, {}, "Error for field 'triggers': field is not parameterizable"),
+        ({}, {"main_file_path": "parameters.env"}, r"Error for field 'actions\[0\]\.python\.main_file_path': field is not parameterizable"),
+        ({}, {"engine": "parameters.env"}, r"Error for field 'actions\[0\]\.python\.engine': field is not parameterizable"),
+        ({}, {"labels[0]": "parameters.env"}, r"Error for field 'actions\[0\]\.python\.dynamic_bindings': invalid field 'labels\[0\]'"),
+        ({"notifications.on_pipeline_failure.email[0]": "parameters.env"}, {}, r"Error for field 'notifications\.on_pipeline_failure\.email': individual list elements cannot be parameterized"),
+        ({}, {"execution_timeout.sub": "parameters.env"}, r"Error for field 'actions\[0\]\.python\.execution_timeout': primitive and repeated fields must be parameterized as a whole property"),
+        ({}, {"unknown_field": "parameters.env"}, r"Error for field 'actions\[0\]\.python\.dynamic_bindings': invalid field 'unknown_field'"),
+    ],
+)
+def test_dynamic_bindings_invalid_targets(
+    base_pipeline, root_bindings, action_bindings, error_pattern
+):
+    base_pipeline.dynamic_bindings.update(root_bindings)
+    base_pipeline.actions[0].python.dynamic_bindings.update(action_bindings)
+
+    with pytest.raises(ValueError, match=error_pattern):
+        PipelineValidator.validate(base_pipeline)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "error_pattern"),
+    [
+        ({"root_bindings": {"defaults.project_id": "outputs.step_1.value.proj"}}, r"pipeline-level dynamic bindings cannot reference 'outputs\.\*'"),
+        ({"root_bindings": {"defaults.project_id": "run.unknown"}}, "Invalid or unknown reference 'run.unknown'"),
+        ({"root_bindings": {"defaults.project_id": "parameters.missing"}}, "references undefined parameter 'missing'"),
+        ({"step2_bindings": {"execution_timeout": "outputs.non_existent.value.t"}}, "references undefined action 'non_existent'"),
+        ({"step2_depends_on": [], "step2_bindings": {"execution_timeout": "outputs.step_1.value.t"}}, "references outputs of action 'step_1', which is not in 'depends_on'"),
+        ({"step1_run_if": "parameters.env == 'prod'", "step2_bindings": {"execution_timeout": "outputs.step_1.value.t"}}, r"Upstream action 'step_1' may be skipped; guard with 'has\(outputs\.step_1\.\.\.\)'"),
+        ({"step1_trigger_rule": TriggerRule.all_done, "step2_run_if": "outputs.step_1.value.ok"}, r"Upstream action 'step_1' may be skipped; guard with 'has\(outputs\.step_1\.\.\.\)'"),
+    ],
+)
+def test_dynamic_bindings_and_run_if_expression_errors(
+    base_pipeline, overrides, error_pattern
+):
+    base_pipeline.dynamic_bindings.update(overrides.get("root_bindings", {}))
+    step1, step2 = base_pipeline.actions[0].python, base_pipeline.actions[1].python
+    step1.run_if = overrides.get("step1_run_if", "")
+    step1.trigger_rule = overrides.get("step1_trigger_rule", TriggerRule.trigger_rule_undefined)
+    if "step2_depends_on" in overrides:
+        del step2.depends_on[:]
+        step2.depends_on.extend(overrides["step2_depends_on"])
+    step2.dynamic_bindings.update(overrides.get("step2_bindings", {}))
+    step2.run_if = overrides.get("step2_run_if", "")
+
+    with pytest.raises(ValueError, match=error_pattern):
+        PipelineValidator.validate(base_pipeline)
+
+
+def test_dynamic_bindings_bypass_format_checks_and_allow_has_guard(base_pipeline):
+    base_pipeline.defaults.project_id = ""
+    base_pipeline.dynamic_bindings["defaults.project_id"] = "parameters.env"
+    base_pipeline.actions[0].python.run_if = "parameters.env == 'prod'"
+    base_pipeline.actions.append(
+        Action(
+            sql=SqlAction(
+                name="step_3",
+                depends_on=["step_1"],
+                execution_timeout="",
+                params={"dynamic_key": "", "static_key": "valid_val"},
+                engine=SqlEngine(bigquery=BigQueryEngine()),
+                query=Query(inline="SELECT 1"),
+                dynamic_bindings={
+                    "execution_timeout": "has(outputs.step_1.value) ? outputs.step_1.value.t : '10m'",
+                    "params.dynamic_key": "run.trigger_date",
+                },
+            )
+        )
+    )
+
+    PipelineValidator.validate(base_pipeline)
 
 
 if __name__ == "__main__":
