@@ -153,6 +153,11 @@ class RetryResolver:
             initial_delay = getattr(exp_backoff, "initialDelay", None)
             if isinstance(initial_delay, str) and initial_delay:
                 kwargs["retry_delay"] = duration_to_timedelta(initial_delay)
+                kwargs["retry_exponential_backoff"] = True
+
+            max_delay = getattr(exp_backoff, "maxDelay", None)
+            if isinstance(max_delay, str) and max_delay:
+                kwargs["max_retry_delay"] = duration_to_timedelta(max_delay)
 
         if kwargs or isinstance(retry_policy, RetryPolicyModel):
             kwargs[CUSTOM_RETRY_POLICY_KEY] = retry_policy

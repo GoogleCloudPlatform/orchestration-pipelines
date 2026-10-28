@@ -27,6 +27,10 @@ constraints, and temporary limitations of `orchestration-pipelines`.
 - **Event-driven scheduling** The library currently do not support enabling
   pipeline to be triggered based on anything else than a schedule and manual
   trigger.
+- **Exponential Backoff Retry Strategy:** Configuring a custom `multiplier` (other
+  than 2.0) or disabling jitter (`randomizeJitter: false`) is not supported on
+  Airflow 2. Full customization of multiplier and deterministic backoff without
+  jitter is supported on Airflow 3.3+.
 
 ## 3. Managed Airflow on GCP limitations
 

@@ -75,6 +75,30 @@ class RetryResolverTest(unittest.TestCase):
                 "retries": 4,
                 "retry_delay": timedelta(seconds=15),
                 CUSTOM_RETRY_POLICY_KEY: policy,
+                "retry_exponential_backoff": True,
+                "max_retry_delay": timedelta(minutes=10),
+            },
+        )
+
+    def test_resolve_policy_kwargs_with_exponential_backoff_without_max_delay(
+        self,
+    ):
+        """Tests resolving ExponentialBackoffStrategyModel when maxDelay is None."""
+        policy = RetryPolicyModel(
+            maxRetries=3,
+            exponentialBackoff=ExponentialBackoffStrategyModel(
+                initialDelay="20s",
+                maxDelay=None,
+            ),
+        )
+        result = RetryResolver.resolve_policy_kwargs(policy)
+        self.assertEqual(
+            result,
+            {
+                "retries": 3,
+                "retry_delay": timedelta(seconds=20),
+                CUSTOM_RETRY_POLICY_KEY: policy,
+                "retry_exponential_backoff": True,
             },
         )
 

@@ -105,6 +105,34 @@ Configuration for pipeline notifications on failure.
 - **Examples**:
   - [pipeline-email-notification.yml](../examples/pipeline-email-notification.yml)
 
+### 3.5. Retry Policy
+
+Pipelines and actions support automated retries for transient failures. A retry
+policy can be defined globally in `defaults.retryPolicy` or per action in
+`action.retryPolicy`. An action-level policy overrides the global default.
+
+- **`RetryPolicy`**:
+  - `max_retries` (int32, **Required**): Maximum number of retry attempts
+    (must be >= 0).
+  - Strategy (`oneof`):
+    - `fixed_delay` (`FixedDelayStrategy`): Retries with a constant delay.
+    - `exponential_backoff` (`ExponentialBackoffStrategy`): Retries with an
+      increasing exponential delay.
+- **`FixedDelayStrategy`**:
+  - `retry_delay` (string, **Required**): Delay between retries (e.g., `"30s"`,
+    `"2m"`).
+- **`ExponentialBackoffStrategy`**:
+  - `initial_delay` (string, **Required**): Initial delay for the first retry
+    (e.g., `"10s"`).
+  - `max_delay` (string): Maximum upper bound for the delay (e.g., `"10m"`).
+  - `multiplier` (double): Exponential scaling factor (Default: `2.0`).
+    *Note: Custom multipliers are supported on Airflow 3.3+. Airflow 2 defaults
+    to 2.0.*
+  - `randomize_jitter` (bool): Whether to introduce random jitter (Default:
+    `false`).
+    *Note: Custom jitter configuration is supported on Airflow 3.3+. Airflow 2
+    uses built-in hash-based jitter.*
+
 ---
 
 ## 4. Actions Reference
