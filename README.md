@@ -38,7 +38,10 @@ Python >= 3.11
   - Google Cloud Dataform
   - DBT
 - **Automatic Generation**: A simple Python call generates the full Airflow DAG.
-- **Versioning**: Supports versioning of pipelines via a manifest file(as of
+- **Cross-Task Data Sharing & Conditions**: Pass runtime `parameters`, `run`
+  metadata, and upstream `outputs` across actions and gate execution with CEL
+  `runIf` expressions.
+- **Versioning**: Supports versioning of pipelines via a manifest file (as of
   Preview, on Google Cloud Composer).
 
 ## Installation

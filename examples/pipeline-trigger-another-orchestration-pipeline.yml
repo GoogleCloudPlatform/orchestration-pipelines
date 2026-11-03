@@ -22,8 +22,13 @@ tags: ["example", "orchestration-pipeline"]
 defaults:
   projectId: "your-gcp-project-id"
   location: "us-central1"
-  executionConfig:
-    retries: 0
+  retryPolicy:
+    maxRetries: 0
+
+parameters:
+  target_dataset: {type: string, default: "analytics_override"}
+  min_rows_threshold: {type: number, default: 5}
+  enable_audit: {type: boolean, default: true}
 
 triggers:
   - schedule:
@@ -36,6 +41,11 @@ triggers:
 actions:
   - orchestrationPipeline:
       name: "trigger_another_pipeline"
-      pipelineId: "another-pipeline-id"
-      bundle_id: "example-bundle-id"
+      pipelineId: "pipeline-cross-task-data-sharing"
+      bundleId: "example-bundle-id"
       waitForCompletion: true
+      params:
+        dataset_name: "${parameters['target_dataset']}"
+        table_name: "${'orders_' + run['trigger_date']}"
+        min_rows_threshold: "${parameters['min_rows_threshold']}"
+        enable_audit: "${parameters['enable_audit']}"

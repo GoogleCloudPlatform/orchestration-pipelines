@@ -1,0 +1,142 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+modelVersion: "1.0"
+pipelineId: "pipeline-cross-task-data-sharing"
+description: "Demonstrates runtime parameters, cross-task outputs, and runIf conditions."
+runner: "airflow"
+owner: "data-eng-team"
+tags: ["bigquery", "python", "cross-task", "example"]
+
+defaults:
+  projectId: "your-gcp-project-id"
+  location: "us-central1"
+
+parameters:
+  dataset_name: {type: string, default: "my_dataset", description: "Target BigQuery dataset."}
+  table_name: {type: string, default: "my_table"}
+  min_rows_threshold: {type: number, default: 1}
+  enable_audit: {type: boolean, default: true}
+  enable_enrichment: {type: boolean, default: false}
+  target_regions: {type: array, default: ["US", "EU"]}
+
+triggers:
+  - schedule:
+      interval: "0 5 * * *"
+      startTime: "2026-01-01T00:00:00"
+      catchup: false
+      timezone: "UTC"
+
+actions:
+  - python:
+      name: "prepare_context"
+      mainFilePath: "./scripts/cross_task_helpers.py"
+      pythonCallable: "prepare_execution_context"
+      opKwargs:
+        table_name: "${parameters['table_name']}"
+        run_id: "${run['id']}"
+        trigger_date: "${run['trigger_date']}"
+        regions: "${parameters['target_regions']}"
+      engine: {local: {}}
+
+  - sql:
+      name: "create_and_seed_table"
+      dependsOn: ["prepare_context"]
+      query:
+        inline: >-
+          CREATE TABLE IF NOT EXISTS `your-gcp-project-id.${dataset}.${table}`
+          (id INT64, name STRING, timestamp TIMESTAMP);
+          INSERT INTO `your-gcp-project-id.${dataset}.${table}` (id, name, timestamp)
+          VALUES (1, @batch_tag, CURRENT_TIMESTAMP());
+      params:
+        dataset: "${parameters['dataset_name']}"
+        table: "${parameters['table_name']}"
+        batch_tag: "${outputs['prepare_context'].value['batch_tag']}"
+      engine:
+        bigquery:
+          location: "US"
+
+  - sql:
+      name: "check_table_metrics"
+      dependsOn: ["prepare_context", "create_and_seed_table"]
+      query:
+        inline: >-
+          SELECT COUNT(*) AS row_count,
+          COALESCE(MAX(name), @batch_tag) AS latest_batch_tag
+          FROM `your-gcp-project-id.${dataset}.${table}`
+          WHERE name = @batch_tag;
+      params:
+        dataset: "${parameters['dataset_name']}"
+        table: "${parameters['table_name']}"
+        batch_tag: "${outputs['prepare_context'].value['batch_tag']}"
+      engine:
+        bigquery:
+          location: "US"
+          destinationTable: >-
+            ${'your-gcp-project-id.' + parameters['dataset_name'] + '.' +
+            parameters['table_name'] + '_metrics'}
+
+  - sql:
+      name: "audit_high_volume"
+      dependsOn: ["check_table_metrics"]
+      runIf: >-
+        ${parameters['enable_audit'] &&
+        int(outputs['check_table_metrics'].value['row_count']) >= parameters['min_rows_threshold']}
+      query:
+        inline: >-
+          SELECT
+            @upstream_job_id AS metrics_job_id,
+            @batch_tag AS audited_batch,
+            @run_date AS trigger_date,
+            CURRENT_TIMESTAMP() AS audited_at
+      params:
+        upstream_job_id: "${outputs['check_table_metrics'].metadata['job_id']}"
+        batch_tag: "${outputs['check_table_metrics'].value['latest_batch_tag']}"
+        run_date: "${run['trigger_date']}"
+      engine:
+        bigquery:
+          location: "US"
+          destinationTable: >-
+            ${'your-gcp-project-id.' + parameters['dataset_name'] + '.' +
+            parameters['table_name'] + '_audit'}
+
+  - python:
+      name: "optional_enrichment"
+      dependsOn: ["prepare_context"]
+      runIf: "${parameters['enable_enrichment']}"
+      mainFilePath: "./scripts/cross_task_helpers.py"
+      pythonCallable: "optional_enrichment"
+      opKwargs:
+        batch_tag: "${outputs['prepare_context'].value['batch_tag']}"
+      engine: {local: {}}
+
+  - python:
+      name: "finalize_summary"
+      dependsOn: ["check_table_metrics", "audit_high_volume", "optional_enrichment"]
+      triggerRule: "all_done"
+      mainFilePath: "./scripts/cross_task_helpers.py"
+      pythonCallable: "summarize_pipeline_run"
+      opKwargs:
+        run_id: "${run['id']}"
+        trigger_time: "${run['trigger_time']}"
+        bq_job_id: >-
+          ${has(outputs['check_table_metrics'].metadata)
+          ? outputs['check_table_metrics'].metadata['job_id'] : null}
+        row_count: >-
+          ${has(outputs['check_table_metrics'].value)
+          ? outputs['check_table_metrics'].value['row_count'] : null}
+        enrichment_msg: >-
+          ${has(outputs['optional_enrichment'].value)
+          ? outputs['optional_enrichment'].value['message'] : 'skipped_default'}
+      engine: {local: {}}

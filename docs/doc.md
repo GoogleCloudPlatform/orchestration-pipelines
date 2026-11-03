@@ -62,6 +62,7 @@ This is the entry point for a pipeline definition.
 | `actions` | `repeated Action` | **Yes** | `min_items: 1` | The tasks that make up the pipeline. |
 | `tags` | `repeated string` | No | `regex: ^[a-zA-Z0-9_-]{1,32}$` (implicit) | Tags for metadata and filtering. |
 | `notifications`| `Notification` | No | | Notification settings for success or failures. |
+| `parameters` | `map<string, Parameter>` | No | `map_key_regex: ^[a-zA-Z_][a-zA-Z0-9_]*$` | Runtime parameters (`string`, `number`, `boolean`, `array`) with `default`. |
 
 ### 3.2. Defaults & Execution Config
 
@@ -141,7 +142,8 @@ policy can be defined globally in `defaults.retryPolicy` or per action in
 ## 4. Actions Reference
 
 Actions are the building blocks of the pipeline. Every action has a `name`
-(unique within the pipeline), optional `depends_on` list (for ordering), and an
+(unique within the pipeline), optional `depends_on` list (for ordering),
+optional `run_if` CEL boolean condition (skips the task when `false`), and an
 `execution_timeout` (ISO 8601 duration).
 
 All actions support a `trigger_rule` (enum `TriggerRule`, defaults to
@@ -229,9 +231,17 @@ Executes SQL queries on BigQuery or Spark.
   - `query` (`Query`, **Required**, `oneof`):
     - `inline`: The SQL query string directly in YAML.
     - `path`: Path to a `.sql` file.
-  - `params` (`map<string, string>`): Parameters passed to the SQL job
-    (interpolated via `${param}` placeholders; on BigQuery, also interpolated
-    via `{{ param }}` and bound as `@param` query parameters).
+  - `params` (`map<string, string>`): Parameters passed to the SQL job:
+    - **BigQuery (`bigquery`)**: Interpolates `${param}` placeholders in SQL
+      text (e.g., `FROM`/`JOIN` table or dataset identifiers; static keys also
+      support legacy `{{ param }}` at parse time, while dynamic `${ ... }` keys
+      interpolate `${param}` at runtime), and binds all entries as `@param`
+      BigQuery `STRING` query parameters (use `CAST(@param AS ...)` for
+      non-string comparisons).
+    - **Dataproc (`dataproc_serverless` / `dataproc_on_gce`)**: Passed via
+      `query_variables` / `script_variables` and substituted using `${param}`
+      for both `WHERE` value filters and SQL identifiers (`@param` and
+      `{{ param }}` do not apply).
   - `labels` (`map<string, string>`): Labels to apply to the SQL job.
 - **Examples**:
   - [pipeline-sql-on-bigquery.yml (BigQuery)](../examples/pipeline-sql-on-bigquery.yml)
@@ -358,6 +368,8 @@ Triggers another Orchestration Pipeline.
     current bundle.
   - `wait_for_completion` (bool): If true, this action waits until the triggered
     pipeline finishes. Default is `false`.
+  - `params` (`google.protobuf.Struct`): Runtime parameters forwarded to the
+    triggered pipeline as `dag_run.conf`.
 - **Examples**:
   - [pipeline-trigger-another-orchestration-pipeline.yml](../examples/pipeline-trigger-another-orchestration-pipeline.yml)
 
@@ -507,3 +519,55 @@ The framework enforces strict validation using custom Proto annotations.
 - `is_iana_timezone` (bool): String must be a valid IANA timezone (e.g., `UTC`).
 - `map_key_regex` (string): Map key must match the regex pattern.
 - `map_value_regex` (string): Map value must match the regex pattern.
+- `is_parameterizable` (bool): Field accepts runtime `${ ... }` CEL expressions.
+
+---
+
+## 7. Parameters, Cross-Task Data Sharing & Conditions
+
+Parameterizable fields and `run_if` (`runIf` in YAML) conditions accept
+[Common Expression Language (CEL)](https://github.com/google/cel-spec)
+`${ ... }` expressions evaluated at runtime against three namespaces. Because
+task IDs and map keys may contain hyphens or other non-identifier characters,
+prefer bracket indexing (`["..."]`) over `.` for map/action lookups:
+
+- **`parameters["<name>"]`**: Pipeline parameters declared under `parameters:`
+  (`string`, `number`, `boolean`, `array` of primitives), resolved in precedence
+  order: `default` < Airflow `params` < asset events < `dag_run.conf`.
+- **`run`**: Execution metadata (`run["id"]` / `run.id`, UTC ISO 8601
+  `run["trigger_time"]` / `run.trigger_time`, and `YYYY-MM-DD`
+  `run["trigger_date"]` / `run.trigger_date`).
+- **`outputs["<action_name>"]`**: Harvested upstream output envelope containing
+  `.value` and `.metadata` (`map<string, dyn>`; requires `<action_name>` in
+  `depends_on`).
+
+### 7.1. Harvested Task Output Schema (`outputs["<action_name>"]`)
+
+| Action / Engine | `.value` (CEL Type) | `.metadata` Fields (`map<string, dyn>`) |
+| :--- | :--- | :--- |
+| **`python`** (`local` / virtualenv) | JSON-normalized return value of `python_callable` (`dyn`, `null` on failure) | `{}` |
+| **`sql`** (`bigquery`) | First result row as `map<string, dyn>` when `.value` is referenced in CEL (`{}` if 0 rows; `null` otherwise) | `job_id` (`string \| null`), `rows_written` (`int`), `bytes_billed` (`int`) |
+| **`pyspark` / `notebook` / `sql`** (`dataproc_serverless`) | JSON payload uploaded to the `gs://...` URI in `os.environ["PIPELINE_OUTPUT_URI"]` (`dyn`; `null` for `sql` or if unwritten) | `batch_id` (`string \| null`) |
+| **`pyspark` / `notebook` / `sql`** (`dataproc_on_gce`) | JSON payload uploaded to the `gs://...` URI in `os.environ["PIPELINE_OUTPUT_URI"]` (`dyn`; `null` for `sql` or if unwritten) | `job_id` (`string \| null`) |
+| **`pipeline`** (`dataform.dataform_service` / `dataform.airflow_worker`) | `null` | `invocation_id` (`string \| null`; `null` on `airflow_worker`), `failed_actions` (`list<string>`), `successful_actions` (`list<string>`) |
+| **`pipeline`** (`dbt.airflow_worker`) | `null` | `run_id` (`string`), `failed_actions` (`list<string>`), `successful_actions` (`list<string>`) |
+| **`data_ingestion`** (`bigquery_dts`) | `null` | `run_id` (`string \| null`), `run_state` (`string`), `start_time` (`string \| null`), `end_time` (`string \| null`) |
+| **`orchestration_pipeline` / `ai` / `airflow_task`** | Operator XCom return value, e.g., triggered run ID (`dyn`, `null` on failure) | `{}` |
+
+- **Dataproc `PIPELINE_OUTPUT_URI`**: For referenced `pyspark` and `notebook`
+  actions, `os.environ["PIPELINE_OUTPUT_URI"]` is a `gs://...` Cloud Storage
+  URI (not a local filesystem path—upload JSON via the Cloud Storage SDK rather
+  than local `open()`).
+- **XCom Offloading & Size Limits**: Serialized `{value, metadata}` envelopes
+  >= 10 KB are automatically offloaded to
+  `gs://<GCS_BUCKET>/data/task_outputs/...` when `GCS_BUCKET` is configured
+  (configure a bucket lifecycle TTL rule on `data/task_outputs/` if automatic
+  expiration is desired). Envelopes exceeding **1 MB** fail the task; write
+  larger datasets to a table or GCS object and pass its identifier instead.
+
+### 7.2. Conditional Execution (`run_if`)
+
+`run_if: "${ ... }"` skips the action when the boolean CEL expression evaluates
+to `false`. Downstream `trigger_rule: all_done` actions can guard against
+skipped or failed upstreams with `has(outputs["<action_name>"].value)`. See
+[pipeline-cross-task-data-sharing.yml](../examples/pipeline-cross-task-data-sharing.yml).

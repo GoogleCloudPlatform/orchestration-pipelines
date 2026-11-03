@@ -1081,3 +1081,43 @@ def test_generate_and_execute_cross_task_cel_and_run_if_pipeline(
         dag.task_dict["step3_skip"].pre_execute(ctx)
     with pytest.raises(AirflowSkipException, match="step4_dyn_binding_runif"):
         dag.task_dict["step4_dyn_binding_runif"].pre_execute(ctx)
+
+
+@pytest.mark.parametrize(
+    ("rel_yaml", "expected_dag_id", "expected_tasks"),
+    [
+        (
+            "examples/pipeline-cross-task-data-sharing.yml",
+            "pipeline-cross-task-data-sharing",
+            {
+                "prepare_context",
+                "create_and_seed_table",
+                "check_table_metrics",
+                "audit_high_volume",
+                "optional_enrichment",
+                "finalize_summary",
+            },
+        ),
+        (
+            "examples/pipeline-trigger-another-orchestration-pipeline.yml",
+            "pipeline-trigger-another-orchestration-pipeline",
+            {"trigger_another_pipeline"},
+        ),
+    ],
+)
+def test_validate_and_generate_cross_task_examples(
+    rel_yaml: str, expected_dag_id: str, expected_tasks: set[str], monkeypatch
+) -> None:
+    """Tests api.validate and api.generate on the public cross-task example YAMLs."""
+    examples_dir = os.path.join(_PROJECT_ROOT, "examples")
+    yaml_path = os.path.join(_PROJECT_ROOT, rel_yaml)
+    monkeypatch.setenv("DAGS_FOLDER", examples_dir)
+
+    api.validate(yaml_path)
+    globals_dict: dict[str, Any] = {}
+    api.generate(os.path.basename(yaml_path), globals_dict, examples_dir)
+
+    assert expected_dag_id in globals_dict
+    dag = globals_dict[expected_dag_id]
+    assert isinstance(dag, DAG)
+    assert expected_tasks.issubset(set(dag.task_dict))

@@ -28,10 +28,26 @@ constraints, and temporary limitations of `orchestration-pipelines`.
 
 ## 2. Feature Limitations
 
-- **Parameter Types:** Parameters provided to actions (e.g., in SQL queries,
-  scripts) are always passed as strings. Users must handle type casting within
-  their scripts, queries, or notebooks if different data types are required
-  (e.g., using `CAST` in SQL).
+- **Action `params` Maps:** Entries in `map<string, string>` fields (such as
+  `params` on SQL, PySpark, Notebook, `dbt`, and `dataform.airflow_worker`
+  actions, and `dbt.invocations[].vars`; note `dataform.dataform_service` does
+  not support `params`) are passed as strings—cast values in queries or scripts
+  if needed (e.g., `CAST` in BigQuery SQL). Pipeline `parameters` and
+  `google.protobuf.Struct` fields (such as Python `opKwargs`,
+  `orchestration_pipeline.params`, `airflow_task.params`,
+  `dataform_service.workflow_invocation`, `dbt.invocations[].args`, and
+  `ai.create_and_run_custom_job.custom_job`) preserve native types (`string`,
+  `number`, `boolean`, `array`) when bound via `${ ... }`.
+- **Dynamic CEL & Cross-Task Output Constraints:**
+  - Mid-string `${ ... }` interpolation inside string literals (e.g.,
+    `"prefix-${parameters.env}"`) is not supported; wrap the entire value in a
+    single expression using CEL `+` concatenation
+    (`"${'prefix-' + parameters['env']}"`).
+  - Harvested `{value, metadata}` task output envelopes have a hard **1 MB**
+    serialized size limit; pass table names or GCS URIs for larger datasets.
+  - Dynamic branching (`branch`), dynamic task mapping (`forEach`), the
+    `${secrets.*}` CEL namespace, and `.value` row harvesting on Dataproc Spark
+    SQL actions are not currently supported.
 - **YAML Keys:** Avoid using `n` or `y` (as well as `yes`, `no`, `on`, or `off`)
   as unquoted keys in your YAML definitions. Due to YAML 1.1 parsing
   specifications, these unquoted words are implicitly evaluated as boolean
