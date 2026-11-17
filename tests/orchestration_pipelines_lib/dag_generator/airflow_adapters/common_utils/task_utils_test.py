@@ -1715,6 +1715,88 @@ def test_create_bq_operation_task_with_params(
     ]
 
 
+@patch(
+    "orchestration_pipelines_lib.dag_generator.airflow_adapters."
+    "common_utils.task_utils.FileManager"
+)
+def test_create_bq_operation_task_interpolates_params_in_sql_file(
+    mock_file_manager_cls, bq_operation_action, pipeline, sample_dag
+):
+    """Tests ${param} and {{ param }} interpolation in .sql files."""
+    sql_content = (
+        "ASSERT (\n"
+        "  SELECT COUNT(*) > 0\n"
+        "  FROM `${project}.${dataset}.${orders_table}` o\n"
+        "  JOIN `{{ project }}.{{dataset}}.{{  users_table  }}` u\n"
+        "    ON o.user_id = u.id\n"
+        "  WHERE o.status = @status\n"
+        "    AND o.dt = '{{ ds }}'\n"
+        "    AND o.note != '${untouched_var}'\n"
+        ") AS 'Expected matching orders';"
+    )
+    mock_fm = MagicMock()
+    mock_fm.read.return_value = sql_content
+    mock_file_manager_cls.return_value = mock_fm
+
+    action = replace(
+        bq_operation_action,
+        query=None,
+        filename="queries/assert_orders.sql",
+        params={
+            "project": "my-gcp-project",
+            "dataset": "analytics_dev",
+            "orders_table": "orders",
+            "users_table": "users",
+            "status": "Complete",
+        },
+    )
+
+    task = create_bq_operation_task(action, pipeline, dag=sample_dag)
+
+    mock_fm.read.assert_called_once_with("queries/assert_orders.sql")
+    assert task.configuration["query"]["query"] == (
+        "ASSERT (\n"
+        "  SELECT COUNT(*) > 0\n"
+        "  FROM `my-gcp-project.analytics_dev.orders` o\n"
+        "  JOIN `my-gcp-project.analytics_dev.users` u\n"
+        "    ON o.user_id = u.id\n"
+        "  WHERE o.status = @status\n"
+        "    AND o.dt = '{{ ds }}'\n"
+        "    AND o.note != '${untouched_var}'\n"
+        ") AS 'Expected matching orders';"
+    )
+    assert len(task.configuration["query"]["queryParameters"]) == 5
+
+
+def test_create_bq_operation_task_interpolates_inline_query_single_pass(
+    bq_operation_action, pipeline, sample_dag
+):
+    """Tests inline ${param} and {{ param }} interpolation is single-pass."""
+    action = replace(
+        bq_operation_action,
+        query=(
+            "CREATE TABLE IF NOT EXISTS "
+            "`${my-project}.{{ dataset }}.${a}_{{ c }}` (id INT64)"
+        ),
+        params={
+            "my-project": "prod-proj",
+            "dataset": "raw_ds",
+            "a": "{{ b }}",
+            "c": "${b}",
+            "b": "should_not_cascade",
+        },
+    )
+
+    task = create_bq_operation_task(action, pipeline, dag=sample_dag)
+
+    assert task.configuration["query"]["query"] == (
+        "CREATE TABLE IF NOT EXISTS "
+        "`prod-proj.raw_ds.{{ b }}_${b}` (id INT64)"
+    )
+    assert "writeDisposition" not in task.configuration["query"]
+    assert "createDisposition" not in task.configuration["query"]
+
+
 def test_create_bq_operation_task_raises_on_invalid_destination_table(
     bq_operation_action, pipeline, sample_dag
 ):

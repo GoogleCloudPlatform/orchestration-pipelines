@@ -19,7 +19,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import Callable, Generator
+import re
+from collections.abc import Callable, Generator, Mapping
 from contextlib import contextmanager
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -65,6 +66,10 @@ if TYPE_CHECKING:
     from airflow.utils.task_group import TaskGroup
 
     from .dag_utils import DAGKwargs
+
+_SQL_QUERY_INTERPOLATION_RE = re.compile(
+    r"\$\{([a-zA-Z0-9_-]+)\}|\{\{\s*([a-zA-Z0-9_-]+)\s*\}\}"
+)
 
 
 @contextmanager
@@ -639,6 +644,18 @@ def create_dataproc_create_batch_operator_task(
         )
 
 
+def _interpolate_sql_params(query: str, params: Mapping[str, Any]) -> str:
+    """Replaces '${key}' and '{{ key }}' placeholders in a SQL query."""
+    return _SQL_QUERY_INTERPOLATION_RE.sub(
+        lambda m: (
+            str(params[key])
+            if (key := m.group(1) or m.group(2)) in params
+            else m.group(0)
+        ),
+        query,
+    )
+
+
 def create_bq_operation_task(
     action: BqOperationActionModel, pipeline: PipelineModel, dag: DAG
 ):
@@ -669,6 +686,9 @@ def create_bq_operation_task(
             query = file_manager.read(action.filename)
         else:
             query = action.query
+
+        if action.params and query:
+            query = _interpolate_sql_params(query, action.params)
 
         configuration = {
             # Will be converted to JobConfigurationQuery in Protobuf.

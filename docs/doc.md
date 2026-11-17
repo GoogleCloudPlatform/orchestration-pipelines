@@ -223,7 +223,9 @@ Executes SQL queries on BigQuery or Spark.
   - `query` (`Query`, **Required**, `oneof`):
     - `inline`: The SQL query string directly in YAML.
     - `path`: Path to a `.sql` file.
-  - `params` (`map<string, string>`): Parameters passed to the SQL job.
+  - `params` (`map<string, string>`): Parameters passed to the SQL job
+    (interpolated via `${param}` placeholders; on BigQuery, also interpolated
+    via `{{ param }}` and bound as `@param` query parameters).
   - `labels` (`map<string, string>`): Labels to apply to the SQL job.
 - **Examples**:
   - [pipeline-sql-on-bigquery.yml (BigQuery)](../examples/pipeline-sql-on-bigquery.yml)
