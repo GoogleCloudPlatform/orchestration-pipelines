@@ -184,7 +184,9 @@ message ScheduleTrigger {
 
 message Trigger {
   oneof trigger {
-    ScheduleTrigger schedule = 1;
+    ScheduleTrigger schedule = 1 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
   }
 }
 
@@ -279,15 +281,33 @@ message DataprocServerlessBatchEngine {
 ////////////////////////
 message Action {
   oneof action {
-    PythonAction python = 1;
-    PysparkAction pyspark = 2;
-    NotebookAction notebook = 3;
-    SqlAction sql = 4;
-    PipelineAction pipeline = 5;
-    DataIngestionAction data_ingestion = 6;
-    OrchestrationPipelineAction orchestration_pipeline = 7;
-    AIAction ai = 8;
-    AirflowTaskAction airflow_task = 9;
+    PythonAction python = 1 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
+    PysparkAction pyspark = 2 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
+    NotebookAction notebook = 3 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
+    SqlAction sql = 4 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
+    PipelineAction pipeline = 5 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
+    DataIngestionAction data_ingestion = 6 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
+    OrchestrationPipelineAction orchestration_pipeline = 7 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
+    AIAction ai = 8 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
+    AirflowTaskAction airflow_task = 9 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
   }
 }
 
@@ -334,7 +354,9 @@ message PythonEnvironment {
 
 message PythonEngine {
   oneof engine {
-    LocalEngine local = 1;
+    LocalEngine local = 1 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
   }
 }
 
@@ -373,8 +395,12 @@ message PysparkAction {
 
 message PysparkEngine {
   oneof engine {
-    DataprocOnGceEngine dataproc_on_gce = 1;
-    DataprocServerlessBatchEngine dataproc_serverless = 2;
+    DataprocOnGceEngine dataproc_on_gce = 1 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
+    DataprocServerlessBatchEngine dataproc_serverless = 2 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
   }
 }
 
@@ -431,8 +457,12 @@ message NotebookAction {
 
 message NotebookEngine {
   oneof engine {
-    DataprocOnGceEngine dataproc_on_gce = 1;
-    DataprocServerlessBatchEngine dataproc_serverless = 2;
+    DataprocOnGceEngine dataproc_on_gce = 1 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
+    DataprocServerlessBatchEngine dataproc_serverless = 2 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
   }
 }
 
@@ -487,9 +517,15 @@ message Query {
 
 message SqlEngine {
   oneof engine {
-    BigQueryEngine bigquery = 1;
-    DataprocServerlessBatchEngine dataproc_serverless = 2;
-    DataprocOnGceEngine dataproc_on_gce = 3;
+    BigQueryEngine bigquery = 1 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
+    DataprocServerlessBatchEngine dataproc_serverless = 2 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
+    DataprocOnGceEngine dataproc_on_gce = 3 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
   }
 }
 
@@ -534,7 +570,9 @@ message PipelineFramework {
 message DbtFrameworkSpec {
   oneof execution {
     // Execute DBT using Airflow Worker (local execution).
-    DbtAirflowExecution airflow_worker = 1;
+    DbtAirflowExecution airflow_worker = 1 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
   }
   // Ordered sequence of structured DBT commands executed sequentially.
   repeated DbtInvocation invocations = 3;
@@ -586,9 +624,13 @@ message DbtKnowledgeCatalogConfig {
 message DataformFrameworkSpec {
   oneof execution {
     // Execute Dataform using Dataform Service.
-    DataformServiceExecution dataform_service = 1;
+    DataformServiceExecution dataform_service = 1 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
     // Execute Dataform using Airflow Worker (local execution).
-    DataformAirflowExecution airflow_worker = 2;
+    DataformAirflowExecution airflow_worker = 2 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.9" }
+    ];
   }
 }
 
@@ -779,7 +821,12 @@ message AgentPlatform {
   oneof type {
     AgentPlatformModelUpload model_upload = 3;
     AgentPlatformBatchInference batch_inference = 4;
-    AgentPlatformCreateAndRunCustomJob create_and_run_custom_job = 5;
+    // CreateCustomJobOperator requires apache-airflow-providers-google>=22.5.0,
+    // whose PyPI metadata enforces apache-airflow>=2.11.0 (causing a dependency
+    // conflict on Airflow <2.11, regardless of Cloud Composer image defaults).
+    AgentPlatformCreateAndRunCustomJob create_and_run_custom_job = 5 [
+      (pipeline_models.validation.supported_on) = { runner: "airflow", min_version: "2.11" }
+    ];
   }
 }
 

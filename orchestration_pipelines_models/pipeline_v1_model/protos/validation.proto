@@ -22,6 +22,17 @@ import "google/protobuf/descriptor.proto";
 // These options can be used to enforce validation rules at the application level
 // via custom code.
 
+// Declares runner and optional minimum runtime version support for a schema
+// capability.
+message RunnerSupport {
+  // Runner identifier matching PipelineRunner enum (e.g., "airflow").
+  string runner = 1;
+
+  // Optional minimum runtime version for that runner (e.g., "2.0", "2.11",
+  // "3.0"). If empty, all versions of the runner are supported.
+  string min_version = 2;
+}
+
 extend google.protobuf.FieldOptions {
   // For string: must not be empty.
   // For message: must be set.
@@ -66,4 +77,15 @@ extend google.protobuf.FieldOptions {
 
   // Specifies whether the field can be parameterized at runtime via ${...}.
   bool is_parameterizable = 50013;
+
+  // Explicit list of runners and minimum versions where this capability is
+  // supported. Child fields inherit their parent's supported_on unless
+  // overridden.
+  repeated RunnerSupport supported_on = 50014;
+}
+
+extend google.protobuf.EnumValueOptions {
+  // Explicit list of runners and minimum versions where this enum value is
+  // supported. Inherits the containing field's compatibility unless narrowed.
+  repeated RunnerSupport enum_value_supported_on = 60001;
 }
