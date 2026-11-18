@@ -927,9 +927,27 @@ class TestPipelineValidator(unittest.TestCase):
             "test",
             "snapshot",
             "freshness",
+            "source freshness",
             "seed",
             "compile",
+            "deps",
         ]
+        op_args = struct_pb2.Struct()
+        op_args.update({"role": "reporter", "dry_run": False, "days": 7})
+        invocations = [DbtInvocation(command=cmd) for cmd in valid_commands]
+        invocations.extend(
+            [
+                DbtInvocation(
+                    command="run-operation",
+                    macro="grant_select",
+                    args=op_args,
+                ),
+                DbtInvocation(
+                    command="run-operation",
+                    macro="dbt_utils.log_info",
+                ),
+            ]
+        )
         self.pipeline.actions[0].CopyFrom(
             Action(
                 pipeline=PipelineAction(
@@ -939,16 +957,119 @@ class TestPipelineValidator(unittest.TestCase):
                             airflow_worker=DbtAirflowExecution(
                                 project_directory_path="dbt_project"
                             ),
-                            invocations=[
-                                DbtInvocation(command=cmd)
-                                for cmd in valid_commands
-                            ],
+                            invocations=invocations,
                         )
                     ),
                 )
             )
         )
         PipelineValidator.validate(self.pipeline)
+
+    def test_dbt_invocation_cross_field_constraints_fail(self):
+        """Tests command-specific validation errors for DbtInvocation."""
+        from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipeline_pb2 import (
+            DbtAirflowExecution,
+            DbtFrameworkSpec,
+            DbtInvocation,
+            PipelineAction,
+            PipelineFramework,
+        )
+
+        empty_args = struct_pb2.Struct()
+        cases = [
+            (
+                DbtInvocation(command="run-operation"),
+                r"invocations\[0\]\.macro': 'macro' is required when command is 'run-operation'",
+            ),
+            (
+                DbtInvocation(command="run-operation", macro="--bad-flag"),
+                r"invocations\[0\]\.macro': value '--bad-flag' does not match regex pattern",
+            ),
+            (
+                DbtInvocation(command="run", macro="grant_select"),
+                r"invocations\[0\]\.macro': 'macro' is only supported when command is 'run-operation'",
+            ),
+            (
+                DbtInvocation(command="run", args=empty_args),
+                r"invocations\[0\]\.args': 'args' is only supported when command is 'run-operation'",
+            ),
+            (
+                DbtInvocation(
+                    command="run-operation",
+                    macro="grant_select",
+                    select=["model_1"],
+                ),
+                r"invocations\[0\]\.select': 'select' is not supported when command is 'run-operation'",
+            ),
+            (
+                DbtInvocation(
+                    command="run-operation",
+                    macro="grant_select",
+                    exclude=["model_1"],
+                ),
+                r"invocations\[0\]\.exclude': 'exclude' is not supported when command is 'run-operation'",
+            ),
+            (
+                DbtInvocation(
+                    command="run-operation",
+                    macro="grant_select",
+                    full_refresh=True,
+                ),
+                r"invocations\[0\]\.full_refresh': 'full_refresh' is not supported when command is 'run-operation'",
+            ),
+            (
+                DbtInvocation(command="deps", select=["model_1"]),
+                r"invocations\[0\]\.select': 'select' is not supported when command is 'deps'",
+            ),
+            (
+                DbtInvocation(command="deps", exclude=["model_1"]),
+                r"invocations\[0\]\.exclude': 'exclude' is not supported when command is 'deps'",
+            ),
+            (
+                DbtInvocation(command="deps", full_refresh=True),
+                r"invocations\[0\]\.full_refresh': 'full_refresh' is not supported when command is 'deps'",
+            ),
+            (
+                DbtInvocation(command="deps", threads=2),
+                r"invocations\[0\]\.threads': 'threads' is not supported when command is 'deps'",
+            ),
+            (
+                DbtInvocation(command="freshness", full_refresh=True),
+                r"invocations\[0\]\.full_refresh': 'full_refresh' is not supported when command is 'freshness'",
+            ),
+            (
+                DbtInvocation(command="source freshness", full_refresh=True),
+                r"invocations\[0\]\.full_refresh': 'full_refresh' is not supported when command is 'source freshness'",
+            ),
+            (
+                DbtInvocation(command="test", full_refresh=True),
+                r"invocations\[0\]\.full_refresh': 'full_refresh' is not supported when command is 'test'",
+            ),
+            (
+                DbtInvocation(command="snapshot", full_refresh=True),
+                r"invocations\[0\]\.full_refresh': 'full_refresh' is not supported when command is 'snapshot'",
+            ),
+        ]
+
+        for inv, expected_pattern in cases:
+            with self.subTest(inv=inv):
+                self.pipeline.actions[0].CopyFrom(
+                    Action(
+                        pipeline=PipelineAction(
+                            name="dbt-invalid-constraints",
+                            framework=PipelineFramework(
+                                dbt=DbtFrameworkSpec(
+                                    airflow_worker=DbtAirflowExecution(
+                                        project_directory_path="dbt_project"
+                                    ),
+                                    invocations=[inv],
+                                )
+                            ),
+                        )
+                    )
+                )
+                with self.assertRaisesRegex(ValueError, expected_pattern):
+                    PipelineValidator.validate(self.pipeline)
 
     def test_dbt_invocation_invalid_command_fails(self):
         """Tests that an unsupported DBT invocation command fails validation."""

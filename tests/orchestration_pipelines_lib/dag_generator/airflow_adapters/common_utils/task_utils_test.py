@@ -1193,7 +1193,12 @@ def test_creates_dbt_task_with_invocations(
     action_with_invocations = replace(
         dbt_action_full,
         invocations=[
-            DbtInvocationModel(command="seed"),
+            DbtInvocationModel(command="deps"),
+            DbtInvocationModel(
+                command="run-operation",
+                macro="grant_select",
+                args={"role": "reporter", "dry_run": False},
+            ),
             DbtInvocationModel(
                 command="build",
                 select=["model_1"],
@@ -1213,7 +1218,7 @@ def test_creates_dbt_task_with_invocations(
     assert result.op_kwargs["profiles_dir"] == "/opt/dbt/my_project"
     assert result.op_kwargs["invocations"] == [
         {
-            "command": "seed",
+            "command": "deps",
             "select": None,
             "exclude": None,
             "vars": None,
@@ -1222,6 +1227,21 @@ def test_creates_dbt_task_with_invocations(
             "threads": None,
             "target": None,
             "extra_args": None,
+            "macro": None,
+            "args": None,
+        },
+        {
+            "command": "run-operation",
+            "select": None,
+            "exclude": None,
+            "vars": None,
+            "full_refresh": False,
+            "fail_fast": False,
+            "threads": None,
+            "target": None,
+            "extra_args": None,
+            "macro": "grant_select",
+            "args": {"role": "reporter", "dry_run": False},
         },
         {
             "command": "build",
@@ -1233,6 +1253,8 @@ def test_creates_dbt_task_with_invocations(
             "threads": None,
             "target": None,
             "extra_args": None,
+            "macro": None,
+            "args": None,
         },
     ]
 

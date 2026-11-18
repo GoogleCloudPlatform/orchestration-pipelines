@@ -204,6 +204,8 @@ class DbtInvocationModel:
     threads: int | None = None
     target: str | None = None
     extra_args: list[str] | None = None
+    macro: str | None = None
+    args: dict[str, Any] | None = None
 
 
 @dataclass

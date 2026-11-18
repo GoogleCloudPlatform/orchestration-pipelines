@@ -256,7 +256,8 @@ Orchestrates third-party transformation frameworks.
       structured dbt commands executed sequentially. Defaults to a single `run`
       invocation if omitted.
       - `command` (string, **Required**): Base dbt command (`build`, `run`,
-        `test`, `snapshot`, `freshness`, `seed`, `compile`).
+        `test`, `snapshot`, `freshness`, `source freshness`, `seed`,
+        `compile`, `deps`, `run-operation`).
       - `select` (`repeated string`, optional): Node selection (`--select`).
       - `exclude` (`repeated string`, optional): Node exclusion (`--exclude`).
       - `vars` (`map<string, string>`, optional): Variables passed via `--vars`.
@@ -265,6 +266,10 @@ Orchestrates third-party transformation frameworks.
       - `threads` (int32, optional): Number of threads (`--threads`, >= 0).
       - `target` (string, optional): Target profile name (`--target`).
       - `extra_args` (`repeated string`, optional): Additional CLI flags.
+      - `macro` (string, optional): Macro name to invoke when `command` is
+        `run-operation` (**Required** for `run-operation`).
+      - `args` (`google.protobuf.Struct`, optional): Keyword arguments passed
+        via `--args` when `command` is `run-operation`.
   - `dataform`: Runs Dataform.
     - `dataform_service` (`DataformServiceExecution`): Executes via GCP Dataform
       API.

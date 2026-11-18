@@ -1202,6 +1202,16 @@ class TestConverterV1ToInternal(unittest.TestCase):
 
     def test_convert_pipeline_action_dbt_with_invocations(self):
         """Tests conversion of a dbt action with structured invocations."""
+        op_args = struct_pb2.Struct()
+        op_args.update(
+            {
+                "role": "reporter",
+                "dry_run": False,
+                "days": 7,
+                "ratio": 0.5,
+                "tables": ["orders", "users"],
+            }
+        )
         dbt_action = v1_protos.PipelineAction(
             name="dbt-task-invocations",
             framework=v1_protos.PipelineFramework(
@@ -1211,6 +1221,13 @@ class TestConverterV1ToInternal(unittest.TestCase):
                     ),
                     output_gcs_uri="gs://my-bucket/dbt-outputs/",
                     invocations=[
+                        v1_protos.DbtInvocation(command="deps"),
+                        v1_protos.DbtInvocation(command="source freshness"),
+                        v1_protos.DbtInvocation(
+                            command="run-operation",
+                            macro="grant_select",
+                            args=op_args,
+                        ),
                         v1_protos.DbtInvocation(command="seed"),
                         v1_protos.DbtInvocation(
                             command="build",
@@ -1238,6 +1255,19 @@ class TestConverterV1ToInternal(unittest.TestCase):
         self.assertEqual(
             internal_dbt.invocations,
             [
+                internal_actions.DbtInvocationModel(command="deps"),
+                internal_actions.DbtInvocationModel(command="source freshness"),
+                internal_actions.DbtInvocationModel(
+                    command="run-operation",
+                    macro="grant_select",
+                    args={
+                        "role": "reporter",
+                        "dry_run": False,
+                        "days": 7,
+                        "ratio": 0.5,
+                        "tables": ["orders", "users"],
+                    },
+                ),
                 internal_actions.DbtInvocationModel(command="seed"),
                 internal_actions.DbtInvocationModel(
                     command="build",

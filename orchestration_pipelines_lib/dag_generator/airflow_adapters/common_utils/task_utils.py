@@ -253,6 +253,8 @@ def create_dbt_task(
                     "threads": inv.threads,
                     "target": inv.target,
                     "extra_args": inv.extra_args,
+                    "macro": inv.macro,
+                    "args": inv.args,
                 }
                 for inv in action.invocations
             ]

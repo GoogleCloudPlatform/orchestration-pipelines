@@ -41,6 +41,16 @@ _PARAM_TYPE_TO_VALUE_KIND = {
 _PRIMITIVE_VALUE_KINDS = frozenset(
     {"string_value", "number_value", "bool_value"}
 )
+_DBT_NO_FULL_REFRESH_COMMANDS = frozenset(
+    {
+        "deps",
+        "run-operation",
+        "freshness",
+        "source freshness",
+        "test",
+        "snapshot",
+    }
+)
 
 
 class PipelineValidator:
@@ -175,6 +185,64 @@ class PipelineValidator:
                     cls._validate_message(
                         value, current_field_path, bound_paths
                     )
+
+        if descriptor == orchestration_pipeline_pb2.DbtInvocation.DESCRIPTOR:
+            cls._validate_dbt_invocation(message, path_prefix)
+
+    @classmethod
+    def _validate_dbt_invocation(
+        cls, message: Message, path_prefix: str
+    ) -> None:
+        """Validates command-specific field constraints on DbtInvocation."""
+
+        def _field_path(field_name: str) -> str:
+            return f"{path_prefix}.{field_name}" if path_prefix else field_name
+
+        command = message.command
+        if command == "run-operation":
+            if not message.macro:
+                raise ValueError(
+                    f"Error for field '{_field_path('macro')}': 'macro' is "
+                    "required when command is 'run-operation'."
+                )
+            for unsupported in ("select", "exclude"):
+                if getattr(message, unsupported):
+                    raise ValueError(
+                        f"Error for field '{_field_path(unsupported)}': "
+                        f"'{unsupported}' is not supported when command is "
+                        "'run-operation'."
+                    )
+        else:
+            if message.macro:
+                raise ValueError(
+                    f"Error for field '{_field_path('macro')}': 'macro' is "
+                    "only supported when command is 'run-operation'."
+                )
+            if message.HasField("args"):
+                raise ValueError(
+                    f"Error for field '{_field_path('args')}': 'args' is "
+                    "only supported when command is 'run-operation'."
+                )
+
+        if command == "deps":
+            for unsupported in ("select", "exclude"):
+                if getattr(message, unsupported):
+                    raise ValueError(
+                        f"Error for field '{_field_path(unsupported)}': "
+                        f"'{unsupported}' is not supported when command is "
+                        "'deps'."
+                    )
+            if message.threads > 0:
+                raise ValueError(
+                    f"Error for field '{_field_path('threads')}': 'threads' is "
+                    "not supported when command is 'deps'."
+                )
+
+        if message.full_refresh and command in _DBT_NO_FULL_REFRESH_COMMANDS:
+            raise ValueError(
+                f"Error for field '{_field_path('full_refresh')}': "
+                f"'full_refresh' is not supported when command is '{command}'."
+            )
 
     @staticmethod
     def find_field(descriptor: Descriptor, name: str) -> FieldDescriptor | None:

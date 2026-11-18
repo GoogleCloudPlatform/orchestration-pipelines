@@ -879,6 +879,12 @@ class ConverterV1ToInternal:
                 threads=inv.threads if inv.threads > 0 else None,
                 target=inv.target or None,
                 extra_args=list(inv.extra_args) if inv.extra_args else None,
+                macro=inv.macro or None,
+                args=(
+                    normalize_proto_json(struct_to_dict(inv.args))
+                    if inv.HasField("args") and inv.args
+                    else None
+                ),
             )
             for inv in invocations_proto
         ]

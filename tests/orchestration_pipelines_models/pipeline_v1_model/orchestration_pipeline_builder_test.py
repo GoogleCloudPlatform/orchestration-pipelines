@@ -371,6 +371,18 @@ class TestOrchestrationPipelineBuilder(unittest.TestCase):
                                 },
                                 "output_gcs_uri": "gs://my-bucket/dbt-outputs/",
                                 "invocations": [
+                                    {"command": "deps"},
+                                    {"command": "source freshness"},
+                                    {
+                                        "command": "run-operation",
+                                        "macro": "grant_select",
+                                        "args": {
+                                            "role": "reporter",
+                                            "dry_run": False,
+                                            "days": 7,
+                                            "tables": ["orders", "users"],
+                                        },
+                                    },
                                     {"command": "seed"},
                                     {
                                         "command": "build",
@@ -395,9 +407,18 @@ class TestOrchestrationPipelineBuilder(unittest.TestCase):
 
         dbt = pipeline.actions[0].pipeline.framework.dbt
         self.assertEqual(dbt.output_gcs_uri, "gs://my-bucket/dbt-outputs/")
-        self.assertEqual(len(dbt.invocations), 2)
-        self.assertEqual(dbt.invocations[0].command, "seed")
-        build_inv = dbt.invocations[1]
+        self.assertEqual(len(dbt.invocations), 5)
+        self.assertEqual(dbt.invocations[0].command, "deps")
+        self.assertEqual(dbt.invocations[1].command, "source freshness")
+        run_op_inv = dbt.invocations[2]
+        self.assertEqual(run_op_inv.command, "run-operation")
+        self.assertEqual(run_op_inv.macro, "grant_select")
+        self.assertEqual(run_op_inv.args["role"], "reporter")
+        self.assertIs(run_op_inv.args["dry_run"], False)
+        self.assertEqual(run_op_inv.args["days"], 7.0)
+        self.assertEqual(list(run_op_inv.args["tables"]), ["orders", "users"])
+        self.assertEqual(dbt.invocations[3].command, "seed")
+        build_inv = dbt.invocations[4]
         self.assertEqual(build_inv.command, "build")
         self.assertListEqual(list(build_inv.select), ["tag:nightly", "my_model+"])
         self.assertListEqual(list(build_inv.exclude), ["legacy_model"])
