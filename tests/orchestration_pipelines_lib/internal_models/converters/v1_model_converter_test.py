@@ -897,6 +897,32 @@ class TestConverterV1ToInternal(unittest.TestCase):
                 "gs://bucket/resolved/archives/conda.tar.gz#environment",
             ],
         )
+        self.assertIsNone(internal_action.outputUriPrefix)
+
+    def test_convert_dataproc_notebook_action_with_output_uri_prefix(self):
+        """Tests converting a Dataproc notebook action with output_uri_prefix."""
+        notebook_action = v1_protos.NotebookAction(
+            name="dp-nb-custom-output",
+            main_file_path="main.ipynb",
+            output_uri_prefix="gs://custom-bucket/notebooks/archive/",
+            engine=v1_protos.NotebookEngine(
+                dataproc_serverless=v1_protos.DataprocServerlessBatchEngine(
+                    location="us-central1",
+                    resource_profile=v1_protos.DataprocBatchResourceProfile(
+                        inline=v1_protos.DataprocBatchResourceProfile.InlineConfig()
+                    ),
+                )
+            ),
+        )
+
+        internal_action = self.converter._convert_dataproc_action(
+            notebook_action, "notebook", self.defaults, self.labels
+        )
+
+        self.assertEqual(
+            internal_action.outputUriPrefix,
+            "gs://custom-bucket/notebooks/archive/",
+        )
 
     def test_resolve_archive_uri(self):
         """Tests _resolve_archive_uri helper with empty strings, relative paths, and aliases."""

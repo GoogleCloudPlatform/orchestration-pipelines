@@ -700,6 +700,8 @@ def test_dataproc_ephemeral_task_setup_and_teardown(mock_get_path, mock_upload):
     assert isinstance(delete_task, DataprocDeleteClusterOperator)
     assert create_task.is_setup
     assert delete_task.is_teardown
+    mock_get_path.assert_not_called()
+    mock_upload.assert_not_called()
 
 
 MODULE_PATH = "orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils"  # noqa: E501
@@ -1935,22 +1937,23 @@ def mock_notebook_gcs_utils():
             f"{MODULE_PATH}.gcs_utils.get_run_notebook_gcs_path",
             return_value="gs://fake/runner.py",
             autospec=True,
-        ),
+        ) as mock_get_path,
         patch(
             f"{MODULE_PATH}.gcs_utils.upload_run_notebook_if_needed",
             autospec=True,
-        ),
+        ) as mock_upload,
     ):
-        yield
+        yield mock_get_path, mock_upload
 
 
-@pytest.mark.usefixtures("mock_notebook_gcs_utils")
 def test_dataproc_existing_cluster_pyspark_with_pyfiles(
     existing_cluster_sql_action,
     pipeline,
     sample_dag,
+    mock_notebook_gcs_utils,
 ):
-    """Tests existing cluster pyspark task sets python_file_uris."""
+    """Tests existing cluster pyspark task sets python_file_uris and skips notebook upload."""
+    mock_get_path, mock_upload = mock_notebook_gcs_utils
     action = replace(
         existing_cluster_sql_action,
         name="existing_pyspark",
@@ -1965,6 +1968,91 @@ def test_dataproc_existing_cluster_pyspark_with_pyfiles(
     assert task.job["pyspark_job"]["python_file_uris"] == [
         "gs://bucket/dep1.py"
     ]
+    mock_get_path.assert_not_called()
+    mock_upload.assert_not_called()
+
+
+def test_dataproc_existing_cluster_notebook_uploads_wrapper(
+    existing_cluster_sql_action,
+    pipeline,
+    sample_dag,
+    mock_notebook_gcs_utils,
+    monkeypatch,
+):
+    """Tests existing cluster notebook task resolves and uploads wrapper script."""
+    monkeypatch.setenv("GCS_BUCKET", "composer-bucket")
+    mock_get_path, mock_upload = mock_notebook_gcs_utils
+    action = replace(
+        existing_cluster_sql_action,
+        name="existing_notebook",
+        type="notebook",
+        filename="gs://bucket/analysis.ipynb",
+        params=None,
+    )
+
+    task = dataproc_existing_cluster(action, pipeline, dag=sample_dag)
+
+    mock_get_path.assert_called_once()
+    mock_upload.assert_called_once_with("gs://fake/runner.py")
+    assert task.job["pyspark_job"]["main_python_file_uri"] == (
+        "gs://fake/runner.py"
+    )
+
+
+def test_create_batch_operator_skips_wrapper_upload_for_pyspark(
+    serverless_sql_action,
+    pipeline,
+    sample_dag,
+    mock_notebook_gcs_utils,
+):
+    """Tests serverless batch pyspark task does not upload notebook wrapper."""
+    mock_get_path, mock_upload = mock_notebook_gcs_utils
+    action = replace(
+        serverless_sql_action,
+        name="batch_pyspark",
+        type="pyspark",
+        filename="gs://bucket/job.py",
+        params=None,
+    )
+
+    task = create_dataproc_create_batch_operator_task(
+        action, pipeline, dag=sample_dag
+    )
+
+    mock_get_path.assert_not_called()
+    mock_upload.assert_not_called()
+    assert task.batch["pyspark_batch"]["main_python_file_uri"] == (
+        "gs://bucket/job.py"
+    )
+
+
+def test_create_batch_operator_uploads_wrapper_for_notebook(
+    serverless_sql_action,
+    pipeline,
+    sample_dag,
+    mock_notebook_gcs_utils,
+    monkeypatch,
+):
+    """Tests serverless batch notebook task resolves and uploads wrapper script."""
+    monkeypatch.setenv("GCS_BUCKET", "composer-bucket")
+    mock_get_path, mock_upload = mock_notebook_gcs_utils
+    action = replace(
+        serverless_sql_action,
+        name="batch_notebook",
+        type="notebook",
+        filename="gs://bucket/analysis.ipynb",
+        params=None,
+    )
+
+    task = create_dataproc_create_batch_operator_task(
+        action, pipeline, dag=sample_dag
+    )
+
+    mock_get_path.assert_called_once()
+    mock_upload.assert_called_once_with("gs://fake/runner.py")
+    assert task.batch["pyspark_batch"]["main_python_file_uri"] == (
+        "gs://fake/runner.py"
+    )
 
 
 @pytest.mark.parametrize(

@@ -1420,5 +1420,78 @@ def test_dynamic_bindings_bypass_format_checks_and_allow_has_guard(base_pipeline
     PipelineValidator.validate(base_pipeline)
 
 
+def _make_notebook_action(**kwargs):
+    from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipeline_pb2 import (
+        DataprocBatchResourceProfile,
+        DataprocServerlessBatchEngine,
+        NotebookAction,
+        NotebookEngine,
+    )
+
+    return Action(
+        notebook=NotebookAction(
+            name="notebook_step",
+            main_file_path="gs://example-bucket/analysis.ipynb",
+            engine=NotebookEngine(
+                dataproc_serverless=DataprocServerlessBatchEngine(
+                    location="us-central1",
+                    resource_profile=DataprocBatchResourceProfile(
+                        inline=DataprocBatchResourceProfile.InlineConfig()
+                    ),
+                )
+            ),
+            **kwargs,
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "output_uri_prefix",
+    [
+        "",
+        "gs://my-bucket",
+        "gs://my-bucket/",
+        "gs://my-bucket/notebooks/outputs",
+        "gs://my-bucket/notebooks/outputs/",
+    ],
+)
+def test_notebook_action_valid_output_uri_prefix_succeeds(
+    base_pipeline, output_uri_prefix
+):
+    """Tests optional NotebookAction.output_uri_prefix accepts empty or valid gs:// URIs."""
+    base_pipeline.actions.append(
+        _make_notebook_action(output_uri_prefix=output_uri_prefix)
+    )
+    PipelineValidator.validate(base_pipeline)
+
+
+@pytest.mark.parametrize(
+    "output_uri_prefix",
+    [
+        "gs://",
+        "gs:///",
+        "gs:////",
+        "gs:///outputs",
+        "gs:// my-bucket",
+        "gs://   ",
+        "https://storage.googleapis.com/bucket/out",
+        "/local/out",
+        "bucket/out",
+    ],
+)
+def test_notebook_action_invalid_output_uri_prefix_fails(
+    base_pipeline, output_uri_prefix
+):
+    """Tests NotebookAction.output_uri_prefix rejects non-GCS and bucketless URIs."""
+    base_pipeline.actions.append(
+        _make_notebook_action(output_uri_prefix=output_uri_prefix)
+    )
+    with pytest.raises(
+        ValueError,
+        match=r"Error for field 'actions\[2\]\.notebook\.output_uri_prefix': .*does not match regex pattern '\^gs://\[\^/\\s\]\+\(/\.\*\)\?\$'",
+    ):
+        PipelineValidator.validate(base_pipeline)
+
+
 if __name__ == "__main__":
     unittest.main()

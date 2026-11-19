@@ -104,6 +104,93 @@ class DataprocUtilsTest(unittest.TestCase):
             self.assertEqual(config["archive_uris"],
                              ["gs://bucket/archive.zip"])
 
+    def test_get_pyspark_batch_config_notebook_custom_output_uri_prefix(self):
+        """Tests batch config passes custom outputUriPrefix (trailing slashes stripped)."""
+        for raw_prefix, expected_arg in [
+            ("gs://custom-bucket/notebooks/out/", "gs://custom-bucket/notebooks/out"),
+            ("gs://custom-bucket/notebooks/out", "gs://custom-bucket/notebooks/out"),
+            ("gs://custom-bucket/", "gs://custom-bucket"),
+            ("gs://custom-bucket///", "gs://custom-bucket"),
+        ]:
+            with self.subTest(raw_prefix=raw_prefix):
+                action = type(
+                    "obj",
+                    (object,),
+                    {
+                        "type": "notebook",
+                        "filename": "gs://src-bucket/my_analysis.ipynb",
+                        "archives": [],
+                        "pyFiles": [],
+                        "params": None,
+                        "outputUriPrefix": raw_prefix,
+                    },
+                )
+                with patch.dict(os.environ, {"GCS_BUCKET": "composer-bucket"}):
+                    config = util.get_pyspark_batch_config(
+                        action, "gs://wrapper/run_notebook.py"
+                    )
+                    self.assertEqual(
+                        config["args"],
+                        [
+                            "gs://src-bucket/my_analysis.ipynb",
+                            expected_arg,
+                            "{{ run_id }}",
+                        ],
+                    )
+
+    def test_get_pyspark_batch_config_notebook_invalid_output_uri_prefix(self):
+        """Tests invalid, slash-only, or whitespace-bucket outputUriPrefix raises ValueError."""
+        for invalid_prefix in (
+            "gs://",
+            "gs:///",
+            "gs:///outputs",
+            "gs://   ",
+            "gs://   /outputs",
+            "gs://my bucket/outputs",
+            "gs://{{ params.bucket }}/out/",
+            "{{ params.output_uri }}",
+            "https://storage.googleapis.com/bucket/out",
+        ):
+            with self.subTest(invalid_prefix=invalid_prefix):
+                action = type(
+                    "obj",
+                    (object,),
+                    {
+                        "type": "notebook",
+                        "filename": "gs://src-bucket/my_analysis.ipynb",
+                        "archives": [],
+                        "pyFiles": [],
+                        "params": None,
+                        "outputUriPrefix": invalid_prefix,
+                    },
+                )
+                with self.assertRaisesRegex(
+                    ValueError, "Invalid GCS output URI prefix"
+                ):
+                    util.get_pyspark_batch_config(
+                        action, "gs://wrapper/run_notebook.py"
+                    )
+
+    def test_get_pyspark_batch_config_notebook_missing_wrapper_uri_raises(self):
+        """Tests notebook action without wrapper_uri raises ValueError."""
+        action = type(
+            "obj",
+            (object,),
+            {
+                "type": "notebook",
+                "filename": "gs://src-bucket/my_analysis.ipynb",
+                "archives": [],
+                "pyFiles": [],
+                "params": None,
+            },
+        )
+        for wrapper_uri in (None, ""):
+            with self.subTest(wrapper_uri=wrapper_uri):
+                with self.assertRaisesRegex(
+                    ValueError, "wrapper_uri must be provided"
+                ):
+                    util.get_pyspark_batch_config(action, wrapper_uri)
+
     def test_get_pyspark_batch_config_script(self):
         """Tests batch config generation for a standard pyspark script action."""
         action = type(

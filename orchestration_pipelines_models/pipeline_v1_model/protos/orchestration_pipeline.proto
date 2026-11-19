@@ -422,6 +422,11 @@ message NotebookAction {
   repeated string py_files = 13;
   map<string, string> dynamic_bindings = 14;
   string run_if = 15 [(pipeline_models.validation.is_parameterizable) = true];
+  // Optional GCS URI prefix (e.g., "gs://my-bucket/notebooks/outputs") for
+  // archiving executed notebooks.
+  string output_uri_prefix = 16 [
+    (pipeline_models.validation.regex) = "^gs://[^/\\s]+(/.*)?$"
+  ];
 }
 
 message NotebookEngine {

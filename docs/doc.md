@@ -211,6 +211,9 @@ Executes a Jupyter Notebook (`.ipynb`) on Dataproc.
   - `labels` (`map<string, string>`): Labels to apply to the Notebook.
   - `py_files` (`repeated string`): Additional Python files to put on
     PYTHONPATH.
+  - `output_uri_prefix` (string, optional): GCS URI prefix (`gs://...`) for
+    archiving executed `.ipynb` files (defaults to
+    `gs://<GCS_BUCKET>/composer_orchestration_pipelines_resources/`).
 - **Examples**:
   - [pipeline-dataproc-create-batch.yml (Serverless)](../examples/pipeline-dataproc-create-batch.yml)
 

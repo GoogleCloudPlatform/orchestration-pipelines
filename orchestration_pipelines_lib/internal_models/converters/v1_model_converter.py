@@ -701,6 +701,8 @@ class ConverterV1ToInternal:
             for uri in getattr(action, "archive_uris", [])
         ]
 
+        output_uri_prefix = getattr(action, "output_uri_prefix", "") or None
+
         return internal_actions.DataprocOperatorActionModel(
             **self._base_action_kwargs(action, defaults),
             type=action_type,
@@ -713,6 +715,7 @@ class ConverterV1ToInternal:
             impersonationChain=impersonation_chain,
             archives=archives,
             depsBucket=action.staging_bucket,
+            outputUriPrefix=output_uri_prefix,
             engine=internal_engine,
             config=internal_config,
         )

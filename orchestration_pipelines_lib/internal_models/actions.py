@@ -176,6 +176,7 @@ class DataprocOperatorActionModel(ActionBaseModel):
     labels: dict[str, str] | None = None
     params: dict[str, str] | None = None
     impersonationChain: str | list[str] | None = None
+    outputUriPrefix: str | None = None
     config: (
         DataprocGceExistingClusterConfigurationModel
         | DataprocEphemeralConfigurationModel

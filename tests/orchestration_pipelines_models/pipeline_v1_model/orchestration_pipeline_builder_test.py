@@ -592,6 +592,7 @@ class TestOrchestrationPipelineBuilder(unittest.TestCase):
                         "execution_timeout": "45m",
                         "main_file_path": "gs://example-bucket/notebookWithArchivesCheck.ipynb",
                         "staging_bucket": "example-bucket",
+                        "outputUriPrefix": "gs://custom-bucket/notebooks/outputs/",
                         "archive_uris": ["gs://example-bucket/custom_venv.tar.gz"],
                         "engine": {
                             "dataproc_serverless": {
@@ -639,6 +640,10 @@ class TestOrchestrationPipelineBuilder(unittest.TestCase):
             ("gs://example-bucket/notebookWithArchivesCheck.ipynb"),
         )
         self.assertEqual(notebook_action.staging_bucket, "example-bucket")
+        self.assertEqual(
+            notebook_action.output_uri_prefix,
+            "gs://custom-bucket/notebooks/outputs/",
+        )
         self.assertListEqual(list(notebook_action.archive_uris),
                              ["gs://example-bucket/custom_venv.tar.gz"])
         self.assertTrue(notebook_action.engine.HasField("dataproc_serverless"))

@@ -14,47 +14,76 @@
 #
 """Module with various file util methods."""
 
-import importlib
+import functools
+import hashlib
 import importlib.resources
 import os
+import time
 
-BLOB_NAME_CLUSTER = "data/run_notebook.py"
+BLOB_NAME_PREFIX = "data/run_notebook"
+_UPLOAD_CACHE_TTL_SECONDS = 300.0
+_UPLOADED_RUN_NOTEBOOK_PATHS: dict[str, float] = {}
+
+
+@functools.lru_cache(maxsize=1)
+def _get_run_notebook_content_hash() -> str:
+    """Returns a short SHA-256 hex digest of the bundled run_notebook.py."""
+    files = importlib.resources.files("orchestration_pipelines_lib")
+    notebook_bytes = files.joinpath("run_notebook.py").read_bytes()
+    return hashlib.sha256(notebook_bytes).hexdigest()[:12]
 
 
 def upload_run_notebook_if_needed(gcs_path: str):
-    """Checks buckets for existence of run_notebook.py and uploads if missing.
+    """Uploads run_notebook.py to a content-addressed GCS path if missing.
+
+    Uses process-level TTL memoization to avoid redundant GCS RPCs across tasks
+    within the same process while self-healing if the blob is deleted, and
+    uploads with ``if_generation_match=0`` so concurrent writers never
+    overwrite the object or hit per-object write throttling.
 
     Args:
         gcs_path: The GCS path where the notebook should be uploaded.
     """
-    path_parts = gcs_path.replace("gs://", "").split("/", 1)
+    now = time.monotonic()
+    cached_at = _UPLOADED_RUN_NOTEBOOK_PATHS.get(gcs_path)
+    if cached_at is not None and (now - cached_at) < _UPLOAD_CACHE_TTL_SECONDS:
+        return
+
+    path_parts = gcs_path.removeprefix("gs://").split("/", 1)
     bucket_name = path_parts[0]
     blob_name = path_parts[1]
 
+    from google.api_core.exceptions import PreconditionFailed
     from google.cloud import storage
 
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(blob_name)
+
     if blob.exists():
+        _UPLOADED_RUN_NOTEBOOK_PATHS[gcs_path] = time.monotonic()
         print(f"File already exists at {gcs_path}.")
         return
 
-    # File does not exist, so we need to upload it.
     try:
         # Using importlib.resources.files is the modern approach (Python 3.9+)
         files = importlib.resources.files("orchestration_pipelines_lib")
         notebook_path = files.joinpath("run_notebook.py")
         with importlib.resources.as_file(notebook_path) as local_path:
-            blob.upload_from_filename(str(local_path))
-            print(f"File {local_path} uploaded to {gcs_path}.")
-
+            try:
+                blob.upload_from_filename(
+                    str(local_path), if_generation_match=0
+                )
+                print(f"File {local_path} uploaded to {gcs_path}.")
+            except PreconditionFailed:
+                print(f"File already uploaded concurrently to {gcs_path}.")
+            _UPLOADED_RUN_NOTEBOOK_PATHS[gcs_path] = time.monotonic()
     except (ImportError, AttributeError):
         print(f"Exception while uploading to {gcs_path}.")
 
 
 def get_run_notebook_gcs_path() -> str:
-    """Returns the GCS path for the run_notebook.py script.
+    """Returns the content-addressed GCS path for the run_notebook.py script.
 
     Returns:
         The full GCS path to the notebook wrapper script.
@@ -68,9 +97,8 @@ def get_run_notebook_gcs_path() -> str:
             "GCS_BUCKET environment variable not set. "
             "This is expected to be set in a Cloud Composer environment."
         )
-    gcs_path = f"gs://{bucket_name}/{BLOB_NAME_CLUSTER}"
-
-    return gcs_path
+    content_hash = _get_run_notebook_content_hash()
+    return f"gs://{bucket_name}/{BLOB_NAME_PREFIX}_{content_hash}.py"
 
 
 def get_gcs_file_content(gcs_path: str) -> str:

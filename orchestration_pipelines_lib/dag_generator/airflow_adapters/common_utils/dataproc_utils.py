@@ -68,23 +68,60 @@ def sanitized(
     return session_template
 
 
+def _normalize_output_uri_prefix(prefix: str) -> str:
+    """Strips trailing slashes from a GCS URI prefix without touching 'gs://'.
+
+    Args:
+        prefix: Raw output URI prefix starting with ``gs://``.
+
+    Returns:
+        The normalized prefix without trailing slashes.
+
+    Raises:
+        ValueError: If ``prefix`` does not start with ``gs://`` or has an
+            empty or whitespace-containing bucket segment (e.g., ``"gs://"``,
+            ``"gs:///"``, or ``"gs://   /outputs"``).
+    """
+    if not prefix.startswith("gs://"):
+        raise ValueError(f"Invalid GCS output URI prefix: {prefix!r}")
+    remainder = prefix.removeprefix("gs://").rstrip("/")
+    bucket = remainder.split("/", 1)[0]
+    if not bucket or any(ch.isspace() for ch in bucket):
+        raise ValueError(f"Invalid GCS output URI prefix: {prefix!r}")
+    return f"gs://{remainder}"
+
+
 def get_pyspark_batch_config(
-    action: Dict[str, Any], wrapper_uri: str
+    action: Dict[str, Any], wrapper_uri: str | None = None
 ) -> Dict[str, Any]:
     """Returns the pyspark_batch configuration.
 
     Args:
         action: A dictionary containing the action's configuration.
-        wrapper_uri: The GCS URI for the notebook wrapper script.
+        wrapper_uri: The GCS URI for the notebook wrapper script (required for
+            notebook actions).
 
     Returns:
         A dictionary representing the PySpark batch configuration.
+
+    Raises:
+        ValueError: If ``action.type == "notebook"`` and ``wrapper_uri`` is
+            missing or empty, or if ``outputUriPrefix`` is invalid.
     """
     pyspark_job = {}
 
     if action.type == "notebook":
-        bucket_name = os.environ.get("GCS_BUCKET")
-        args = [action.filename, bucket_name, "{{ run_id }}"]
+        if not wrapper_uri:
+            raise ValueError(
+                "wrapper_uri must be provided for notebook actions."
+            )
+        output_uri_prefix = getattr(action, "outputUriPrefix", None)
+        output_target = (
+            _normalize_output_uri_prefix(output_uri_prefix)
+            if output_uri_prefix
+            else os.environ.get("GCS_BUCKET")
+        )
+        args = [action.filename, output_target, "{{ run_id }}"]
         if action.params:
             args.append(json.dumps(action.params))
 

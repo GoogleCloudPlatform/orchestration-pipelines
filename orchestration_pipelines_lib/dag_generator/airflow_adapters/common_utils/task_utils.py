@@ -543,6 +543,17 @@ def get_dataproc_submit_job_inline_sql_operator_class():
     return _dataproc_submit_job_inline_sql_operator_class
 
 
+def _get_notebook_wrapper_uri(
+    action: DataprocOperatorActionModel,
+) -> str | None:
+    """Returns and ensures upload of the wrapper URI for notebook actions."""
+    if action.type != "notebook":
+        return None
+    wrapper_uri = gcs_utils.get_run_notebook_gcs_path()
+    gcs_utils.upload_run_notebook_if_needed(wrapper_uri)
+    return wrapper_uri
+
+
 def create_dataproc_create_batch_operator_task(
     action: DataprocOperatorActionModel, pipeline: PipelineModel, dag: DAG
 ):
@@ -566,8 +577,7 @@ def create_dataproc_create_batch_operator_task(
     with wrap_task_creation_error(action.name):
         job_specific_config = {}
         if action.type in ("pyspark", "notebook"):
-            wrapper_uri = gcs_utils.get_run_notebook_gcs_path()
-            gcs_utils.upload_run_notebook_if_needed(wrapper_uri)
+            wrapper_uri = _get_notebook_wrapper_uri(action)
             job_specific_config["pyspark_batch"] = (
                 dataproc_utils.get_pyspark_batch_config(
                     action,
@@ -826,8 +836,7 @@ def dataproc_ephemeral_task(
                 # ephemeral clusters (since ephemeral Dataproc still relies on
                 # DataprocSubmitJobOperator, which uses pyspark_job for
                 # notebooks via the old wrapper method).
-                wrapper_uri = gcs_utils.get_run_notebook_gcs_path()
-                gcs_utils.upload_run_notebook_if_needed(wrapper_uri)
+                wrapper_uri = _get_notebook_wrapper_uri(action)
                 pyspark_job = dataproc_utils.get_pyspark_batch_config(
                     action, wrapper_uri
                 )
@@ -925,8 +934,7 @@ def dataproc_existing_cluster(
         else:
             # This block handles both pyspark and notebook actions for
             # existing clusters
-            wrapper_uri = gcs_utils.get_run_notebook_gcs_path()
-            gcs_utils.upload_run_notebook_if_needed(wrapper_uri)
+            wrapper_uri = _get_notebook_wrapper_uri(action)
             job["pyspark_job"] = dataproc_utils.get_pyspark_batch_config(
                 action, wrapper_uri
             )
