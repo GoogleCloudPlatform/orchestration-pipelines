@@ -17,11 +17,17 @@
 import re
 from datetime import timedelta
 
+from orchestration_pipelines_models.utils.time_utils import (
+    ISO8601_DURATION_RE,
+    iso_match_to_timedelta,
+)
+
 
 def duration_to_timedelta(value: str) -> timedelta:
     """Parses a duration string into a timedelta object.
 
-    Supports formats like '10m', '1.5h', and '1h 30m'. Supported units are
+    Supports ISO 8601 durations (e.g., 'PT30M', 'PT1H30M', 'P1DT2H', 'P2W')
+    and shorthand formats like '10m', '1.5h', and '1h 30m'. Supported units are
     's' (seconds), 'm' (minutes), 'h' (hours), 'd' (days), and 'w' (weeks).
 
     Args:
@@ -30,17 +36,28 @@ def duration_to_timedelta(value: str) -> timedelta:
     Returns:
         A timedelta object representing the parsed duration.
     """
+    stripped = value.strip()
+    is_negative = stripped.startswith("-")
+    unsigned = stripped[1:] if is_negative else stripped
+
+    if unsigned.lower().startswith("p"):
+        iso_match = ISO8601_DURATION_RE.match(unsigned)
+        if not iso_match:
+            return timedelta(0)
+        delta = iso_match_to_timedelta(iso_match)
+        return -delta if is_negative else delta
+
     multipliers = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
 
-    value = value.strip().lower()
+    normalized = stripped.lower()
 
-    pairs = re.findall(r"(\d*\.?\d+)([smhdw])", value)
+    pairs = re.findall(r"(\d*\.?\d+)([smhdw])", normalized)
 
     total_seconds = 0.0
     for amount_str, unit in pairs:
         total_seconds += float(amount_str) * multipliers[unit]
 
-    if value.startswith("-"):
+    if is_negative:
         total_seconds = -total_seconds
 
     return timedelta(seconds=total_seconds)

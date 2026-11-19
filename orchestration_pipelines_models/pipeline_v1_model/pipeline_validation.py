@@ -16,7 +16,6 @@
 import re
 import warnings
 from collections.abc import Collection, MutableMapping
-from datetime import datetime
 from graphlib import CycleError, TopologicalSorter
 
 from google.protobuf.descriptor import Descriptor, FieldDescriptor
@@ -434,9 +433,13 @@ class PipelineValidator:
         if field.cpp_type == FieldDescriptor.CPPTYPE_STRING and value:
             try:
                 cls._check_quote_issues(value)
-                # Replacing 'Z' with '+00:00' for broader Python version
-                # compatibility with fromisoformat().
-                datetime.fromisoformat(value.replace("Z", "+00:00"))
+                allow_timezone = (
+                    field.containing_type
+                    != orchestration_pipeline_pb2.ScheduleTrigger.DESCRIPTOR
+                )
+                time_utils.check_iso8601_timestamp(
+                    value, allow_timezone=allow_timezone
+                )
             except ValueError as e:
                 raise ValueError(f"Error for field '{path}': {e}") from e
 

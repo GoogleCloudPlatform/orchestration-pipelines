@@ -102,8 +102,67 @@ class UtilTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     util.check_timezone(tz)
 
+    def test_check_iso8601_timestamp_valid(self):
+        """Tests valid ISO 8601 timestamps with and without timezone."""
+        naive_timestamps = [
+            "2025-10-01T00:00:00",
+            "2026-01-01T12:30:45.123456",
+            "2026-01-01",
+        ]
+        aware_timestamps = [
+            "2025-10-01T00:00:00Z",
+            "2025-10-01T00:00:00+00:00",
+            "2025-10-01T00:00:00-05:00",
+            "2025-10-01T00:00:00+0200",
+        ]
+
+        for ts in naive_timestamps:
+            with self.subTest(ts=ts, allow_timezone=True):
+                util.check_iso8601_timestamp(ts, allow_timezone=True)
+            with self.subTest(ts=ts, allow_timezone=False):
+                util.check_iso8601_timestamp(ts, allow_timezone=False)
+
+        for ts in aware_timestamps:
+            with self.subTest(ts=ts, allow_timezone=True):
+                util.check_iso8601_timestamp(ts, allow_timezone=True)
+
+    def test_check_iso8601_timestamp_rejects_timezone_when_disallowed(self):
+        """Tests timezone suffixes/offsets are rejected when allow_timezone=False."""
+        aware_timestamps = [
+            "2025-10-01T00:00:00Z",
+            "2025-10-01T00:00:00+00:00",
+            "2025-10-01T00:00:00-05:00",
+            "2025-10-01T00:00:00+0200",
+        ]
+        for ts in aware_timestamps:
+            with self.subTest(ts=ts):
+                with self.assertRaisesRegex(
+                    ValueError, "must not include a timezone suffix or offset"
+                ):
+                    util.check_iso8601_timestamp(ts, allow_timezone=False)
+
+    def test_check_iso8601_timestamp_invalid(self):
+        """Tests invalid ISO 8601 timestamp strings raise ValueError."""
+        invalid_timestamps = [
+            "2025/01/01",
+            "2025-10-01T00:00:00z",
+            "not-a-timestamp",
+            "",
+        ]
+        for ts in invalid_timestamps:
+            with self.subTest(ts=ts):
+                with self.assertRaises(ValueError):
+                    util.check_iso8601_timestamp(ts)
+
+    def test_check_iso8601_timestamp_type_error(self):
+        """Tests non-string timestamp inputs raise TypeError."""
+        for val in [123, None, []]:
+            with self.subTest(val=val):
+                with self.assertRaises(TypeError):
+                    util.check_iso8601_timestamp(val)
+
     def test_check_duration_valid(self):
-        """Tests that check duration valid."""
+        """Tests that check duration accepts shorthand and ISO 8601 durations."""
         valid_durations = [
             '10s',
             '5m',
@@ -115,7 +174,22 @@ class UtilTest(unittest.TestCase):
             ' 10m ',
             '1h 30m ',  # Leading/trailing spaces
             '1H 30M',
-            '10S'  # Case sensitivity
+            '10S',  # Case sensitivity
+            'PT30M',
+            'PT1H',
+            'PT45S',
+            'PT1H30M',
+            'PT1H30M15S',
+            'P1D',
+            'P1DT2H30M',
+            'P1DT2H30M15S',
+            'P2W',
+            'PT0.5H',
+            'PT1H30.5M',
+            'PT30.5S',
+            'PT0.000001S',
+            'pt30m',
+            ' PT30M ',
         ]
 
         for dur in valid_durations:
@@ -123,7 +197,7 @@ class UtilTest(unittest.TestCase):
                 util.check_duration(dur)
 
     def test_check_duration_invalid(self):
-        """Tests that check duration invalid."""
+        """Tests that check duration rejects invalid shorthand and ISO 8601 durations."""
         invalid_durations = {
             'invalid unit': '10x',
             'missing unit': '10',
@@ -134,6 +208,26 @@ class UtilTest(unittest.TestCase):
             'only spaces': '   ',
             'zero seconds': '0s',
             'zero combined': '0h 0m',
+            'iso bare P': 'P',
+            'iso bare PT': 'PT',
+            'iso trailing T': 'P1DT',
+            'iso months unsupported': 'P1M',
+            'iso years unsupported': 'P1Y',
+            'iso year month day': 'P1Y2M3D',
+            'iso zero seconds': 'PT0S',
+            'iso zero minutes': 'PT0M',
+            'iso zero days': 'P0D',
+            'iso zero weeks': 'P0W',
+            'iso zero fractional': 'PT0.0S',
+            'iso sub-microsecond rounds to zero': 'PT0.0000001S',
+            'iso overflow weeks': 'P200000000W',
+            'iso overflow days': 'P1000000000D',
+            'iso negative': '-PT30M',
+            'iso wrong order': 'PT30M1H',
+            'iso weeks with days': 'P1W2D',
+            'iso fractional non-final unit': 'PT1.5H30M',
+            'iso internal space': 'PT 30M',
+            'iso invalid unit': 'PT30X',
         }
 
         for name, dur in invalid_durations.items():

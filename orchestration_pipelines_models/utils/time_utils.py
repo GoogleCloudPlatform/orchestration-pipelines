@@ -15,8 +15,25 @@
 """Utility functions for orchestration pipelines models."""
 
 import re
+from datetime import datetime, timedelta
 
 import pytz
+
+ISO8601_DURATION_RE = re.compile(
+    r"^P(?:"
+    r"(?P<weeks>\d+(?:\.\d+)?)W"
+    r"|"
+    r"(?=\d|T)"
+    r"(?:(?P<days>\d+(?:\.\d+)?)D)?"
+    r"(?:T(?=\d)"
+    r"(?:(?P<hours>\d+(?:\.\d+)?)H)?"
+    r"(?:(?P<minutes>\d+(?:\.\d+)?)M)?"
+    r"(?:(?P<seconds>\d+(?:\.\d+)?)S)?"
+    r")?"
+    r")$",
+    re.IGNORECASE,
+)
+_SHORTHAND_DURATION_RE = re.compile(r"^(\s*\d+[smhdw]\s*)+$")
 
 _MONTHS = [
     "JAN",
@@ -133,24 +150,92 @@ def check_timezone(value):
         raise ValueError(f"'{value}' is not a valid timezone") from e
 
 
-def check_duration(value):
-    """Validates that a string is a valid positive duration (e.g., '30s', '5m').
+def check_iso8601_timestamp(value: str, *, allow_timezone: bool = True) -> None:
+    """Validates that a string is a valid ISO 8601 timestamp.
 
-    Allowed units: s (seconds), m (minutes), h (hours), d (days), w (weeks).
+    Args:
+        value: The timestamp string to validate.
+        allow_timezone: Whether timezone suffixes or offsets (e.g., 'Z',
+            '+00:00') are allowed. Set to False for fields paired with a
+            separate timezone field (e.g., ScheduleTrigger start_time/end_time).
+
+    Raises:
+        TypeError: If value is not a string.
+        ValueError: If value is not a valid ISO 8601 timestamp or contains a
+            timezone suffix/offset when allow_timezone is False.
     """
-    pattern = r"^(\s*\d+[smhdw]\s*)+$"
-
     if not isinstance(value, str):
         raise TypeError(
-            "Duration must be a string (e.g., '10m'), "
+            "Timestamp must be a string (e.g., '2026-01-01T00:00:00'), "
             f"got {type(value).__name__}."
         )
 
-    normalized = value.strip().lower()
-    if not re.match(pattern, normalized):
+    dt = datetime.fromisoformat(value)
+    if not allow_timezone and dt.tzinfo is not None:
+        raise ValueError(
+            f"Timestamp '{value}' must not include a timezone suffix or "
+            "offset (e.g., 'Z' or '+00:00'); use the 'timezone' field instead "
+            "(e.g., '2025-10-01T00:00:00')."
+        )
+
+
+def iso_match_to_timedelta(iso_match: re.Match[str]) -> timedelta:
+    """Converts an ISO8601_DURATION_RE match into a timedelta."""
+    groups = iso_match.groupdict()
+    return timedelta(
+        weeks=float(groups["weeks"] or 0),
+        days=float(groups["days"] or 0),
+        hours=float(groups["hours"] or 0),
+        minutes=float(groups["minutes"] or 0),
+        seconds=float(groups["seconds"] or 0),
+    )
+
+
+def check_duration(value):
+    """Validates that a string is a valid positive duration.
+
+    Supports ISO 8601 durations (e.g., 'PT30M', 'PT1H30M', 'P1D', 'P2W')
+    and shorthand durations (e.g., '30s', '5m', '1h 30m').
+    Allowed units: s (seconds), m (minutes), h (hours), d (days), w (weeks).
+    """
+    if not isinstance(value, str):
+        raise TypeError(
+            "Duration must be a string (e.g., 'PT10M' or '10m'), "
+            f"got {type(value).__name__}."
+        )
+
+    stripped = value.strip()
+    iso_match = ISO8601_DURATION_RE.match(stripped)
+    if iso_match:
+        present_values = [
+            v for v in iso_match.groupdict().values() if v is not None
+        ]
+        if any("." in v for v in present_values[:-1]):
+            raise ValueError(
+                f"Invalid duration format: '{value}'. "
+                "In ISO 8601 durations, only the smallest unit may contain "
+                "a fractional value."
+            )
+        try:
+            delta = iso_match_to_timedelta(iso_match)
+        except OverflowError as e:
+            raise ValueError(
+                f"Invalid duration: '{value}'. "
+                "Duration is too large to represent as a timedelta."
+            ) from e
+        if delta <= timedelta(0):
+            raise ValueError(
+                f"Invalid duration: '{value}'. "
+                "Duration must be strictly positive (> 0)."
+            )
+        return
+
+    normalized = stripped.lower()
+    if not _SHORTHAND_DURATION_RE.match(normalized):
         raise ValueError(
             f"Invalid duration format: '{value}'. "
-            "Expected format: <number><unit> (e.g., '1h 30m', '30s'). "
+            "Expected an ISO 8601 duration (e.g., 'PT30M', 'PT1H30M', 'P1D') "
+            "or shorthand <number><unit> (e.g., '1h 30m', '30s'). "
             "Valid units are: s, m, h, d, w."
         )
 

@@ -64,6 +64,33 @@ class TestDurationUtils(unittest.TestCase):
                 self.assertEqual(duration_to_timedelta(val),
                                  timedelta(seconds=expected))
 
+    def test_iso8601_durations(self):
+        """Test ISO 8601 duration string conversions."""
+        cases = [
+            ("PT30M", 1800.0),
+            ("PT1H", 3600.0),
+            ("PT45S", 45.0),
+            ("PT1H30M", 5400.0),
+            ("PT1H30M15S", 5415.0),
+            ("P1D", 86400.0),
+            ("P1DT2H30M", 95400.0),
+            ("P1DT2H30M15S", 95415.0),
+            ("P2W", 1209600.0),
+            ("PT0.5H", 1800.0),
+            ("PT30.5S", 30.5),
+            ("pt45s", 45.0),
+            (" PT30M ", 1800.0),
+            ("-PT30M", -1800.0),
+            ("-P1DT2H", -93600.0),
+        ]
+
+        for val, expected in cases:
+            with self.subTest(val=val):
+                self.assertEqual(
+                    duration_to_timedelta(val),
+                    timedelta(seconds=expected),
+                )
+
     def test_edge_cases(self):
         """Test unusual or empty inputs."""
         cases = [
@@ -74,6 +101,11 @@ class TestDurationUtils(unittest.TestCase):
             ("-1m", -60.0),
             ("-1h5m30s", -3930),
             (" -2m15s", -135),
+            ("P", 0.0),  # Invalid bare ISO prefix
+            ("PT", 0.0),  # Invalid ISO time prefix without units
+            ("P1M", 0.0),  # Unsupported ISO month must not parse as 1 minute
+            ("P1Y", 0.0),  # Unsupported ISO year
+            ("-P1M", 0.0),  # Negative unsupported ISO month
         ]
 
         for val, expected in cases:

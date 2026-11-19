@@ -82,9 +82,12 @@ A pipeline can be triggered by external events or schedules.
   types. Currently supports `ScheduleTrigger`.
 - **`ScheduleTrigger`**:
   - `interval` (string, **Required**): Cron expression defining the schedule.
-  - `start_time` (string, **Required**): ISO 8601 timestamp when the schedule
-    starts.
-  - `end_time` (string): ISO 8601 timestamp when the schedule ends.
+  - `start_time` (string, **Required**): Naive ISO 8601 timestamp without a
+    timezone suffix or offset (e.g., `2026-01-01T00:00:00`); use `timezone` to
+    specify the timezone.
+  - `end_time` (string): Naive ISO 8601 timestamp without a timezone suffix or
+    offset (e.g., `2026-12-31T23:59:59`); use `timezone` to specify the
+    timezone.
   - `catchup` (bool): If true, backfills missed runs. Default is `false`.
   - `timezone` (string): IANA Timezone (e.g., `America/New_York`). Defaults to
     `UTC`.
@@ -455,9 +458,10 @@ The framework enforces strict validation using custom Proto annotations.
   value.
 - `min_len` / `max_len` (uint32): Min/Max character length for strings.
 - `is_cron_expression` (bool): String must be a valid cron schedule.
-- `is_iso8601_timestamp` (bool): String must be an ISO 8601 timestamp.
+- `is_iso8601_timestamp` (bool): String must be an ISO 8601 timestamp (naive
+  timestamp without `Z` or UTC offset on `ScheduleTrigger` fields).
 - `is_iso8601_duration` (bool): String must be an ISO 8601 duration (e.g.,
-  `PT1H`).
+  `PT30M`, `PT1H`) or shorthand duration (e.g., `30m`, `1h 30m`).
 - `is_iana_timezone` (bool): String must be a valid IANA timezone (e.g., `UTC`).
 - `map_key_regex` (string): Map key must match the regex pattern.
 - `map_value_regex` (string): Map value must match the regex pattern.

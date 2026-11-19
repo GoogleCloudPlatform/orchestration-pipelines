@@ -133,8 +133,8 @@ class TestConverterV1ToInternal(unittest.TestCase):
             triggers=[
                 v1_protos.Trigger(schedule=v1_protos.ScheduleTrigger(
                     interval="0 0 * * *",
-                    start_time="2023-01-01T00:00:00Z",
-                    end_time="2024-01-01T00:00:00Z",
+                    start_time="2023-01-01T00:00:00",
+                    end_time="2024-01-01T00:00:00",
                     catchup=False,
                     timezone="UTC",
                 ))
@@ -208,8 +208,8 @@ class TestConverterV1ToInternal(unittest.TestCase):
         """Tests conversion of trigger settings."""
         v1_trigger = v1_protos.Trigger(schedule=v1_protos.ScheduleTrigger(
             interval="* * * * *",
-            start_time="2023-01-01T00:00:00Z",
-            end_time="2024-01-01T00:00:00Z",
+            start_time="2023-01-01T00:00:00",
+            end_time="2024-01-01T00:00:00",
             catchup=True,
             timezone="America/New_York",
         ))

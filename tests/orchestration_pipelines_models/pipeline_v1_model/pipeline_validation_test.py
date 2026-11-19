@@ -39,7 +39,9 @@ from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipel
     AgentPlatformCreateAndRunCustomJob,
     AgentPlatformModelUpload,
     AIAction,
+    BigQueryDtsSpec,
     BigQueryEngine,
+    DataIngestionAction,
     Defaults,
     ExecutionConfig,
     ExponentialBackoffStrategy,
@@ -158,7 +160,7 @@ class TestPipelineValidator(unittest.TestCase):
     def test_is_cron_expression_fails(self):
         """Tests failure for an invalid cron expression string."""
         trigger = Trigger(schedule=ScheduleTrigger(
-            interval="not a cron", start_time="2025-01-01T00:00:00Z"))
+            interval="not a cron", start_time="2025-01-01T00:00:00"))
         self.pipeline.triggers.extend([trigger])
         with self.assertRaisesRegex(
                 ValueError,
@@ -178,6 +180,96 @@ class TestPipelineValidator(unittest.TestCase):
              r"Invalid isoformat string: '2025/01/01'"),
         ):
             PipelineValidator.validate(self.pipeline)
+
+    def test_schedule_trigger_start_time_rejects_timezone_suffix(self):
+        """Tests ScheduleTrigger.start_time rejects trailing 'Z' and UTC offsets."""
+        for bad_start_time in (
+            "2025-01-01T00:00:00Z",
+            "2025-01-01T00:00:00+00:00",
+            "2025-01-01T00:00:00-05:00",
+        ):
+            with self.subTest(start_time=bad_start_time):
+                self.pipeline.ClearField("triggers")
+                trigger = Trigger(
+                    schedule=ScheduleTrigger(
+                        interval="* * * * *",
+                        start_time=bad_start_time,
+                        timezone="UTC",
+                    )
+                )
+                self.pipeline.triggers.extend([trigger])
+                with self.assertRaisesRegex(
+                    ValueError,
+                    r"Error for field 'triggers\[0\].schedule.start_time': "
+                    r".*must not include a timezone suffix or offset",
+                ):
+                    PipelineValidator.validate(self.pipeline)
+
+    def test_schedule_trigger_end_time_rejects_timezone_suffix(self):
+        """Tests ScheduleTrigger.end_time rejects trailing 'Z' and UTC offsets."""
+        for bad_end_time in (
+            "2026-01-01T00:00:00Z",
+            "2026-01-01T00:00:00+00:00",
+        ):
+            with self.subTest(end_time=bad_end_time):
+                self.pipeline.ClearField("triggers")
+                trigger = Trigger(
+                    schedule=ScheduleTrigger(
+                        interval="* * * * *",
+                        start_time="2025-01-01T00:00:00",
+                        end_time=bad_end_time,
+                        timezone="UTC",
+                    )
+                )
+                self.pipeline.triggers.extend([trigger])
+                with self.assertRaisesRegex(
+                    ValueError,
+                    r"Error for field 'triggers\[0\].schedule.end_time': "
+                    r".*must not include a timezone suffix or offset",
+                ):
+                    PipelineValidator.validate(self.pipeline)
+
+    def test_schedule_trigger_naive_timestamps_succeed(self):
+        """Tests ScheduleTrigger with naive start_time and end_time passes."""
+        trigger = Trigger(
+            schedule=ScheduleTrigger(
+                interval="0 0 * * *",
+                start_time="2025-10-01T00:00:00",
+                end_time="2026-10-01T00:00:00",
+                timezone="America/New_York",
+            )
+        )
+        self.pipeline.triggers.extend([trigger])
+        PipelineValidator.validate(self.pipeline)
+
+    def test_bigquery_dts_timestamps_allow_z_suffix(self):
+        """Tests BigQueryDtsSpec timestamps continue accepting trailing 'Z'."""
+        self.pipeline.actions.extend(
+            [
+                Action(
+                    data_ingestion=DataIngestionAction(
+                        name="dts-range-action",
+                        bigquery_dts=BigQueryDtsSpec(
+                            transfer_config_id="cfg-1",
+                            requested_time_range=BigQueryDtsSpec.TimeRange(
+                                start_time="2026-06-23T00:00:00Z",
+                                end_time="2026-06-23T01:00:00Z",
+                            ),
+                        ),
+                    )
+                ),
+                Action(
+                    data_ingestion=DataIngestionAction(
+                        name="dts-run-action",
+                        bigquery_dts=BigQueryDtsSpec(
+                            transfer_config_id="cfg-2",
+                            requested_run_time="2026-06-23T00:00:00Z",
+                        ),
+                    )
+                ),
+            ]
+        )
+        PipelineValidator.validate(self.pipeline)
 
     def test_is_iso8601_timestamp_start_time_trailing_quotes(self):
         """Tests descriptive error when start_time has mismatched trailing quotes."""
@@ -211,7 +303,7 @@ class TestPipelineValidator(unittest.TestCase):
     def test_is_cron_expression_trailing_quote(self):
         """Tests descriptive error when cron interval has a mismatched trailing quote."""
         trigger = Trigger(schedule=ScheduleTrigger(
-            interval='* * * * *"', start_time="2025-01-01T00:00:00Z"
+            interval='* * * * *"', start_time="2025-01-01T00:00:00"
         ))
         self.pipeline.triggers.extend([trigger])
         with self.assertRaisesRegex(
@@ -235,7 +327,7 @@ class TestPipelineValidator(unittest.TestCase):
         """Tests descriptive error when timezone has a mismatched leading quote."""
         trigger = Trigger(schedule=ScheduleTrigger(
             interval="* * * * *",
-            start_time="2025-01-01T00:00:00Z",
+            start_time="2025-01-01T00:00:00",
             timezone='"UTC',
         ))
         self.pipeline.triggers.extend([trigger])
@@ -260,7 +352,7 @@ class TestPipelineValidator(unittest.TestCase):
         """Tests failure for an invalid IANA timezone string."""
         trigger = Trigger(schedule=ScheduleTrigger(
             interval="* * * * *",
-            start_time="2025-01-01T00:00:00Z",
+            start_time="2025-01-01T00:00:00",
             timezone="Mars/Olympus_Mons",
         ))
         self.pipeline.triggers.extend([trigger])
@@ -307,13 +399,30 @@ class TestPipelineValidator(unittest.TestCase):
             )
 
     def test_valid_duration_succeeds(self):
-        """Tests that a valid duration string passes validation."""
-        self.pipeline.actions[0].python.execution_timeout = "1h 30m"
-        try:
-            PipelineValidator.validate(self.pipeline)
-        except ValueError as e:
-            self.fail(
-                f"Validation failed unexpectedly for valid duration: {e}")
+        """Tests that shorthand and ISO 8601 duration strings pass validation."""
+        for valid_duration in ("1h 30m", "PT30M", "PT1H30M", "P1DT2H", "P2W"):
+            with self.subTest(duration=valid_duration):
+                self.pipeline.actions[0].python.execution_timeout = (
+                    valid_duration
+                )
+                try:
+                    PipelineValidator.validate(self.pipeline)
+                except ValueError as e:
+                    self.fail(
+                        "Validation failed unexpectedly for valid duration "
+                        f"'{valid_duration}': {e}"
+                    )
+
+    def test_invalid_iso8601_duration_fails(self):
+        """Tests that invalid ISO 8601 duration strings fail validation."""
+        for bad_duration in ("PT", "P1M", "PT0S"):
+            with self.subTest(duration=bad_duration):
+                self.pipeline.actions[0].python.execution_timeout = bad_duration
+                with self.assertRaisesRegex(
+                    ValueError,
+                    r"Error for field 'actions\[0\].python.execution_timeout':",
+                ):
+                    PipelineValidator.validate(self.pipeline)
 
     def test_invalid_map_key(self):
         """Tests failure when a map key does not match its regex pattern."""
@@ -963,7 +1072,7 @@ def valid_pipeline_for_custom_job():
             Trigger(
                 schedule=ScheduleTrigger(
                     interval="@daily",
-                    start_time="2026-01-01T00:00:00Z",
+                    start_time="2026-01-01T00:00:00",
                     timezone="UTC",
                 )
             )
