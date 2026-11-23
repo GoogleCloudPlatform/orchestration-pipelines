@@ -114,3 +114,40 @@ def init_context_callback(
         report_init_context(bundle_id, pipeline_id, status)
 
     return callback
+
+
+def dynamic_email_callback(
+    pipeline: Any,
+    cel_expr: str,
+    is_success: bool,
+    emails_callback: Callable[[list[str], bool, "Context"], None],
+) -> Callable[["Context"], None]:
+    """Prepares a callback that resolves notification emails via CEL."""
+
+    def callback(context: "Context | None" = None) -> None:
+        from orchestration_pipelines_lib.utils import runtime_resolver
+
+        if context is None:
+            try:
+                from airflow.sdk import get_current_context  # pyright: ignore
+            except ImportError:  # pragma: no cover
+                from airflow.operators.python import (  # pyright: ignore
+                    get_current_context,
+                )
+            context = get_current_context()
+
+        eval_ctx = runtime_resolver.build_cel_eval_context(
+            None, context, pipeline_model=pipeline
+        )
+        resolved = runtime_resolver.evaluate_cel_expression(cel_expr, eval_ctx)
+        if not isinstance(resolved, list) or not all(
+            isinstance(email, str) for email in resolved
+        ):
+            raise TypeError(
+                "Notification email expected list of strings, "
+                f"got {type(resolved).__name__}."
+            )
+        if emails := [email for email in resolved if email]:
+            emails_callback(emails, is_success, context)
+
+    return callback

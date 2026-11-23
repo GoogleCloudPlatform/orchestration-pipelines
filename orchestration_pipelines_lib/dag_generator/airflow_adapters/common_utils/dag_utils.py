@@ -19,8 +19,9 @@ to construct DAG objects, configure their properties, and generate corresponding
 tasks and dependencies.
 """
 
+import copy
 import json
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Any, TypedDict
@@ -33,9 +34,11 @@ from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.ret
     RetryResolver,
 )
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.utils import (  # noqa: E501
+    dynamic_email_callback,
     init_context_callback,
     pipeline_run_callback,
 )
+from orchestration_pipelines_lib.utils import dict_utils, runtime_resolver
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -168,16 +171,52 @@ def _build_dag_kwargs(
     on_failure_callbacks = [finish_callback]
     on_success_callbacks = [finish_callback]
 
-    if pipeline.notifications:
-        if pipeline.notifications.onPipelineFailure:
-            emails = pipeline.notifications.onPipelineFailure.email
-            on_failure_callback = partial(emails_callback, emails, False)
-            on_failure_callbacks.append(on_failure_callback)
-
-        if pipeline.notifications.onPipelineSuccess:
-            emails = pipeline.notifications.onPipelineSuccess.email
-            on_success_callback = partial(emails_callback, emails, True)
-            on_success_callbacks.append(on_success_callback)
+    raw_bindings = (
+        pipeline.dynamicBindings
+        if isinstance(pipeline.dynamicBindings, Mapping)
+        else {}
+    )
+    dynamic_bindings = {
+        ".".join(dict_utils.to_snake_case(seg) for seg in k.split(".")): v
+        for k, v in raw_bindings.items()
+        if isinstance(k, str)
+    }
+    failure_expr = dynamic_bindings.get(
+        "notifications.on_pipeline_failure.email"
+    )
+    success_expr = dynamic_bindings.get(
+        "notifications.on_pipeline_success.email"
+    )
+    runtime_pipeline_ctx = (
+        runtime_resolver.build_runtime_pipeline_context(pipeline)
+        if failure_expr or success_expr
+        else None
+    )
+    notifications = pipeline.notifications
+    for cel_expr, notification_config, is_success, target_callbacks in (
+        (
+            failure_expr,
+            notifications.onPipelineFailure if notifications else None,
+            False,
+            on_failure_callbacks,
+        ),
+        (
+            success_expr,
+            notifications.onPipelineSuccess if notifications else None,
+            True,
+            on_success_callbacks,
+        ),
+    ):
+        if cel_expr:
+            target_callbacks.append(
+                dynamic_email_callback(
+                    runtime_pipeline_ctx, cel_expr, is_success, emails_callback
+                )
+            )
+        elif notification_config:
+            target_callbacks.append(
+                partial(emails_callback, notification_config.email, is_success)
+            )
 
     dag_kwargs: DAGKwargs = {
         "dag_id": pipeline.metadata.pipelineId,
@@ -263,7 +302,18 @@ def _create_tasks(
     Returns:
         A dictionary mapping action names to their corresponding tasks.
     """
+    runtime_resolver.register_operator_kwargs_builder(
+        action_handler_registry.build_runtime_operator_kwargs
+    )
     tasks = {}
+    runtime_pipeline_ctx = runtime_resolver.build_runtime_pipeline_context(
+        pipeline
+    )
+    referenced_outputs: set[str] = set()
+    for act in pipeline.actions:
+        referenced_outputs.update(
+            runtime_resolver.referenced_output_actions(act)
+        )
 
     for action in pipeline.actions:
         handler = action_handlers.get(type(action))
@@ -274,9 +324,54 @@ def _create_tasks(
         # IMPORTANT: Ensure your handler passes 'dag=dag' to the
         # Operator constructor
         task_obj = handler(action, pipeline, dag=dag)
+        _attach_runtime_metadata(
+            task_obj,
+            action,
+            runtime_pipeline_ctx,
+            is_output_referenced=action.name in referenced_outputs,
+        )
         tasks[action.name] = task_obj
 
     return tasks
+
+
+def _attach_runtime_metadata(
+    task_obj: Any,
+    action: "AnyAction",
+    runtime_pipeline_ctx: runtime_resolver.RuntimePipelineContext,
+    *,
+    is_output_referenced: bool = False,
+) -> None:
+    """Attaches lightweight action and pipeline metadata onto Airflow tasks."""
+    children = getattr(task_obj, "children", None)
+    tasks = children.values() if isinstance(children, Mapping) else (task_obj,)
+    for task in tasks:
+        task_role = getattr(
+            task, "_op_task_role", runtime_resolver.TASK_ROLE_MAIN
+        )
+        is_entry = task_role in runtime_resolver.ENTRY_TASK_ROLES
+        is_output = (
+            is_output_referenced
+            and task_role in runtime_resolver.OUTPUT_TASK_ROLES
+        )
+        task._op_is_entry_task = is_entry
+        task._op_is_output_task = is_output
+
+        needs_dynamic = bool(
+            (is_entry and runtime_resolver.get_run_if_expr(action))
+            or runtime_resolver.has_applicable_bindings(
+                runtime_pipeline_ctx, action, task_role
+            )
+        )
+        if needs_dynamic or is_output:
+            task._op_action_model = (
+                copy.deepcopy(action) if needs_dynamic else action
+            )
+        if needs_dynamic:
+            task._op_pipeline_model = runtime_pipeline_ctx
+            task._op_kwargs_builder = (
+                action_handler_registry.build_runtime_operator_kwargs
+            )
 
 
 def _set_dependencies(tasks: dict[str, Any], action: "AnyAction"):

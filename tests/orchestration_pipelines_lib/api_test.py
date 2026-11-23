@@ -16,6 +16,8 @@
 
 import contextlib
 import os
+import textwrap
+import types
 from datetime import datetime, timedelta
 from typing import Any, Generator, Iterator
 from unittest.mock import MagicMock, patch
@@ -41,6 +43,9 @@ from airflow.providers.google.cloud.operators.vertex_ai import (
 
 from orchestration_pipelines_lib import api
 from orchestration_pipelines_lib.utils import file_manager
+from orchestration_pipelines_lib.utils.runtime_resolver import (
+    AirflowSkipException,
+)
 from tests.conftest import IS_AIRFLOW_2
 
 if IS_AIRFLOW_2:
@@ -973,3 +978,106 @@ def test_generate_dbt_pipeline() -> None:
     assert dbt_task.op_kwargs["invocations"][0]["threads"] == 2
     assert dbt_task.op_kwargs["invocations"][0]["target"] == "prod"
     assert dbt_task.op_kwargs["invocations"][1]["command"] == "test"
+
+
+def test_generate_and_execute_cross_task_cel_and_run_if_pipeline(
+    tmp_path, monkeypatch
+) -> None:
+    """Tests end-to-end api.generate, CEL binding, XCom, and run_if."""
+    monkeypatch.setenv("DAGS_FOLDER", str(tmp_path))
+    (tmp_path / "jobs.py").write_text(
+        "def produce(mult, env): return {'rows': 4 * mult, 'env': env}\n"
+        "def consume(rows, env): return f'{env}:{rows}'\n",
+        encoding="utf-8",
+    )
+    yaml_path = tmp_path / "e2e-cross-task.yml"
+    yaml_path.write_text(
+        textwrap.dedent(
+            """\
+            modelVersion: "1.0"
+            pipelineId: e2e-cross-task
+            owner: data-eng
+            runner: airflow
+            defaults: {projectId: demo-proj, location: us-central1}
+            parameters:
+              mult: {type: number, default: 5}
+              env: {type: string, default: staging}
+            actions:
+              - python:
+                  name: step1
+                  mainFilePath: jobs.py
+                  pythonCallable: produce
+                  opKwargs: {mult: "${parameters.mult}", env: "${parameters.env}"}
+                  engine: {local: {}}
+              - python:
+                  name: step2
+                  dependsOn: [step1]
+                  runIf: "${outputs.step1.value.rows >= 10}"
+                  mainFilePath: jobs.py
+                  pythonCallable: consume
+                  opKwargs: "${outputs.step1.value}"
+                  engine: {local: {}}
+              - python:
+                  name: step3_skip
+                  dependsOn: [step1]
+                  runIf: "${outputs.step1.value.rows > 100}"
+                  mainFilePath: jobs.py
+                  pythonCallable: consume
+                  opKwargs: {rows: 0, env: skip}
+                  engine: {local: {}}
+              - python:
+                  name: step4_dyn_binding_runif
+                  dependsOn: [step1]
+                  dynamicBindings:
+                    runIf: "outputs.step1.value.rows > 100"
+                  mainFilePath: jobs.py
+                  pythonCallable: consume
+                  opKwargs: {rows: 0, env: skip}
+                  engine: {local: {}}
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    api.validate(str(yaml_path))
+    globals_dict: dict[str, Any] = {}
+    api.generate("e2e-cross-task.yml", globals_dict, str(tmp_path))
+    dag = globals_dict["e2e-cross-task"]
+
+    xcoms: dict[str, Any] = {}
+    ti = types.SimpleNamespace(
+        try_number=1,
+        xcom_pull=lambda task_ids=None, key=None: xcoms.get(task_ids),
+        xcom_push=lambda key=None, value=None: None,
+    )
+    ctx: dict[str, Any] = {
+        "dag": dag,
+        "dag_run": types.SimpleNamespace(
+            run_id="manual__1",
+            logical_date=datetime(2026, 10, 22, tzinfo=pytz.UTC),
+            conf={"mult": 6},
+        ),
+        "ti": ti,
+        "task_instance": ti,
+        "params": {},
+    }
+
+    def _run_task(task_id: str) -> tuple[dict[str, Any], Any]:
+        task = dag.task_dict[task_id].prepare_for_execution()
+        ctx["task"] = task
+        task.pre_execute(ctx)
+        resolved_kwargs = dict(task.op_kwargs)
+        return resolved_kwargs, task.execute(ctx)
+
+    _, xcoms["step1"] = _run_task("step1")
+    assert xcoms["step1"] == {"value": {"rows": 24, "env": "staging"}, "metadata": {}}
+
+    t2_kwargs, out2 = _run_task("step2")
+    assert t2_kwargs == {"rows": 24, "env": "staging"}
+    # Unreferenced leaf actions return their raw result without envelope wrapping.
+    assert out2 == "staging:24"
+
+    with pytest.raises(AirflowSkipException, match="step3_skip"):
+        dag.task_dict["step3_skip"].pre_execute(ctx)
+    with pytest.raises(AirflowSkipException, match="step4_dyn_binding_runif"):
+        dag.task_dict["step4_dyn_binding_runif"].pre_execute(ctx)

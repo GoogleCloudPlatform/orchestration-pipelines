@@ -20,6 +20,7 @@ from functools import partial
 from typing import Any
 
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
+    runtime_kwargs,
     task_utils,
 )
 from orchestration_pipelines_lib.internal_models.actions import (
@@ -33,6 +34,9 @@ from orchestration_pipelines_lib.internal_models.actions import (
     OrchestrationPipelineActionModel,
     PythonScriptActionModel,
     PythonVirtualenvActionModel,
+)
+from orchestration_pipelines_lib.utils.runtime_resolver import (
+    register_operator_kwargs_builder,
 )
 
 
@@ -58,6 +62,7 @@ def get_action_handlers(
     Returns:
         A dictionary mapping internal action models to task factory methods.
     """
+    register_operator_kwargs_builder(build_runtime_operator_kwargs)
     return {
         PythonScriptActionModel: partial(
             task_utils.create_python_script_task,
@@ -85,3 +90,48 @@ def get_action_handlers(
         AIActionModel: task_utils.create_ai_task,
         AirflowActionModel: task_utils.create_airflow_task,
     }
+
+
+RuntimeKwargsHandler = Callable[
+    [Any, Any, runtime_kwargs.RuntimeKwargsContext], dict[str, Any]
+]
+
+RUNTIME_KWARGS_HANDLERS: dict[type, RuntimeKwargsHandler] = {
+    PythonScriptActionModel: runtime_kwargs.python_kwargs,
+    PythonVirtualenvActionModel: runtime_kwargs.python_kwargs,
+    BqOperationActionModel: runtime_kwargs.bq_operation_kwargs,
+    DataprocOperatorActionModel: runtime_kwargs.dataproc_kwargs,
+    DBTActionModel: runtime_kwargs.dbt_kwargs,
+    DataformActionModel: runtime_kwargs.dataform_kwargs,
+    DataIngestionActionModel: runtime_kwargs.bq_dts_kwargs,
+    OrchestrationPipelineActionModel: runtime_kwargs.trigger_pipeline_kwargs,
+    AIActionModel: runtime_kwargs.ai_kwargs,
+    AirflowActionModel: runtime_kwargs.airflow_task_kwargs,
+}
+
+
+def build_runtime_operator_kwargs(
+    op: Any,
+    action: Any,
+    defaults: Any,
+    *,
+    base_action: Any,
+    task_role: str,
+    action_paths: set[str],
+    is_resolved: bool,
+    run_id: str,
+    **_: Any,
+) -> dict[str, Any]:
+    """Dispatches `action` to its registered runtime operator kwargs builder."""
+    kw = runtime_kwargs.policy_kwargs(action, defaults, task_role)
+    if handler := RUNTIME_KWARGS_HANDLERS.get(type(action)):
+        ctx = runtime_kwargs.RuntimeKwargsContext(
+            op=op,
+            base_action=base_action,
+            task_role=task_role,
+            action_paths=action_paths,
+            is_resolved=is_resolved,
+            run_id=run_id,
+        )
+        kw.update(handler(action, defaults, ctx))
+    return kw

@@ -81,6 +81,9 @@ from orchestration_pipelines_lib.internal_models.pipeline import (
     RunnerType,
 )
 from orchestration_pipelines_lib.scripts.dbt_wrapper import invoke_dbt
+from orchestration_pipelines_lib.utils.runtime_resolver import (
+    RuntimeResolutionMixin,
+)
 from tests.conftest import IS_AIRFLOW_2
 
 if IS_AIRFLOW_2:
@@ -698,6 +701,8 @@ def test_dataproc_ephemeral_task_setup_and_teardown(mock_get_path, mock_upload):
     assert isinstance(create_task, DataprocCreateClusterOperator)
     assert isinstance(submit_task, DataprocSubmitJobOperator)
     assert isinstance(delete_task, DataprocDeleteClusterOperator)
+    assert isinstance(create_task, RuntimeResolutionMixin)
+    assert isinstance(delete_task, RuntimeResolutionMixin)
     assert create_task.is_setup
     assert delete_task.is_teardown
     mock_get_path.assert_not_called()
@@ -2408,3 +2413,205 @@ def test_create_vertex_custom_job_task_raises_runtime_error_on_missing_operator(
         "the installed version of apache-airflow-providers-google"
     ) in str(exc_info.value)
     assert isinstance(exc_info.value.__cause__, ImportError)
+
+
+def test_creates_orchestration_task_passes_action_params_as_conf(
+    orch_action_full, pipeline, sample_dag
+):
+    """Tests trigger task forwards action.params as TriggerDagRun conf."""
+    action = replace(orch_action_full, params={"env": "staging", "limit": 25})
+    result = create_orchestration_pipeline_trigger_task(
+        get_operator=adapter_imports.get_trigger_dagrun_operator,
+        action=action,
+        pipeline=pipeline,
+        dag=sample_dag,
+    )
+    assert result.conf == {"env": "staging", "limit": 25}
+
+
+def test_create_bq_operation_task_defers_dynamically_bound_sql_params(
+    bq_operation_action, pipeline, sample_dag
+):
+    """Tests dynamically bound SQL params stay as `${key}` placeholders at parse time."""
+    action = replace(
+        bq_operation_action,
+        query="SELECT * FROM `${my-project}.${dataset}.orders`",
+        params={"my-project": "prod-proj", "dataset": ""},
+        dynamicBindings={"params.dataset": "outputs.step1.value.dataset"},
+    )
+    task = create_bq_operation_task(action, pipeline, dag=sample_dag)
+    assert (
+        task.configuration["query"]["query"]
+        == "SELECT * FROM `prod-proj.${dataset}.orders`"
+    )
+
+
+def test_python_script_task_user_task_kwarg_does_not_shadow_ti_task(
+    pipeline, sample_dag, tmp_path, monkeypatch
+):
+    """Tests that user `opKwargs: {task: ...}` does not shadow `ti.task`."""
+    monkeypatch.setenv("DAGS_FOLDER", str(tmp_path))
+    (tmp_path / "mod.py").write_text(
+        "def run(task, ti, dyn): return f'{task}:{ti}:{dyn}'\n",
+        encoding="utf-8",
+    )
+    base_act = PythonScriptActionModel(
+        name="py_shadow",
+        type="script",
+        filename="mod.py",
+        config=PythonScriptConfigurationModel(
+            pythonCallable="run", opKwargs={}
+        ),
+        dependsOn=None,
+        executionTimeout=None,
+        triggerRule="all_success",
+    )
+    op = create_python_script_task(
+        adapter_imports.get_python_operator, base_act, pipeline, sample_dag
+    )
+    op._op_action_model = base_act
+    cloned = replace(
+        base_act,
+        config=PythonScriptConfigurationModel(
+            pythonCallable="run", opKwargs={"task": "etl", "ti": "usr_ti", "dyn": 7}
+        ),
+    )
+    live_task = MagicMock(_op_action_model=cloned)
+    fallback_ti = MagicMock(task=live_task)
+    assert (
+        op.python_callable(
+            task="etl", ti=fallback_ti, dyn=7, extra="ignored"
+        )
+        == f"etl:{fallback_ti}:7"
+    )
+    try:
+        import airflow.sdk as ctx_mod  # pyright: ignore
+    except ImportError:
+        import airflow.operators.python as ctx_mod  # pyright: ignore
+    with patch.object(
+        ctx_mod, "get_current_context", return_value={"task": live_task}
+    ):
+        assert (
+            op.python_callable(
+                task="etl", ti="usr_ti", dyn=7, extra="ignored"
+            )
+            == "etl:usr_ti:7"
+        )
+
+
+def test_create_airflow_task_filters_protected_and_synthesizes_mro_placeholders(
+    pipeline, sample_dag, monkeypatch
+):
+    """Tests MRO placeholders (whole & per-key params), structural annotations, and AF3 MRO."""
+    import sys
+    import types
+    from collections.abc import Callable as AbcCallable
+    from typing import Any
+
+    from airflow.models import BaseOperator
+
+    from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (  # noqa: E501
+        _get_operator_init_params,
+        _placeholder_for_annotation,
+    )
+
+    assert callable(_placeholder_for_annotation(AbcCallable[..., bool]))
+    assert callable(
+        _placeholder_for_annotation("Callable[[dict[str, int]], bool]")
+    )
+    assert _placeholder_for_annotation(list[int]) == []
+    assert _placeholder_for_annotation(list[dict[str, Any]]) == []
+    assert _placeholder_for_annotation(dict[str, int]) == {}
+    assert _placeholder_for_annotation("dict[str, bool] | None") == {}
+    assert _placeholder_for_annotation("Optional[int]") == 0
+    assert _placeholder_for_annotation("HttpEndpoint") == ""
+
+    class _FakeSdkBase:
+        def __init__(self, sdk_internal_required: int, **kw: Any) -> None:
+            pass
+
+    class _SdkSubOp(_FakeSdkBase):
+        def __init__(self, user_arg: int, **kw: Any) -> None:
+            super().__init__(sdk_internal_required=1, **kw)
+
+    monkeypatch.setattr(
+        "orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils.BASE_OPERATOR_CLASSES",
+        (BaseOperator, _FakeSdkBase),
+    )
+    assert list(_get_operator_init_params(_SdkSubOp)) == ["user_arg"]
+
+    class _ParentOp(BaseOperator):
+        def __init__(
+            self,
+            count: int,
+            ratio: float,
+            enabled: bool,
+            items: list[int],
+            handler: AbcCallable[..., bool],
+            poll: float = 5.0,
+            **kw,
+        ):
+            super().__init__(**kw)
+            assert callable(handler) and isinstance(count, int)
+            assert isinstance(items, list) and isinstance(poll, float)
+            self.vals = (count, ratio, enabled, items, poll)
+
+    class _ChildOp(_ParentOp):
+        def __init__(self, raw, payload: dict[str, int], **kw):
+            super().__init__(**kw)
+            self.child_vals = (raw, payload)
+
+    fake_mod = types.ModuleType("_fake_custom_ops")
+    fake_mod.ChildOp = _ChildOp  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "_fake_custom_ops", fake_mod)
+
+    op = create_airflow_task(
+        AirflowActionModel(
+            name="af_custom",
+            type="airflow_task",
+            operator_class="_fake_custom_ops.ChildOp",
+            params={"trigger_rule": "always", "task_id": "bad", "_secret": 1},
+            dynamicBindings={"params": "outputs.up.value"},
+            dependsOn=None,
+            executionTimeout=None,
+            triggerRule="all_success",
+        ),
+        pipeline,
+        sample_dag,
+    )
+    assert (op.task_id, op.trigger_rule) == ("af_custom", "all_success")
+    assert op.vals == (0, 0.0, False, [], 5.0)
+    assert op.child_vals == ("", {})
+
+    # Per-key params.<key> bindings also replace "" placeholders by annotation.
+    per_key_op = create_airflow_task(
+        AirflowActionModel(
+            name="af_per_key",
+            type="airflow_task",
+            operator_class="_fake_custom_ops.ChildOp",
+            params={
+                "raw": "ok",
+                "payload": "",
+                "count": "",
+                "ratio": 1.5,
+                "enabled": True,
+                "items": "",
+                "handler": "",
+                "poll": "",
+            },
+            dynamicBindings={
+                "params.payload": "outputs.up.value.p",
+                "params.count": "parameters.c",
+                "params.items": "parameters.i",
+                "params.handler": "parameters.h",
+                "params.poll": "parameters.poll",
+            },
+            dependsOn=None,
+            executionTimeout=None,
+            triggerRule="all_success",
+        ),
+        pipeline,
+        sample_dag,
+    )
+    assert per_key_op.vals == (0, 1.5, True, [], 0.0)
+    assert per_key_op.child_vals == ("ok", {})

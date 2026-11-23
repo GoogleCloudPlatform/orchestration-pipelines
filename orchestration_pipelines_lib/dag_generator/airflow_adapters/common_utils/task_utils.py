@@ -16,20 +16,23 @@
 
 from __future__ import annotations
 
+import importlib
+import inspect
 import json
 import logging
 import os
 import re
-from collections.abc import Callable, Generator, Mapping
+import types
+from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any, Union, get_args, get_origin
 
 import pytz
 
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils import (  # noqa: E501
-    dataproc_utils,
     gcs_utils,
+    runtime_kwargs,
     utils,
 )
 from orchestration_pipelines_lib.internal_models import (
@@ -55,8 +58,20 @@ from orchestration_pipelines_lib.utils.file_manager import FileManager
 from orchestration_pipelines_lib.utils.metrics import (
     ActionExecutionEngine,
     ActionExecutionType,
+)
+from orchestration_pipelines_lib.utils.operator_wrappers import (
+    BASE_OPERATOR_CLASSES,
     wrap_operator,
     wrap_retry_operator,
+)
+from orchestration_pipelines_lib.utils.runtime_resolver import (
+    PROTECTED_AIRFLOW_TASK_ATTRS,
+    TASK_ROLE_CREATE_CLUSTER,
+    TASK_ROLE_DELETE_CLUSTER,
+    TASK_ROLE_DTS_SENSOR,
+    TASK_ROLE_DTS_START,
+    TASK_ROLE_SUBMIT_JOB,
+    filter_airflow_task_params,
 )
 
 from .retry_resolver import RetryResolver
@@ -86,6 +101,33 @@ def wrap_task_creation_error(
         ) from e
 
 
+def _resolve_live_python_task(
+    kwargs: Mapping[str, Any], fallback_op: Any
+) -> Any:
+    """Returns the cloned task executing `runtime_wrapper`, or `fallback_op`."""
+    # Airflow's prepare_for_execution() clones `op` into `ti.task` before
+    # pre_execute() updates `_op_action_model`; prefer get_current_context() so
+    # user `opKwargs` keys named `ti` or `task` cannot shadow the live task.
+    try:
+        try:
+            from airflow.sdk import get_current_context  # pyright: ignore
+        except ImportError:  # pragma: no cover
+            from airflow.operators.python import (  # pyright: ignore
+                get_current_context,
+            )
+        ctx_op = get_current_context().get("task")
+    except Exception:  # pylint: disable=broad-exception-caught
+        ctx_op = None
+    for cand in (
+        ctx_op,
+        getattr(kwargs.get("ti"), "task", None),
+        kwargs.get("task"),
+    ):
+        if hasattr(cand, "_op_action_model"):
+            return cand
+    return fallback_op
+
+
 def create_python_script_task(
     get_operator: Callable[[], type],
     action: PythonScriptActionModel,
@@ -109,15 +151,18 @@ def create_python_script_task(
     with wrap_task_creation_error(action.name, action.config.pythonCallable):
         callable_path = action.filename
         entrypoint = action.config.pythonCallable
-        user_kwargs = action.config.opKwargs or {}
 
         def runtime_wrapper(**kwargs):
             """Imports the target callable at runtime and filters kwargs."""
             python_callable = utils.import_callable(callable_path, entrypoint)
-            filtered_kwargs = {
-                k: v for k, v in kwargs.items() if k in user_kwargs
-            }
-            return python_callable(**filtered_kwargs)
+            live_task = _resolve_live_python_task(kwargs, op)
+            resolved_action = (
+                getattr(live_task, "_op_action_model", None) or action
+            )
+            allowed = resolved_action.config.opKwargs or ()
+            return python_callable(
+                **{k: v for k, v in kwargs.items() if k in allowed}
+            )
 
         OrchestrationPythonOperator = wrap_operator(
             get_operator(),
@@ -126,10 +171,10 @@ def create_python_script_task(
             get_pipeline_metadata,
         )
 
-        return OrchestrationPythonOperator(
+        op = OrchestrationPythonOperator(
             task_id=action.name,
             python_callable=runtime_wrapper,
-            op_kwargs=action.config.opKwargs or {},
+            op_kwargs=dict(action.config.opKwargs or {}),
             execution_timeout=(
                 duration_to_timedelta(action.executionTimeout)
                 if action.executionTimeout
@@ -140,6 +185,7 @@ def create_python_script_task(
             dag=dag,
             **get_action_retry_kwargs(action),
         )
+        return op
 
 
 def create_python_virtualenv_task(
@@ -190,7 +236,7 @@ def create_python_virtualenv_task(
         return OrchestrationPythonVirtualenvOperator(
             task_id=action.name,
             python_callable=python_callable,
-            op_kwargs=action.config.opKwargs or {},
+            op_kwargs=dict(action.config.opKwargs or {}),
             requirements=requirements,
             system_site_packages=action.config.systemSitePackages or False,
             execution_timeout=(
@@ -237,29 +283,7 @@ def create_dbt_task(
         RuntimeError: If operator instantiation fails.
     """
     with wrap_task_creation_error(action.name):
-        op_kwargs: dict[str, Any] = {
-            "project_dir": action.source.path,
-            "profiles_dir": action.source.path,
-        }
-        if action.invocations:
-            op_kwargs["invocations"] = [
-                {
-                    "command": inv.command,
-                    "select": inv.select,
-                    "exclude": inv.exclude,
-                    "vars": inv.vars,
-                    "full_refresh": inv.full_refresh,
-                    "fail_fast": inv.fail_fast,
-                    "threads": inv.threads,
-                    "target": inv.target,
-                    "extra_args": inv.extra_args,
-                    "macro": inv.macro,
-                    "args": inv.args,
-                }
-                for inv in action.invocations
-            ]
-        if action.params:
-            op_kwargs["params"] = action.params
+        op_kwargs = runtime_kwargs.build_dbt_op_kwargs(action)
 
         base_gcs_output_uri = _get_base_gcs_output_uri(action)
         if base_gcs_output_uri:
@@ -362,6 +386,7 @@ def create_orchestration_pipeline_trigger_task(
                 "bundle_id": action.bundle_id,
             },
             wait_for_completion=wait_for_completion,
+            conf=dict(action.params) if action.params else None,
             execution_timeout=(
                 duration_to_timedelta(action.executionTimeout)
                 if action.executionTimeout
@@ -572,59 +597,16 @@ def create_dataproc_create_batch_operator_task(
     from airflow.providers.google.cloud.operators.dataproc import (
         DataprocCreateBatchOperator,
     )
-    from google.cloud import dataproc_v1
 
     with wrap_task_creation_error(action.name):
-        job_specific_config = {}
-        if action.type in ("pyspark", "notebook"):
-            wrapper_uri = _get_notebook_wrapper_uri(action)
-            job_specific_config["pyspark_batch"] = (
-                dataproc_utils.get_pyspark_batch_config(
-                    action,
-                    wrapper_uri,
-                )
-            )
-
-        dataproc_create_batch_operator = DataprocCreateBatchOperator
-        extra_kwargs = {}
-
-        if action.type == "sql":
-            spark_sql_batch = {}
-
-            if action.params:
-                spark_sql_batch["query_variables"] = action.params
-
-            if action.query:
-                dataproc_create_batch_operator = (
-                    get_dataproc_create_batch_inline_sql_operator_class()
-                )
-                extra_kwargs["query"] = action.query
-                extra_kwargs["gcs_bucket"] = os.environ.get("GCS_BUCKET")
-
-            elif action.filename:
-                spark_sql_batch["query_file_uri"] = action.filename
-            job_specific_config["spark_sql_batch"] = spark_sql_batch
-
-        runtime_config = action.config.resourceProfile.runtimeConfig or {}
-        environment_config = (
-            action.config.resourceProfile.environmentConfig or {}
+        batch_dict, extra_kwargs = runtime_kwargs.build_dataproc_batch_payload(
+            action, wrapper_uri=_get_notebook_wrapper_uri(action)
         )
-
-        if action.type in ("pyspark", "notebook"):
-            deps_bucket = action.depsBucket or ""
-            execution_config = environment_config.setdefault(
-                "execution_config", {}
-            )
-            if execution_config.get("staging_bucket") is None and deps_bucket:
-                execution_config["staging_bucket"] = deps_bucket
-
-        batch = dataproc_v1.types.Batch(
-            **job_specific_config,
-            runtime_config=runtime_config,
-            environment_config=environment_config,
-            labels=action.labels,
+        dataproc_create_batch_operator = (
+            get_dataproc_create_batch_inline_sql_operator_class()
+            if "query" in extra_kwargs
+            else DataprocCreateBatchOperator
         )
-        batch_dict = type(batch).to_dict(batch)
 
         ObservableDataprocCreateBatchOperator = wrap_operator(
             dataproc_create_batch_operator,
@@ -700,49 +682,23 @@ def create_bq_operation_task(
             query = action.query
 
         if action.params and query:
-            query = _interpolate_sql_params(query, action.params)
-
-        configuration = {
-            # Will be converted to JobConfigurationQuery in Protobuf.
-            # It can be set up via the QueryJobConfig Python class,
-            # which can be imported from google.cloud.bigquery.job.query
-            "query": {
-                "query": query,
-                "useLegacySql": False,
-            },
-            "labels": action.labels,
-        }
-
-        if action.params:
-            configuration["query"]["queryParameters"] = []
-
-            for key, value in action.params.items():
-                param = {
-                    "name": key,
-                    # NOTE: The limitation of dataproc engine that requires
-                    # string typed arguments is applicable as well to SQL
-                    # actions run on BigQuerys.
-                    "parameterType": {"type": "STRING"},
-                    "parameterValue": {"value": value},
+            # Defer dynamically bound keys to runtime pre_execute so parse-time
+            # empty-string placeholders do not clobber '${key}' in the query.
+            bindings = action.dynamicBindings or ()
+            if "params" not in bindings:
+                static_params = {
+                    k: v
+                    for k, v in action.params.items()
+                    if f"params.{k}" not in bindings
                 }
-                configuration["query"]["queryParameters"].append(param)
+                query = _interpolate_sql_params(query, static_params)
 
-        if not query.strip().upper().startswith("CREATE"):
-            configuration["query"]["writeDisposition"] = "WRITE_TRUNCATE"
-            configuration["query"]["createDisposition"] = "CREATE_IF_NEEDED"
-
-        if action.config.destinationTable:
-            parts = action.config.destinationTable.split(".")
-            if len(parts) != 3:
-                raise ValueError(
-                    "destinationTable should be in format "
-                    "'project.dataset.table'"
-                )
-            configuration["query"]["destinationTable"] = {
-                "projectId": parts[0],
-                "datasetId": parts[1],
-                "tableId": parts[2],
-            }
+        configuration = runtime_kwargs.build_bq_configuration(
+            query,
+            action.labels,
+            action.params,
+            action.config.destinationTable,
+        )
 
         return ObservableBigQueryInsertJobOperator(
             task_id=action.name,
@@ -790,7 +746,7 @@ def dataproc_ephemeral_task(
             if action.depsBucket:
                 cluster_config["config_bucket"] = action.depsBucket
 
-            create_cluster = DataprocCreateClusterOperator(
+            create_cluster = wrap_retry_operator(DataprocCreateClusterOperator)(
                 task_id=f"{action.name}_create_cluster",
                 project_id=action.config.project_id,
                 cluster_config=cluster_config,
@@ -801,49 +757,18 @@ def dataproc_ephemeral_task(
                 doc_md=json.dumps({"op_action_name": action.name}),
                 labels=action.labels,
                 dag=dag,
+                **get_action_retry_kwargs(action),
             ).as_setup()
+            create_cluster._op_task_role = TASK_ROLE_CREATE_CLUSTER
 
-            job = {
-                "placement": {"cluster_name": action.config.cluster_name},
-                "reference": {
-                    "project_id": action.config.project_id,
-                },
-                "labels": action.labels,
-            }
-
-            dataproc_submit_job_operator = DataprocSubmitJobOperator
-            extra_kwargs = {}
-
-            if action.type == "sql":
-                spark_sql_job = {}
-
-                if action.params:
-                    spark_sql_job["script_variables"] = action.params
-
-                if action.query:
-                    dataproc_submit_job_operator = (
-                        get_dataproc_submit_job_inline_sql_operator_class()
-                    )
-                    extra_kwargs["query"] = action.query
-                    extra_kwargs["gcs_bucket"] = os.environ.get("GCS_BUCKET")
-                elif action.filename:
-                    spark_sql_job["query_file_uri"] = action.filename
-                if action.config.properties:
-                    spark_sql_job["properties"] = action.config.properties
-                job["spark_sql_job"] = spark_sql_job
-            else:
-                # This block handles both pyspark and notebook actions for
-                # ephemeral clusters (since ephemeral Dataproc still relies on
-                # DataprocSubmitJobOperator, which uses pyspark_job for
-                # notebooks via the old wrapper method).
-                wrapper_uri = _get_notebook_wrapper_uri(action)
-                pyspark_job = dataproc_utils.get_pyspark_batch_config(
-                    action, wrapper_uri
-                )
-                if action.pyFiles:
-                    pyspark_job["python_file_uris"] = action.pyFiles
-                pyspark_job["properties"] = action.config.properties
-                job["pyspark_job"] = pyspark_job
+            job, extra_kwargs = runtime_kwargs.build_dataproc_job_payload(
+                action, wrapper_uri=_get_notebook_wrapper_uri(action)
+            )
+            dataproc_submit_job_operator = (
+                get_dataproc_submit_job_inline_sql_operator_class()
+                if "query" in extra_kwargs
+                else DataprocSubmitJobOperator
+            )
 
             ObservableDataprocSubmitJobOperator = wrap_operator(
                 dataproc_submit_job_operator,
@@ -868,8 +793,9 @@ def dataproc_ephemeral_task(
                 **get_action_retry_kwargs(action),
                 **extra_kwargs,
             )
+            submit_job._op_task_role = TASK_ROLE_SUBMIT_JOB
 
-            delete_cluster = DataprocDeleteClusterOperator(
+            delete_cluster = wrap_retry_operator(DataprocDeleteClusterOperator)(
                 task_id=f"{action.name}_delete_cluster",
                 project_id=action.config.project_id,
                 cluster_name=action.config.cluster_name,
@@ -877,7 +803,9 @@ def dataproc_ephemeral_task(
                 impersonation_chain=action.impersonationChain,
                 doc_md=json.dumps({"op_action_name": action.name}),
                 dag=dag,
+                **get_action_retry_kwargs(action),
             ).as_teardown(setups=create_cluster)
+            delete_cluster._op_task_role = TASK_ROLE_DELETE_CLUSTER
 
             # pylint: disable=pointless-statement
             create_cluster >> submit_job >> delete_cluster
@@ -903,44 +831,14 @@ def dataproc_existing_cluster(
     )
 
     with wrap_task_creation_error(action.name):
-        job = {
-            "placement": {"cluster_name": action.config.cluster_name},
-            "reference": {
-                "project_id": action.config.project_id,
-            },
-            "labels": action.labels,
-        }
-
-        dataproc_submit_job_operator = DataprocSubmitJobOperator
-        extra_kwargs = {}
-
-        if action.type == "sql":
-            spark_sql_job = {}
-
-            if action.params:
-                spark_sql_job["script_variables"] = action.params
-
-            if action.query:
-                dataproc_submit_job_operator = (
-                    get_dataproc_submit_job_inline_sql_operator_class()
-                )
-                extra_kwargs["query"] = action.query
-                extra_kwargs["gcs_bucket"] = os.environ.get("GCS_BUCKET")
-            elif action.filename:
-                spark_sql_job["query_file_uri"] = action.filename
-            if action.config.properties:
-                spark_sql_job["properties"] = action.config.properties
-            job["spark_sql_job"] = spark_sql_job
-        else:
-            # This block handles both pyspark and notebook actions for
-            # existing clusters
-            wrapper_uri = _get_notebook_wrapper_uri(action)
-            job["pyspark_job"] = dataproc_utils.get_pyspark_batch_config(
-                action, wrapper_uri
-            )
-            if action.pyFiles:
-                job["pyspark_job"]["python_file_uris"] = action.pyFiles
-            job["pyspark_job"]["properties"] = action.config.properties
+        job, extra_kwargs = runtime_kwargs.build_dataproc_job_payload(
+            action, wrapper_uri=_get_notebook_wrapper_uri(action)
+        )
+        dataproc_submit_job_operator = (
+            get_dataproc_submit_job_inline_sql_operator_class()
+            if "query" in extra_kwargs
+            else DataprocSubmitJobOperator
+        )
 
         ObservableDataprocSubmitJobOperator = wrap_operator(
             dataproc_submit_job_operator,
@@ -1107,8 +1005,6 @@ def create_local_dataform_task(
     Returns:
         An instance of KubernetesPodOperator configured to run Dataform locally.
     """
-    import shlex
-
     from airflow.providers.cncf.kubernetes.operators.pod import (
         KubernetesPodOperator,
     )
@@ -1123,21 +1019,7 @@ def create_local_dataform_task(
 
         labels = getattr(action, "labels", None) or {}
         params = getattr(action, "params", None) or {}
-
-        dataform_cmd = (
-            "gcloud storage cp --recursive $GCS_BUCKET_PATH/* . && "
-            "dataform run --timeout=60s"
-        )
-        if labels:
-            labels_str = ",".join(
-                shlex.quote(f"{k}={v}") for k, v in labels.items()
-            )
-            dataform_cmd += f" --job-labels={labels_str}"
-        if params:
-            params_str = ",".join(
-                shlex.quote(f"{k}={v}") for k, v in params.items()
-            )
-            dataform_cmd += f" --vars={params_str}"
+        dataform_cmd = runtime_kwargs.build_local_dataform_cmd(labels, params)
 
         return ObservableKubernetesPodOperator(
             task_id=action.name,
@@ -1188,10 +1070,6 @@ def create_bq_dts_task(
     )
     from airflow.utils.task_group import TaskGroup
 
-    from orchestration_pipelines_lib.utils.dict_utils import (
-        iso_to_timestamp_dict,
-    )
-
     with wrap_task_creation_error(action.name):
         with TaskGroup(group_id=action.name, dag=dag) as task_group:
             project_id = (
@@ -1201,38 +1079,9 @@ def create_bq_dts_task(
             location = (
                 action.config.location or pipeline.defaults.cloudDefault.region
             )
-
-            requested_run_time = action.config.requestedRunTime
-            requested_time_range = action.config.requestedTimeRange
-
-            if action.config.runtimeParams:
-                if requested_run_time is None:
-                    requested_run_time = action.config.runtimeParams.get(
-                        "requested_run_time"
-                    )
-                if requested_time_range is None:
-                    requested_time_range = action.config.runtimeParams.get(
-                        "requested_time_range"
-                    )
-
-            if isinstance(requested_run_time, str):
-                requested_run_time = iso_to_timestamp_dict(requested_run_time)
-
-            if isinstance(requested_time_range, dict):
-                updated_time_range = {}
-                for k, v in requested_time_range.items():
-                    updated_time_range[k] = (
-                        iso_to_timestamp_dict(v) if isinstance(v, str) else v
-                    )
-                requested_time_range = updated_time_range
-
-            if requested_run_time is None and requested_time_range is None:
-                requested_run_time = {
-                    "seconds": (
-                        "{{ logical_date.timestamp() | int if logical_date is "
-                        "defined else execution_date.timestamp() | int }}"
-                    )
-                }
+            time_kwargs = runtime_kwargs.resolve_bq_dts_time_kwargs(
+                action.config
+            )
 
             OrchestrationBigQueryDataTransferServiceStartTransferRunsOperator = (  # noqa: E501
                 wrap_retry_operator(
@@ -1245,8 +1094,7 @@ def create_bq_dts_task(
                 transfer_config_id=action.config.transferConfigId,
                 project_id=project_id,
                 location=location,
-                requested_run_time=requested_run_time,
-                requested_time_range=requested_time_range,
+                **time_kwargs,
                 impersonation_chain=action.config.impersonationChain,
                 execution_timeout=(
                     duration_to_timedelta(action.executionTimeout)
@@ -1258,6 +1106,7 @@ def create_bq_dts_task(
                 dag=dag,
                 **get_action_retry_kwargs(action),
             )
+            start_task._op_task_role = TASK_ROLE_DTS_START
 
             ObservableBigQueryDataTransferServiceTransferRunSensor = (
                 wrap_operator(
@@ -1285,6 +1134,7 @@ def create_bq_dts_task(
                     dag=dag,
                 )
             )
+            sensor_task._op_task_role = TASK_ROLE_DTS_SENSOR
 
             # pylint: disable=pointless-statement
             start_task >> sensor_task
@@ -1312,18 +1162,7 @@ def _create_vertex_upload_model_task(
     with wrap_task_creation_error(action.name):
         project_id = action.config.project_id
         region = action.config.location
-
-        model = {
-            "display_name": action.config.model_name,
-            "artifact_uri": action.config.model_artifact_uri,
-            "container_spec": {
-                "image_uri": action.config.serving_container_image_uri,
-            },
-        }
-        if action.config.description:
-            model["description"] = action.config.description
-        if action.labels:
-            model["labels"] = action.labels
+        model = runtime_kwargs.build_vertex_model_dict(action)
 
         ObservableUploadModelOperator = wrap_operator(
             UploadModelOperator,
@@ -1461,11 +1300,7 @@ def _create_vertex_custom_job_task(
             )
         project_id = action.config.project_id
         region = action.config.location
-        custom_job = dict(action.config.custom_job)
-        if action.labels:
-            existing_labels = dict(custom_job.get("labels") or {})
-            existing_labels.update(action.labels)
-            custom_job["labels"] = existing_labels
+        custom_job = runtime_kwargs.build_vertex_custom_job_dict(action)
 
         ObservableCreateCustomJobOperator = wrap_operator(
             CreateCustomJobOperator,
@@ -1526,7 +1361,119 @@ def create_ai_task(
             )
 
 
-def create_airflow_task(action: dict[str, Any], pipeline: dict[str, Any], dag):
+def _split_top_level(text: str, sep: str) -> list[str]:
+    parts: list[str] = []
+    depth = 0
+    start = 0
+    for idx, ch in enumerate(text):
+        if ch == "[":
+            depth += 1
+        elif ch == "]":
+            depth = max(0, depth - 1)
+        elif ch == sep and depth == 0:
+            parts.append(text[start:idx].strip())
+            start = idx + 1
+    parts.append(text[start:].strip())
+    return parts
+
+
+def _head_placeholder(head: str) -> Any:
+    if head == "bool":
+        return False
+    if head == "int":
+        return 0
+    if head == "float":
+        return 0.0
+    if head == "callable":
+        return lambda *args, **kwargs: None
+    if head in ("dict", "mapping", "mutablemapping"):
+        return {}
+    if head in ("list", "sequence", "mutablesequence", "iterable", "tuple"):
+        return []
+    return None
+
+
+def _placeholder_for_annotation(annotation: Any) -> Any:
+    """Returns a parse-time placeholder value matching `annotation`."""
+    if annotation is inspect.Parameter.empty or annotation is None:
+        return ""
+    if isinstance(annotation, str):
+        arms = [
+            arm
+            for arm in _split_top_level(annotation, "|")
+            if arm.lower() not in ("", "none", "nonetype")
+        ]
+        if not arms:
+            return ""
+        expr = arms[0]
+        head = expr.split("[", 1)[0].strip().rsplit(".", 1)[-1].lower()
+        if head in ("optional", "union", "annotated") and expr.endswith("]"):
+            inner = expr[expr.index("[") + 1 : -1]
+            sub_arms = [
+                a
+                for a in _split_top_level(inner, ",")
+                if head == "annotated"
+                or a.lower() not in ("", "none", "nonetype")
+            ]
+            return _placeholder_for_annotation(sub_arms[0] if sub_arms else "")
+        res = _head_placeholder(head)
+        return "" if res is None else res
+
+    origin = get_origin(annotation)
+    if origin is Annotated:
+        args = get_args(annotation)
+        return _placeholder_for_annotation(args[0]) if args else ""
+    if origin in (Union, types.UnionType):
+        non_none = [a for a in get_args(annotation) if a is not type(None)]
+        return _placeholder_for_annotation(non_none[0]) if non_none else ""
+
+    target = origin or annotation
+    if (
+        res := _head_placeholder(getattr(target, "__name__", "").lower())
+    ) is not None:
+        return res
+    if isinstance(target, type):
+        if issubclass(target, Callable):
+            return lambda *args, **kwargs: None
+        if issubclass(target, Mapping):
+            return {}
+        if issubclass(target, (Sequence, Iterable)) and not issubclass(
+            target, (str, bytes)
+        ):
+            return []
+    return ""
+
+
+def _get_operator_init_params(
+    operator_class: type,
+) -> dict[str, inspect.Parameter]:
+    """Collects `__init__` parameters across `operator_class.__mro__`."""
+    stop_classes = (*BASE_OPERATOR_CLASSES, object)
+    collected: dict[str, inspect.Parameter] = {}
+    for cls in operator_class.__mro__:
+        if cls in stop_classes:
+            break
+        if "__init__" not in cls.__dict__:
+            continue
+        sig = inspect.signature(cls.__init__)
+        has_var_kw = False
+        for param_name, param in sig.parameters.items():
+            if param_name == "self":
+                continue
+            if param.kind == inspect.Parameter.VAR_KEYWORD:
+                has_var_kw = True
+                continue
+            if param_name not in collected and param.kind in (
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            ):
+                collected[param_name] = param
+        if not has_var_kw:
+            break
+    return collected
+
+
+def create_airflow_task(action: Any, pipeline: Any, dag):
     """Converts Airflow task action to the appropriate Airflow task operator.
 
     Args:
@@ -1537,14 +1484,39 @@ def create_airflow_task(action: dict[str, Any], pipeline: dict[str, Any], dag):
     Returns:
         An instance of the specified Airflow operator.
     """
-    import importlib
-
     with wrap_task_creation_error(action.name):
         module_path, class_name = action.operator_class.rsplit(".", 1)
         module = importlib.import_module(module_path)
         operator_class = getattr(module, class_name)
 
-        params = action.params or {}
+        params = filter_airflow_task_params(action.params)
+        raw_bindings = getattr(action, "dynamicBindings", None) or ()
+        bound_param_keys = {
+            k.removeprefix("params.")
+            for k in raw_bindings
+            if isinstance(k, str)
+            and k.startswith("params.")
+            and "." not in k.removeprefix("params.")
+        }
+        if "params" in raw_bindings or bound_param_keys:
+            init_params = _get_operator_init_params(operator_class)
+            if "params" in raw_bindings:
+                for param_name, param in init_params.items():
+                    if (
+                        param.default is inspect.Parameter.empty
+                        and param_name not in PROTECTED_AIRFLOW_TASK_ATTRS
+                    ):
+                        params.setdefault(
+                            param_name,
+                            _placeholder_for_annotation(param.annotation),
+                        )
+            for key in bound_param_keys:
+                if (
+                    key not in PROTECTED_AIRFLOW_TASK_ATTRS
+                    and (param := init_params.get(key)) is not None
+                    and params.get(key, "") == ""
+                ):
+                    params[key] = _placeholder_for_annotation(param.annotation)
 
         ObservableOperator = wrap_operator(
             operator_class,

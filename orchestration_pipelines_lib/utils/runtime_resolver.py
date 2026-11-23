@@ -300,21 +300,40 @@ def _resolve_parameters(
     return resolved
 
 
-def _referenced_output_actions(
+_RUN_IF_BINDING_KEYS = frozenset({"run_if", "runIf"})
+
+
+def get_run_if_expr(action_model: Any) -> str | None:
+    """Returns the CEL `run_if` expression from `action_model` or its bindings."""
+    if (
+        isinstance(run_if := getattr(action_model, "runIf", None), str)
+        and run_if
+    ):
+        return run_if
+    if isinstance(
+        bindings := getattr(action_model, "dynamicBindings", None), Mapping
+    ):
+        for key in ("run_if", "runIf"):
+            if isinstance(expr := bindings.get(key), str) and expr:
+                return expr
+    return None
+
+
+def referenced_output_actions(
     action_model: Any, *, include_run_if: bool = True
 ) -> set[str]:
     """Returns upstream action names referenced via `outputs.*` in CEL."""
     exprs: list[str] = []
-    if (
-        include_run_if
-        and isinstance(run_if := getattr(action_model, "runIf", None), str)
-        and run_if
-    ):
+    if include_run_if and (run_if := get_run_if_expr(action_model)):
         exprs.append(run_if)
     if isinstance(
         bindings := getattr(action_model, "dynamicBindings", None), Mapping
     ):
-        exprs.extend(e for e in bindings.values() if isinstance(e, str) and e)
+        exprs.extend(
+            e
+            for k, e in bindings.items()
+            if k not in _RUN_IF_BINDING_KEYS and isinstance(e, str) and e
+        )
 
     referenced: set[str] = set()
     for expr in exprs:
@@ -370,7 +389,7 @@ def build_cel_eval_context(
     if callable(getattr(ti, "xcom_pull", None)) and isinstance(
         depends_on, (list, tuple, set)
     ):
-        needed = set(depends_on) & _referenced_output_actions(
+        needed = set(depends_on) & referenced_output_actions(
             action_model,
             include_run_if=getattr(operator, "_op_is_entry_task", True),
         )
@@ -473,6 +492,7 @@ def _str_bindings(source: Any, prefix: str = "") -> list[tuple[str, str]]:
         (key, expr)
         for key, expr in raw.items()
         if isinstance(key, str)
+        and key not in _RUN_IF_BINDING_KEYS
         and key.startswith(prefix)
         and isinstance(expr, str)
     ]
@@ -708,7 +728,7 @@ class RuntimeResolutionMixin:
         pipeline_model = getattr(self, "_op_pipeline_model", None)
         if action_model is not None or pipeline_model is not None:
             run_if = (
-                getattr(action_model, "runIf", None)
+                get_run_if_expr(action_model)
                 if getattr(self, "_op_is_entry_task", True)
                 and not _is_deferred_resume(context)
                 else None
@@ -747,15 +767,20 @@ class RuntimeResolutionMixin:
             super_pre(context)
 
     def _run_and_harvest(self, context: Any, runner: Callable[[], Any]) -> Any:
+        if getattr(self, "_op_in_harvest", False):
+            return runner()
         has_output = getattr(
             self, "_op_action_model", None
         ) is not None and getattr(self, "_op_is_output_task", True)
+        self._op_in_harvest = True
         try:
             raw_result = runner()
         except Exception as err:
             if has_output and not is_non_failure_signal(err):
                 _push_failure_output(self, context)
             raise
+        finally:
+            self._op_in_harvest = False
         return (
             harvester.extract_and_pack_output(
                 self, context, raw_result, failed=False

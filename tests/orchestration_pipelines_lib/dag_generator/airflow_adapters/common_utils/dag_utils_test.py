@@ -13,6 +13,7 @@
 """Tests for dag_utils."""
 
 import json
+import types
 from datetime import datetime
 from functools import partial
 from typing import Any
@@ -35,6 +36,7 @@ from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.dag
 from orchestration_pipelines_lib.dag_generator.airflow_adapters.common_utils.task_utils import (  # noqa: E501
     create_schedule_trigger_task,
 )
+from orchestration_pipelines_lib.internal_models.pipeline import ParameterModel
 from tests.conftest import IS_AIRFLOW_2
 
 try:
@@ -1239,3 +1241,120 @@ def test_build_dag_kwargs_with_parameters_registers_airflow_params(
             "description": None,
         },
     }
+
+
+def test_build_dag_kwargs_dynamic_notification_emails_and_type_check(
+    pipeline_setup,
+):
+    pipeline = pipeline_setup["pipeline"]
+    pipeline.parameters = {
+        "recipients": ParameterModel(type="array", default=["ops@example.com"]),
+        "bad_recipient": ParameterModel(type="string", default="single"),
+    }
+    pipeline.dynamicBindings = {
+        "notifications.on_pipeline_failure.email": "${parameters.recipients}",
+        "notifications.onPipelineSuccess.email": "${parameters.bad_recipient}",
+    }
+    # Dynamic notification bindings must work even when notifications block is omitted.
+    pipeline.notifications = None
+    sent: list[tuple[list[str], bool]] = []
+
+    result = _build_dag_kwargs(
+        pipeline,
+        [],
+        "",
+        "/data",
+        "bundle1",
+        "pipe1",
+        lambda emails, is_ok, _c: sent.append((emails, is_ok)),
+        lambda _p, _b=None: "dag_id",
+        get_param_class=lambda: dict,
+    )
+
+    fail_cb = result["on_failure_callback"][1]  # type: ignore[index]
+    ok_cb = result["on_success_callback"][1]  # type: ignore[index]
+    ctx = {"dag_run": types.SimpleNamespace(conf={}), "params": {}}
+    fail_cb(ctx)
+    assert sent == [(["ops@example.com"], False)]
+
+    try:
+        import airflow.sdk as ctx_mod  # pyright: ignore
+    except ImportError:
+        import airflow.operators.python as ctx_mod  # pyright: ignore
+    with patch.object(ctx_mod, "get_current_context", return_value=ctx) as m_gc:
+        fail_cb(None)  # type: ignore[arg-type]
+        assert m_gc.call_count == 1
+        # Passing an explicit empty dict `{}` must NOT fall back to get_current_context().
+        fail_cb({})  # type: ignore[arg-type]
+        assert m_gc.call_count == 1
+    assert len(sent) == 3
+
+    fail_cb(
+        {"dag_run": types.SimpleNamespace(conf={"recipients": []}), "params": {}}
+    )
+    assert len(sent) == 3
+
+    with pytest.raises(TypeError, match="expected list"):
+        ok_cb(ctx)
+
+
+def test_create_tasks_gates_output_harvesting_and_wires_kwargs_builder(
+    mock_pipeline,
+):
+    from orchestration_pipelines_lib.utils import runtime_resolver as rr
+
+    unreferenced_static = types.SimpleNamespace(name="static_leaf")
+    referenced_static = types.SimpleNamespace(name="up_step")
+    dyn_act = types.SimpleNamespace(
+        name="eph",
+        dependsOn=["up_step"],
+        dynamicBindings={"runIf": "outputs.up_step.value > 0"},
+    )
+    mock_pipeline.actions = [unreferenced_static, referenced_static, dyn_act]
+
+    leaf_op = types.SimpleNamespace(task_id="static_leaf")
+    up_op = types.SimpleNamespace(task_id="up_step")
+    c_op = types.SimpleNamespace(
+        task_id="eph.c", _op_task_role=rr.TASK_ROLE_CREATE_CLUSTER
+    )
+    s_op = types.SimpleNamespace(
+        task_id="eph.s", _op_task_role=rr.TASK_ROLE_SUBMIT_JOB
+    )
+    d_op = types.SimpleNamespace(
+        task_id="eph.d", _op_task_role=rr.TASK_ROLE_DELETE_CLUSTER
+    )
+    group_obj = types.SimpleNamespace(
+        children={"c": c_op, "s": s_op, "d": d_op}
+    )
+    ops_by_name = {
+        "static_leaf": leaf_op,
+        "up_step": up_op,
+        "eph": group_obj,
+    }
+
+    _create_tasks(
+        types.SimpleNamespace(),  # type: ignore[arg-type]
+        {type(unreferenced_static): lambda act, _p, dag=None: ops_by_name[act.name]},
+        mock_pipeline,
+    )
+
+    # Unreferenced static task keeps native XCom (no _op_action_model attached).
+    assert getattr(leaf_op, "_op_action_model", None) is None
+    assert (leaf_op._op_is_entry_task, leaf_op._op_is_output_task) == (
+        True,
+        False,
+    )
+    # Referenced static upstream gets _op_action_model and _op_is_output_task=True.
+    assert up_op._op_action_model is referenced_static
+    assert getattr(up_op, "_op_pipeline_model", None) is None
+    assert (up_op._op_is_entry_task, up_op._op_is_output_task) == (True, True)
+    # Dynamic TaskGroup roles and explicit _op_kwargs_builder wiring.
+    assert (c_op._op_is_entry_task, c_op._op_is_output_task) == (True, False)
+    assert (s_op._op_is_entry_task, s_op._op_is_output_task) == (False, False)
+    assert (d_op._op_is_entry_task, d_op._op_is_output_task) == (False, False)
+    assert isinstance(c_op._op_pipeline_model, rr.RuntimePipelineContext)
+    assert callable(c_op._op_kwargs_builder)
+    assert not hasattr(c_op._op_pipeline_model, "actions")
+    # Non-entry TaskGroup tasks stay static when runIf is the only dynamicBinding.
+    assert getattr(s_op, "_op_pipeline_model", None) is None
+    assert getattr(d_op, "_op_pipeline_model", None) is None
