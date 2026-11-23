@@ -15,6 +15,7 @@
 """Lightweight standard-library CEL validator for orchestration pipelines."""
 
 import ast
+import functools
 import re
 import warnings
 from dataclasses import dataclass
@@ -64,16 +65,19 @@ class CelExpressionAnalysis:
     guarded_output_actions: frozenset[str]
 
 
-def _check_outputs_dot_ref(match: re.Match[str]) -> str:
+def _check_outputs_dot_ref(
+    match: re.Match[str], *, warn: bool = True, stacklevel: int = 3
+) -> str:
     action_id = match.group(1)
     if not action_id or action_id.isidentifier():
         return match.group(0)
-    warnings.warn(
-        f"Non-standard CEL syntax 'outputs.{action_id}'; "
-        f'use outputs["{action_id}"] instead.',
-        UserWarning,
-        stacklevel=3,
-    )
+    if warn:
+        warnings.warn(
+            f"Non-standard CEL syntax 'outputs.{action_id}'; "
+            f'use outputs["{action_id}"] instead.',
+            UserWarning,
+            stacklevel=stacklevel,
+        )
     return f'outputs["{action_id}"]'
 
 
@@ -143,13 +147,27 @@ def extract_cel_expression(
     )
 
 
-def validate_and_analyze_cel(raw_expr: str) -> CelExpressionAnalysis:
-    """Validates pipeline root references and extracts referenced symbols."""
+def normalize_cel_expression(
+    raw_expr: str, *, warn: bool = False, _stacklevel: int = 3
+) -> str:
+    """Unwraps `${ ... }` and normalizes non-identifier `outputs.<id>` refs."""
     if not isinstance(raw_expr, str) or not (expr := raw_expr.strip()):
         raise ValueError("CEL expression must be a non-empty string.")
     if expr.startswith("${"):
         expr = extract_cel_expression(expr, require_cel_root=False) or ""
-    normalized = _OUTPUTS_DOT_REF_RE.sub(_check_outputs_dot_ref, expr)
+    return _OUTPUTS_DOT_REF_RE.sub(
+        functools.partial(
+            _check_outputs_dot_ref, warn=warn, stacklevel=_stacklevel
+        ),
+        expr,
+    )
+
+
+def validate_and_analyze_cel(
+    raw_expr: str, *, warn: bool = True
+) -> CelExpressionAnalysis:
+    """Validates pipeline root references and extracts referenced symbols."""
+    normalized = normalize_cel_expression(raw_expr, warn=warn, _stacklevel=4)
 
     key_table: dict[str, str] = {}
 
@@ -206,9 +224,9 @@ def validate_and_analyze_cel(raw_expr: str) -> CelExpressionAnalysis:
                 continue
         ref = ".".join(parts)
         raise ValueError(
-            f"Invalid 'has()' argument '{ref}' in '{expr}'."
+            f"Invalid 'has()' argument '{ref}' in '{normalized}'."
             if in_has
-            else f"Invalid or unknown reference '{ref}' in CEL: '{expr}'."
+            else f"Invalid or unknown reference '{ref}' in CEL: '{normalized}'."
         )
 
     return CelExpressionAnalysis(

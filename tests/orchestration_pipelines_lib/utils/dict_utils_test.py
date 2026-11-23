@@ -17,6 +17,9 @@ from google.protobuf import struct_pb2
 from google.protobuf.json_format import ParseError
 from google.cloud.dataproc_v1.types.clusters import ClusterConfig
 from orchestration_pipelines_lib.utils import dict_utils
+from orchestration_pipelines_models.pipeline_v1_model.protos import (
+    orchestration_pipeline_pb2,
+)
 
 
 class DictUtilsTest(unittest.TestCase):
@@ -105,6 +108,84 @@ class DictUtilsTest(unittest.TestCase):
     def test_normalize_struct_with_none(self):
         """Test conversion of None to None for normalized dict."""
         self.assertIsNone(dict_utils.normalize_struct(None, ClusterConfig))
+
+    def test_set_nested_path_and_bounds(self):
+        target = {"items": [{"x": 1}], "matrix": [[{"y": 2}]], "a.b": 0}
+        dict_utils.set_nested_path(target, "a.b", 9)
+        dict_utils.set_nested_path(target, "items[0].x", 3)
+        dict_utils.set_nested_path(target, "matrix[0][0]", {"y": 4})
+        self.assertEqual(target["a.b"], 9)
+        self.assertEqual(target["items"][0]["x"], 3)
+        self.assertEqual(target["matrix"][0][0], {"y": 4})
+
+        with self.assertRaises(IndexError):
+            dict_utils.set_nested_path(target, "items[5].x", 1)
+        with self.assertRaises(TypeError):
+            dict_utils.set_nested_path({"items": ["s"]}, "items[0].x", 1)
+
+    def test_set_proto_path_and_string_map_edge_cases(self):
+        with self.assertRaisesRegex(TypeError, "Map entry 'k' in 'metadata'"):
+            dict_utils.dict_to_struct(
+                {"gceClusterConfig": {"metadata": {"k": None}}}, ClusterConfig
+            )
+
+        py_msg = orchestration_pipeline_pb2.PythonAction(name="p1")
+        dict_utils.set_proto_path(py_msg, "op_kwargs.cursor", None)
+        dict_utils.set_proto_path(py_msg, "op_kwargs.rows", 5)
+        self.assertEqual(
+            dict_utils.struct_to_dict(py_msg.op_kwargs),
+            {"cursor": None, "rows": 5.0},
+        )
+
+        py_msg.depends_on.extend(["a", "b"])
+        dict_utils.set_proto_path(py_msg, "depends_on[1]", "c")
+        self.assertEqual(list(py_msg.depends_on), ["a", "c"])
+
+        with self.assertRaisesRegex(TypeError, "Unsupported scalar type"):
+            dict_utils.set_proto_path(py_msg, "trigger_rule", 1)
+
+        dbt_msg = orchestration_pipeline_pb2.DbtFrameworkSpec(
+            invocations=[orchestration_pipeline_pb2.DbtInvocation(command="run")]
+        )
+        with self.assertRaisesRegex(TypeError, "requires a subfield path"):
+            dict_utils.set_proto_path(dbt_msg, "invocations[0]", "bad")
+
+        sql_msg = orchestration_pipeline_pb2.SqlAction(name="s1")
+        dict_utils.set_proto_path(sql_msg, "labels", {"a": 1, "b": True})
+        dict_utils.set_proto_path(sql_msg, "labels.c", "v")
+        self.assertEqual(
+            dict(sql_msg.labels), {"a": "1", "b": "true", "c": "v"}
+        )
+        dict_utils.set_proto_path(py_msg, "op_kwargs", {"k": 2})
+        dict_utils.set_proto_path(py_msg, "depends_on", ["u1", "u2"])
+        self.assertEqual(list(py_msg.depends_on), ["u1", "u2"])
+
+        retry = orchestration_pipeline_pb2.RetryPolicy()
+        dict_utils.set_proto_path(retry, "max_retries", 3.0)
+        dict_utils.set_proto_path(retry, "exponential_backoff.multiplier", 2.5)
+        dict_utils.set_proto_path(
+            retry, "exponential_backoff.randomize_jitter", True
+        )
+        self.assertEqual(retry.max_retries, 3)
+        self.assertEqual(retry.exponential_backoff.multiplier, 2.5)
+        self.assertTrue(retry.exponential_backoff.randomize_jitter)
+        for path, bad in (
+            ("max_retries", 1.5),
+            ("max_retries", None),
+            ("exponential_backoff.multiplier", "bad"),
+            ("exponential_backoff.randomize_jitter", "yes"),
+        ):
+            with self.assertRaises(TypeError):
+                dict_utils.set_proto_path(retry, path, bad)
+        with self.assertRaises(TypeError):
+            dict_utils.set_proto_path(sql_msg, "labels", "not-map")
+        with self.assertRaises(TypeError):
+            dict_utils.set_proto_path(py_msg, "depends_on", "not-list")
+        self.assertIsNone(dict_utils.iso_to_timestamp_dict(""))
+        self.assertEqual(
+            dict_utils.iso_to_timestamp_dict("2026-01-01T00:00:10Z"),
+            {"seconds": 1767225610},
+        )
 
 
 if __name__ == "__main__":

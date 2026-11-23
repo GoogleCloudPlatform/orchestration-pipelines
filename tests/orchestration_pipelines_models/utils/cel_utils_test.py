@@ -260,3 +260,30 @@ def test_validate_and_analyze_cel_invalid(invalid_expr, error_pattern):
 
         with pytest.raises(ValueError, match=error_pattern):
             cel_utils.validate_and_analyze_cel(invalid_expr)
+
+
+def test_normalize_cel_expression_rewrites_hyphenated_outputs():
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        normalized = cel_utils.normalize_cel_expression(
+            "${ outputs.my-step.value.cnt + 1 }", warn=False
+        )
+        quiet_analysis = cel_utils.validate_and_analyze_cel(
+            "outputs.my-step.value.cnt", warn=False
+        )
+    assert normalized == 'outputs["my-step"].value.cnt + 1'
+    assert quiet_analysis.output_actions == frozenset({"my-step"})
+    assert not caught
+
+    with pytest.warns(UserWarning, match='outputs\\["my-step"\\]') as rec1:
+        assert (
+            cel_utils.normalize_cel_expression(
+                "outputs.my-step.value", warn=True
+            )
+            == 'outputs["my-step"].value'
+        )
+    assert rec1[0].filename == __file__
+
+    with pytest.warns(UserWarning, match='outputs\\["my-step"\\]') as rec2:
+        cel_utils.validate_and_analyze_cel("outputs.my-step.value")
+    assert rec2[0].filename == __file__

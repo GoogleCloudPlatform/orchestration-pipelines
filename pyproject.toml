@@ -34,6 +34,7 @@ dependencies = [
     "litellm>=1.84.0",
     "google-cloud-aiplatform>=1.163.0",
     "apache-airflow-providers-cncf-kubernetes",
+    "cel-python>=0.4.0",
 ]
 
 [project.license]

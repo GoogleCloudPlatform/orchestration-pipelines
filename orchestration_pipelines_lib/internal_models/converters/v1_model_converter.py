@@ -19,9 +19,11 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import yaml
@@ -45,7 +47,13 @@ from orchestration_pipelines_lib.utils.dict_utils import (
     normalize_struct,
     struct_to_dict,
 )
-from orchestration_pipelines_lib.utils.file_manager import FileManager
+from orchestration_pipelines_lib.utils.file_manager import (
+    FileManager,
+    OrchestrationPipelinesInvalidPathError,
+)
+from orchestration_pipelines_models.pipeline_v1_model.pipeline_validation import (
+    PipelineValidator,
+)
 from orchestration_pipelines_models.pipeline_v1_model.protos import (
     orchestration_pipeline_pb2 as v1_pipeline_protos,
 )
@@ -86,6 +94,47 @@ _OUTPUT_VALUE_REF_RE = re.compile(
     r"(?:\.\s*([A-Za-z0-9_-]+)|\[\s*(?:'([^'\\]+)'|\"([^\"\\]+)\")\s*\])\s*"
     r"(?:\.\s*value\b|\[\s*['\"]value['\"]\s*\])"
 )
+
+# Static file/URI attributes already resolved at DAG parse time (non-parameterizable)
+# that are preserved from `base_action` during runtime reconversion.
+_PRE_RESOLVED_STATIC_ACTION_ATTRS = (
+    "filename",
+    "pyFiles",
+    "archives",
+    "source",
+    "dataform_project_path",
+    "fetchOutputValue",
+    "_v1_action_bytes",
+)
+_RESOURCE_PROFILE_PREFIXES = (
+    "engine.dataproc_serverless.resource_profile",
+    "engine.dataproc_on_gce.ephemeral_cluster.resource_profile",
+)
+_RESOURCE_PROFILE_PATH_KEYS = frozenset(
+    f"{prefix}.{field}"
+    for prefix in _RESOURCE_PROFILE_PREFIXES
+    for field in ("path", "external_config_path")
+)
+
+
+class _PassthroughFileManager:
+    """Thread-safe FileManager proxy that skips static GCS URI checks."""
+
+    def __init__(self, delegate: FileManager):
+        self._delegate = delegate
+
+    def read(self, file_path: Any) -> str:
+        return self._delegate.read(file_path)
+
+    def resolve_path(self, file_path: Any) -> Any:
+        return self._delegate.resolve_path(file_path)
+
+    def extract_relative_path(self, full_path: Any, *args: Any) -> str:
+        return self._delegate.extract_relative_path(full_path, *args)
+
+    @staticmethod
+    def resolve_to_gcs_uri(file_path: Any) -> str:
+        return str(file_path)
 
 
 class ConverterV1ToInternal:
@@ -427,6 +476,117 @@ class ConverterV1ToInternal:
             retryPolicy=retry_policy,
         )
 
+    def _validate_runtime_resource_profile_path(self, raw_path: str) -> None:
+        """Validates a dynamically bound resource profile path."""
+        if not raw_path:
+            return
+        if raw_path.startswith("gs://"):
+            gcs_bucket = os.environ.get("GCS_BUCKET")
+            bucket_name, blob_path = self.file_manager._parse_gcs_uri(raw_path)
+            if (
+                not gcs_bucket
+                or bucket_name != gcs_bucket
+                or ".." in blob_path.split("/")
+            ):
+                raise OrchestrationPipelinesInvalidPathError(
+                    f"Runtime-bound GCS resource profile path {raw_path!r} "
+                    "is not within the configured GCS_BUCKET."
+                )
+            return
+        if os.path.isabs(raw_path):
+            raise OrchestrationPipelinesInvalidPathError(
+                "Runtime-bound resource profile path must be relative, "
+                f"got {raw_path!r}."
+            )
+        root = self.file_manager.resolve_path("")
+        resolved = self.file_manager.resolve_path(raw_path)
+        if (
+            not root
+            or not resolved
+            or not Path(resolved).resolve().is_relative_to(Path(root).resolve())
+        ):
+            raise OrchestrationPipelinesInvalidPathError(
+                f"Runtime-bound resource profile path {raw_path!r} "
+                "escapes allowed root directory."
+            )
+
+    def reconvert_action(
+        self,
+        v1_action: v1_pipeline_protos.Action,
+        v1_defaults: v1_pipeline_protos.Defaults,
+        base_action: internal_pipeline.AnyAction,
+        tags: list[str] | None,
+        *,
+        bound_paths: Collection[str] | None = None,
+    ) -> internal_pipeline.AnyAction:
+        """Re-converts a resolved Action proto at runtime without static file I/O."""
+        action_type = v1_action.WhichOneof("action")
+        action_proto = getattr(v1_action, action_type) if action_type else None
+        if bound_paths is None and action_proto is not None:
+            raw_bindings = getattr(action_proto, "dynamic_bindings", None) or ()
+            bound_paths = {
+                PipelineValidator.resolve_binding_target(
+                    action_proto.DESCRIPTOR, key
+                )[1]
+                for key in raw_bindings
+            }
+        resolved_bound_paths = set(bound_paths or ())
+        reuse_parsed_resource_profile = not any(
+            path == prefix or path.startswith(f"{prefix}.")
+            for path in resolved_bound_paths
+            for prefix in _RESOURCE_PROFILE_PREFIXES
+        )
+
+        # Skip re-reading static Dataproc resource profile YAML files if no
+        # resource_profile field was dynamically bound; otherwise validate any
+        # dynamically bound profile path before reading.
+        if action_proto is not None and hasattr(action_proto, "engine"):
+            engine_type = action_proto.engine.WhichOneof("engine")
+            rp_parent = None
+            if engine_type == "dataproc_serverless":
+                rp_parent = action_proto.engine.dataproc_serverless
+            elif (
+                engine_type == "dataproc_on_gce"
+                and action_proto.engine.dataproc_on_gce.WhichOneof("config")
+                == "ephemeral_cluster"
+            ):
+                rp_parent = (
+                    action_proto.engine.dataproc_on_gce.ephemeral_cluster
+                )
+            if rp_parent is not None:
+                if reuse_parsed_resource_profile:
+                    rp_parent.ClearField("resource_profile")
+                elif resolved_bound_paths & _RESOURCE_PROFILE_PATH_KEYS:
+                    rp = rp_parent.resource_profile
+                    cfg_type = rp.WhichOneof("config")
+                    if cfg_type in ("path", "external_config_path"):
+                        self._validate_runtime_resource_profile_path(
+                            getattr(rp, cfg_type)
+                        )
+
+        runtime_converter = ConverterV1ToInternal(
+            _PassthroughFileManager(self.file_manager)  # type: ignore[arg-type]
+        )
+        reconverted_model = runtime_converter.convert_action(
+            v1_action, v1_defaults, self._get_labels(tags or [])
+        )
+
+        for attr in _PRE_RESOLVED_STATIC_ACTION_ATTRS:
+            if hasattr(base_action, attr):
+                setattr(reconverted_model, attr, getattr(base_action, attr))
+
+        base_config = getattr(base_action, "config", None)
+        reconverted_config = getattr(reconverted_model, "config", None)
+        preserved_config_attrs = ("requirementsPath",) + (
+            ("resourceProfile", "cluster_config")
+            if reuse_parsed_resource_profile
+            else ()
+        )
+        for attr in preserved_config_attrs:
+            if hasattr(base_config, attr) and reconverted_config is not None:
+                setattr(reconverted_config, attr, getattr(base_config, attr))
+        return reconverted_model
+
     def convert_to_internal_model(
         self, v1_pipeline_model: v1_pipeline_protos.OrchestrationPipeline
     ) -> internal_pipeline.PipelineModel:
@@ -442,6 +602,10 @@ class ConverterV1ToInternal:
             self.convert_trigger(t) for t in v1_pipeline_model.triggers
         ]
         labels = self._get_labels(v1_pipeline_model.tags)
+        has_default_bindings = any(
+            k.startswith("defaults.")
+            for k in v1_pipeline_model.dynamic_bindings
+        )
         value_referenced = self._get_value_referenced_actions(
             v1_pipeline_model.actions
         )
@@ -450,6 +614,11 @@ class ConverterV1ToInternal:
             act = self.convert_action(
                 raw_act, v1_pipeline_model.defaults, labels
             )
+            # When pipeline-level `defaults` have dynamic CEL bindings, retain a
+            # serialized proto snapshot on every action so `runtime_resolver`
+            # can re-validate and reconvert the action with resolved defaults.
+            if has_default_bindings and not hasattr(act, "_v1_action_bytes"):
+                act._v1_action_bytes = raw_act.SerializeToString()
             if isinstance(act, internal_actions.BqOperationActionModel):
                 act.fetchOutputValue = act.name in value_referenced
             internal_actions_list.append(act)
@@ -471,7 +640,7 @@ class ConverterV1ToInternal:
             v1_pipeline_model.runner
         ).lower()
 
-        return internal_pipeline.PipelineModel(
+        pipeline_model = internal_pipeline.PipelineModel(
             metadata=internal_metadata,
             defaults=internal_defaults,
             runner=runner_name,
@@ -481,6 +650,16 @@ class ConverterV1ToInternal:
             parameters=self._convert_parameters(v1_pipeline_model.parameters),
             dynamicBindings=dict(v1_pipeline_model.dynamic_bindings) or None,
         )
+        # Retain a serialized snapshot of `Defaults` whenever defaults or any
+        # action has dynamic bindings so runtime reconversion preserves static
+        # `retry_policy` and `execution_config` defaults.
+        if has_default_bindings or any(
+            hasattr(act, "_v1_action_bytes") for act in internal_actions_list
+        ):
+            pipeline_model._v1_defaults_bytes = (
+                v1_pipeline_model.defaults.SerializeToString()
+            )
+        return pipeline_model
 
     def convert_notifications(
         self, notifications: v1_pipeline_protos.Notification
@@ -564,6 +743,8 @@ class ConverterV1ToInternal:
                 )
             case _:
                 raise TypeError(f"Unknown action type: {action_type}")
+        if getattr(action, action_type).dynamic_bindings:
+            model._v1_action_bytes = action.SerializeToString()
         return model
 
     def _convert_python_action(
@@ -572,7 +753,7 @@ class ConverterV1ToInternal:
         defaults: v1_pipeline_protos.Defaults | None = None,
     ) -> internal_pipeline.AnyAction:
         op_kwargs = (
-            struct_to_dict(action.op_kwargs)
+            normalize_proto_json(struct_to_dict(action.op_kwargs))
             if action.HasField("op_kwargs") and action.op_kwargs
             else None
         )
@@ -1233,7 +1414,7 @@ class ConverterV1ToInternal:
         shared_labels: dict[str, str],
     ) -> internal_pipeline.AnyAction:
         params = (
-            struct_to_dict(action.params)
+            normalize_proto_json(struct_to_dict(action.params))
             if action.HasField("params") and action.params
             else None
         )

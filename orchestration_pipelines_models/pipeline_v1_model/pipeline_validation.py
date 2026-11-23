@@ -30,7 +30,7 @@ from orchestration_pipelines_models.pipeline_v1_model.protos import (
 )
 from orchestration_pipelines_models.utils import cel_utils, time_utils
 
-_INDEXED_SEGMENT_RE = re.compile(r"^([a-zA-Z0-9_]+)\[(\d+)\]$")
+_INDEXED_SEGMENT_RE = re.compile(r"^([^\[\]]+)((?:\[\d+\])+)$")
 _PARAM_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 _PARAM_TYPE_TO_VALUE_KIND = {
     orchestration_pipeline_pb2.Parameter.Type.string: "string_value",
@@ -51,6 +51,14 @@ _DBT_NO_FULL_REFRESH_COMMANDS = frozenset(
         "snapshot",
     }
 )
+
+
+def parse_indexed_segment(segment: str) -> tuple[str, list[int]] | None:
+    """Parses `'field[0]'` or `'matrix[0][1]'` into `(name, [indices])`."""
+    if not (match := _INDEXED_SEGMENT_RE.match(segment)):
+        return None
+    indices = [int(idx) for idx in match.group(2)[1:-1].split("][")]
+    return match.group(1), indices
 
 
 class PipelineValidator:
@@ -114,44 +122,9 @@ class PipelineValidator:
             )
             if current_field_path in bound_paths:
                 continue
-            options = field.GetOptions()
-            if (
-                options.HasExtension(validation_pb2.is_required)
-                and options.Extensions[validation_pb2.is_required]
-            ):
-                cls._validate_is_required(
-                    message, field, current_field_path, bound_paths
-                )
-
-            value = getattr(message, field.name)
-            if options.HasExtension(validation_pb2.min_items):
-                cls._validate_min_items(
-                    field,
-                    value,
-                    options.Extensions[validation_pb2.min_items],
-                    current_field_path,
-                )
-            if (
-                options.HasExtension(validation_pb2.disallow_zero_enum)
-                and options.Extensions[validation_pb2.disallow_zero_enum]
-            ):
-                cls._validate_disallow_zero_enum(
-                    field, value, current_field_path
-                )
-            if options.HasExtension(validation_pb2.min_value):
-                cls._validate_min_value(
-                    field,
-                    value,
-                    options.Extensions[validation_pb2.min_value],
-                    current_field_path,
-                )
-            if options.HasExtension(validation_pb2.min_len):
-                cls._validate_min_len(
-                    field,
-                    value,
-                    options.Extensions[validation_pb2.min_len],
-                    current_field_path,
-                )
+            cls._validate_field_constraints(
+                message, field, current_field_path, bound_paths
+            )
 
         # 2. Validate the values of all fields that are actually set
         # (non-default).
@@ -188,6 +161,80 @@ class PipelineValidator:
 
         if descriptor == orchestration_pipeline_pb2.DbtInvocation.DESCRIPTOR:
             cls._validate_dbt_invocation(message, path_prefix)
+
+    @classmethod
+    def _validate_field_constraints(
+        cls,
+        message: Message,
+        field: FieldDescriptor,
+        field_path: str,
+        bound_paths: Collection[str] = (),
+    ) -> None:
+        options = field.GetOptions()
+        if (
+            options.HasExtension(validation_pb2.is_required)
+            and options.Extensions[validation_pb2.is_required]
+        ):
+            cls._validate_is_required(message, field, field_path, bound_paths)
+
+        value = getattr(message, field.name)
+        if options.HasExtension(validation_pb2.min_items):
+            cls._validate_min_items(
+                field,
+                value,
+                options.Extensions[validation_pb2.min_items],
+                field_path,
+            )
+        if (
+            options.HasExtension(validation_pb2.disallow_zero_enum)
+            and options.Extensions[validation_pb2.disallow_zero_enum]
+        ):
+            cls._validate_disallow_zero_enum(field, value, field_path)
+        if options.HasExtension(validation_pb2.min_value):
+            cls._validate_min_value(
+                field,
+                value,
+                options.Extensions[validation_pb2.min_value],
+                field_path,
+            )
+        if options.HasExtension(validation_pb2.min_len):
+            cls._validate_min_len(
+                field,
+                value,
+                options.Extensions[validation_pb2.min_len],
+                field_path,
+            )
+
+    @classmethod
+    def validate_bound_path(
+        cls, root_msg: Message, canonical_path: str
+    ) -> None:
+        """Validates only the field modified at `canonical_path`."""
+        parent = root_msg
+        segments = canonical_path.split(".")
+        for i, segment in enumerate(segments):
+            indexed = parse_indexed_segment(segment)
+            field = parent.DESCRIPTOR.fields_by_name[
+                indexed[0] if indexed else segment
+            ]
+            has_tail = i < len(segments) - 1
+            if indexed and has_tail:
+                parent = getattr(parent, field.name)[indexed[1][0]]
+            elif (
+                has_tail
+                and field.message_type is not None
+                and not cls.is_map_field(field)
+                and not cls.is_struct_field(field)
+            ):
+                parent = getattr(parent, field.name)
+            else:
+                field_path = ".".join(segments[: i + 1])
+                cls._validate_field_constraints(parent, field, field_path)
+                if any(f is field for f, _ in parent.ListFields()):
+                    cls._validate_field_value(
+                        field, getattr(parent, field.name), field_path
+                    )
+                return
 
     @classmethod
     def _validate_dbt_invocation(
@@ -560,7 +607,7 @@ class PipelineValidator:
         bindings: dict[str, tuple[str, Message | None]] = {}
         for desc, raw_map, prefix, owner in scopes:
             for raw_path, raw_expr in raw_map.items():
-                field, rel_path = cls._resolve_binding_target(
+                field, rel_path = cls.resolve_binding_target(
                     desc, raw_path, prefix
                 )
                 full_path = f"{prefix}.{rel_path}" if prefix else rel_path
@@ -587,8 +634,8 @@ class PipelineValidator:
         )
 
     @classmethod
-    def _resolve_binding_target(
-        cls, root_desc: Descriptor, raw_path: str, error_prefix: str
+    def resolve_binding_target(
+        cls, root_desc: Descriptor, raw_path: str, error_prefix: str = ""
     ) -> tuple[FieldDescriptor, str]:
         """Resolves a dot-delimited binding path to its FieldDescriptor."""
         prefix = f"{error_prefix}." if error_prefix else ""
@@ -596,13 +643,15 @@ class PipelineValidator:
         curr_desc = root_desc
         canonical: list[str] = []
         for idx, segment in enumerate(segments):
-            indexed = _INDEXED_SEGMENT_RE.match(segment)
-            name = indexed.group(1) if indexed else segment
+            indexed = parse_indexed_segment(segment)
+            name = indexed[0] if indexed else segment
             field = cls.find_field(curr_desc, name)
             if field is None or (
                 indexed
                 and (
-                    not cls.is_field_repeated(field) or cls.is_map_field(field)
+                    len(indexed[1]) != 1
+                    or not cls.is_field_repeated(field)
+                    or cls.is_map_field(field)
                 )
             ):
                 raise ValueError(
@@ -618,16 +667,14 @@ class PipelineValidator:
                 )
 
             canonical.append(
-                f"{field.name}[{indexed.group(2)}]" if indexed else field.name
+                f"{field.name}[{indexed[1][0]}]" if indexed else field.name
             )
             if not indexed and (
                 cls.is_map_field(field) or cls.is_struct_field(field)
             ):
                 tail = segments[idx + 1 :]
-                if tail and (leaf_idx := _INDEXED_SEGMENT_RE.match(tail[-1])):
-                    list_path = ".".join(
-                        [*canonical, *tail[:-1], leaf_idx.group(1)]
-                    )
+                if tail and (leaf_idx := parse_indexed_segment(tail[-1])):
+                    list_path = ".".join([*canonical, *tail[:-1], leaf_idx[0]])
                     cls._raise_list_element_error(f"{prefix}{list_path}", field)
                 canonical.extend(tail)
                 return field, ".".join(canonical)
