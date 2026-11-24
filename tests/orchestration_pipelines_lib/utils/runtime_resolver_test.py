@@ -19,6 +19,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 import datetime
+import enum
 import json
 import types
 from typing import Any
@@ -770,3 +771,97 @@ def test_runtime_resolution_mixin_run_if_and_output_wrapping(caplog):
         assert "Failed to push failure metadata XCom" in caplog.text
     finally:
         runtime_resolver.register_operator_kwargs_builder(prev_builder)
+
+
+def test_extract_asset_event_params_skips_non_dataset_runs_and_guards_errors(
+    caplog,
+):
+    """Tests run_type unwrapping, lazy proxy guards, and parameterless skip."""
+
+    class _RunType(str, enum.Enum):
+        # Deliberately include 'dataset' in member name to verify `.value` is used.
+        DATASET_NAMED_MANUAL = "manual"
+        DATASET_TRIGGERED = "dataset_triggered"
+
+    class _ExplodingProxy:
+        def __bool__(self) -> bool:
+            raise RuntimeError("session.merge on dirty dag_run")
+
+        @property
+        def __class__(self) -> type:  # type: ignore[override]
+            raise RuntimeError("session.merge on dirty dag_run")
+
+    class _DetachedDagRun:
+        @property
+        def run_type(self) -> str:
+            raise RuntimeError("detached DagRun instance")
+
+    manual_run = types.SimpleNamespace(run_type=_RunType.DATASET_NAMED_MANUAL)
+    scheduled_run = types.SimpleNamespace(run_type="scheduled")
+    dataset_run = types.SimpleNamespace(run_type=_RunType.DATASET_TRIGGERED)
+    asset_run = types.SimpleNamespace(run_type="asset_triggered")
+
+    asset_proxy_ctx = {"triggering_asset_events": _ExplodingProxy()}
+    dataset_proxy_ctx = {"triggering_dataset_events": _ExplodingProxy()}
+
+    for run in (manual_run, scheduled_run):
+        for proxy_ctx in (asset_proxy_ctx, dataset_proxy_ctx):
+            assert (
+                runtime_resolver._extract_asset_event_params(proxy_ctx, run)
+                == {}
+            )
+
+    for unknown_run in (None, _DetachedDagRun()):
+        for proxy_ctx in (asset_proxy_ctx, dataset_proxy_ctx):
+            caplog.clear()
+            with caplog.at_level("WARNING"):
+                assert (
+                    runtime_resolver._extract_asset_event_params(
+                        proxy_ctx, unknown_run
+                    )
+                    == {}
+                )
+            assert "Could not read triggering asset/dataset events" in (
+                caplog.text
+            )
+
+    with pytest.raises(RuntimeError, match="session.merge"):
+        runtime_resolver._extract_asset_event_params(
+            dataset_proxy_ctx, dataset_run
+        )
+
+    event = types.SimpleNamespace(timestamp=1, extra={"params": {"num": 42}})
+    assert runtime_resolver._extract_asset_event_params(
+        {"triggering_asset_events": {"asset://a": [event]}}, asset_run
+    ) == {"num": 42}
+
+    # End-to-end via build_cel_eval_context: parameterless pipelines, manual runs,
+    # and missing dag_run must not fail on lazy event proxies.
+    parameterless_op = types.SimpleNamespace(
+        _op_pipeline_model=types.SimpleNamespace(parameters={})
+    )
+    assert (
+        runtime_resolver.build_cel_eval_context(
+            parameterless_op,
+            {"dag_run": dataset_run, **dataset_proxy_ctx},
+        )["parameters"]
+        == {}
+    )
+
+    parameterized_op = types.SimpleNamespace(
+        _op_pipeline_model=_sample_pipeline()
+    )
+    assert (
+        runtime_resolver.build_cel_eval_context(
+            parameterized_op,
+            {"dag_run": manual_run, **asset_proxy_ctx},
+        )["parameters"]["num"]
+        == 5
+    )
+    with caplog.at_level("WARNING"):
+        assert (
+            runtime_resolver.build_cel_eval_context(
+                parameterized_op, dataset_proxy_ctx
+            )["parameters"]["num"]
+            == 5
+        )

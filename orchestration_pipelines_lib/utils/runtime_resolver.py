@@ -221,18 +221,38 @@ def _event_sort_key(event: Any) -> float:
     return float(ts) if isinstance(ts, (int, float)) else 0.0
 
 
-def _extract_asset_event_params(context: Mapping[str, Any]) -> dict[str, Any]:
-    raw_events = context.get("triggering_asset_events") or context.get(
-        "triggering_dataset_events"
-    )
-    if not isinstance(raw_events, Mapping):
+def _extract_asset_event_params(
+    context: Mapping[str, Any], dag_run: Any = None
+) -> dict[str, Any]:
+    run_type = ""
+    try:
+        raw_run_type = getattr(dag_run, "run_type", None)
+        run_type = str(
+            getattr(raw_run_type, "value", raw_run_type) or ""
+        ).lower()
+        if run_type and "asset" not in run_type and "dataset" not in run_type:
+            return {}
+        raw_events = context.get("triggering_asset_events")
+        if not raw_events:
+            raw_events = context.get("triggering_dataset_events")
+        if not isinstance(raw_events, Mapping):
+            return {}
+        events = list(
+            itertools.chain.from_iterable(
+                group for group in raw_events.values() if group
+            )
+        )
+    except Exception as err:  # pylint: disable=broad-exception-caught
+        if run_type:
+            raise
+        logger.warning(
+            "Could not read triggering asset/dataset events: %s", err
+        )
         return {}
     extracted: dict[str, Any] = {}
-    all_events = itertools.chain.from_iterable(
-        group for group in raw_events.values() if group
-    )
-    for event in sorted(all_events, key=_event_sort_key):
-        if isinstance(extra := getattr(event, "extra", None), Mapping):
+    for event in sorted(events, key=_event_sort_key):
+        extra = getattr(event, "extra", None)
+        if isinstance(extra, Mapping):
             payload = extra.get("params")
             extracted.update(payload if isinstance(payload, Mapping) else extra)
     return extracted
@@ -276,11 +296,13 @@ def _resolve_parameters(
 ) -> dict[str, Any]:
     raw_params = getattr(pipeline_model, "parameters", None)
     model_params = raw_params if isinstance(raw_params, Mapping) else {}
+    if pipeline_model is not None and not model_params:
+        return {}
     resolved = {name: param.default for name, param in model_params.items()}
 
     for source in (
         context.get("params"),
-        _extract_asset_event_params(context),
+        _extract_asset_event_params(context, dag_run),
         getattr(dag_run, "conf", None),
     ):
         if not isinstance(source, Mapping):
