@@ -12,6 +12,19 @@ constraints, and temporary limitations of `orchestration-pipelines`.
   (requires Airflow 2.11.0+; not supported on Airflow 2.10.x).
 - **Python Versions:** Supported only on Python 3.11+. Older Python runtimes
   (e.g., 3.10) are not supported.
+- **dbt Knowledge Catalog Metadata Ingestion (`knowledge_catalog` on Airflow
+  worker):** Requires `gcloud-cli` (`google-cloud-cli`) version `587.0.0+`
+  installed in the worker environment, as
+  `gcloud dataplex dbt metadata-jobs create` graduated from `alpha` in Google
+  Cloud SDK `587.0.0`. On Cloud Composer, this is bundled in newer image builds
+  (for example, `composer-3-airflow-2.11.1-build.23`,
+  `composer-3-airflow-3.2.2-build.10`, `composer-3-airflow-3.3.1-build.6`, and
+  `composer-2.17.17-airflow-2.11.1` or later); verify `gcloud --version` when
+  targeting earlier builds. The target Dataplex `entry_group` must already
+  exist in the project and location (use a dedicated entry group per dbt
+  project when `aspects_only` is `false`), and the Dataplex service agent
+  (`gcp-sa-dataplex`) must have read access to `storage_uri` (especially when
+  using the default Composer `GCS_BUCKET` or targeting another `project_id`).
 
 ## 2. Feature Limitations
 

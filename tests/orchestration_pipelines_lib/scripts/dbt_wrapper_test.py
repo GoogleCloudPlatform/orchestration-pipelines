@@ -517,3 +517,495 @@ def test_sync_outputs_to_gcs_uploads_manifest_and_run_results_only(
         "orchestration_pipelines_outputs/b1/versions/v1/p1/r1/t1/run_results.json",
         "orchestration_pipelines_outputs/b1/versions/v1/p1/r1/t1/manifest.json",
     }
+
+
+def test_build_knowledge_catalog_cmd_defaults():
+    """Tests _build_knowledge_catalog_cmd builds expected gcloud CLI flags."""
+    from orchestration_pipelines_lib.scripts.dbt_wrapper import (
+        _build_knowledge_catalog_cmd,
+    )
+
+    cmd = _build_knowledge_catalog_cmd(
+        "/tmp/dbt/target",
+        {
+            "project_id": "my-proj",
+            "location": "us-central1",
+            "entry_group": "my-dbt-group",
+            "storage_uri": "gs://my-bucket/dbt-imports",
+        },
+    )
+
+    assert cmd == [
+        "gcloud",
+        "dataplex",
+        "dbt",
+        "metadata-jobs",
+        "create",
+        "--project=my-proj",
+        "--location=us-central1",
+        "--artifacts-path=/tmp/dbt/target",
+        "--entry-group=my-dbt-group",
+        "--storage-uri=gs://my-bucket/dbt-imports/",
+        "--quiet",
+        "--async",
+    ]
+
+
+def test_build_knowledge_catalog_cmd_all_options():
+    """Tests _build_knowledge_catalog_cmd honors all optional flags."""
+    from orchestration_pipelines_lib.scripts.dbt_wrapper import (
+        _build_knowledge_catalog_cmd,
+    )
+
+    cmd = _build_knowledge_catalog_cmd(
+        "/tmp/dbt/target",
+        {
+            "project_id": "my-proj",
+            "location": "europe-west1",
+            "entry_group": "my-dbt-group",
+            "storage_uri": "gs://my-bucket/dbt-imports///",
+            "aspects_only": True,
+            "skip_bigquery_link": True,
+            "include_entry_links": False,
+            "async_mode": False,
+        },
+    )
+
+    assert cmd == [
+        "gcloud",
+        "dataplex",
+        "dbt",
+        "metadata-jobs",
+        "create",
+        "--project=my-proj",
+        "--location=europe-west1",
+        "--artifacts-path=/tmp/dbt/target",
+        "--entry-group=my-dbt-group",
+        "--storage-uri=gs://my-bucket/dbt-imports/",
+        "--quiet",
+        "--aspects-only",
+        "--skip-bigquery-link",
+        "--no-include-entry-links",
+    ]
+
+
+@patch("orchestration_pipelines_lib.scripts.dbt_wrapper.subprocess.run")
+def test_ingest_metadata_skips_when_manifest_missing(mock_run, tmp_path, caplog):
+    """Tests ingestion skips cleanly when manifest.json was not produced."""
+    from orchestration_pipelines_lib.scripts.dbt_wrapper import (
+        _ingest_metadata_to_knowledge_catalog,
+    )
+
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    with caplog.at_level(logging.WARNING, logger="airflow.task"):
+        _ingest_metadata_to_knowledge_catalog(
+            str(target_dir),
+            {
+                "project_id": "my-proj",
+                "location": "us-central1",
+                "entry_group": "my-group",
+                "storage_uri": "gs://my-bucket/imports/",
+            },
+            logging.getLogger("airflow.task"),
+        )
+
+    mock_run.assert_not_called()
+    assert "manifest.json not found" in caplog.text
+
+
+@patch("orchestration_pipelines_lib.scripts.dbt_wrapper.subprocess.run")
+def test_ingest_metadata_happy_path_runs_single_gcloud_call(
+    mock_run, tmp_path, caplog
+):
+    """Tests happy path invokes gcloud directly without extra --version call."""
+    from orchestration_pipelines_lib.scripts.dbt_wrapper import (
+        _GCLOUD_ASYNC_TIMEOUT_SECONDS,
+        _GCLOUD_SYNC_TIMEOUT_SECONDS,
+        _ingest_metadata_to_knowledge_catalog,
+    )
+
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    (target_dir / "manifest.json").write_text('{"nodes": {}}')
+
+    config = {
+        "project_id": "my-proj",
+        "location": "us-central1",
+        "entry_group": "my-group",
+        "storage_uri": "gs://my-bucket/imports/",
+    }
+    logger = logging.getLogger("airflow.task")
+
+    mock_run.return_value = SimpleNamespace(
+        returncode=0,
+        stdout="name: projects/my-proj/locations/us-central1/metadataJobs/job-1\n",
+        stderr="Create request issued.\n",
+    )
+    with caplog.at_level(logging.INFO, logger="airflow.task"):
+        _ingest_metadata_to_knowledge_catalog(str(target_dir), config, logger)
+
+    mock_run.assert_called_once_with(
+        [
+            "gcloud",
+            "dataplex",
+            "dbt",
+            "metadata-jobs",
+            "create",
+            "--project=my-proj",
+            "--location=us-central1",
+            f"--artifacts-path={target_dir}",
+            "--entry-group=my-group",
+            "--storage-uri=gs://my-bucket/imports/",
+            "--quiet",
+            "--async",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=_GCLOUD_ASYNC_TIMEOUT_SECONDS,
+    )
+    assert "Successfully triggered Dataplex Knowledge Catalog" in caplog.text
+
+    caplog.clear()
+    mock_run.reset_mock()
+    sync_config = {**config, "async_mode": False}
+    with caplog.at_level(logging.INFO, logger="airflow.task"):
+        _ingest_metadata_to_knowledge_catalog(
+            str(target_dir), sync_config, logger
+        )
+    assert mock_run.call_args.kwargs["timeout"] == _GCLOUD_SYNC_TIMEOUT_SECONDS
+    assert "Successfully completed Dataplex Knowledge Catalog" in caplog.text
+
+
+@patch("orchestration_pipelines_lib.scripts.dbt_wrapper.subprocess.run")
+def test_ingest_metadata_missing_gcloud_binary_raises(mock_run, tmp_path):
+    """Tests FileNotFoundError raises clear worker upgrade message."""
+    from orchestration_pipelines_lib.scripts.dbt_wrapper import (
+        _ingest_metadata_to_knowledge_catalog,
+    )
+
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    (target_dir / "manifest.json").write_text('{"nodes": {}}')
+
+    mock_run.side_effect = FileNotFoundError("gcloud not found")
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "gcloud CLI is not installed.*gcloud-cli >= 587\\.0\\.0\\..*"
+            "Upgrade your worker/environment to have gcloud-cli 587\\.0\\.0\\+"
+        ),
+    ):
+        _ingest_metadata_to_knowledge_catalog(
+            str(target_dir),
+            {
+                "project_id": "my-proj",
+                "location": "us-central1",
+                "entry_group": "my-group",
+                "storage_uri": "gs://my-bucket/imports/",
+            },
+            logging.getLogger("airflow.task"),
+        )
+
+
+@patch("orchestration_pipelines_lib.scripts.dbt_wrapper.subprocess.run")
+def test_ingest_metadata_timeout_expired_raises(mock_run, tmp_path):
+    """Tests subprocess.TimeoutExpired raises a bounded timeout RuntimeError."""
+    import subprocess
+
+    from orchestration_pipelines_lib.scripts.dbt_wrapper import (
+        _GCLOUD_ASYNC_TIMEOUT_SECONDS,
+        _ingest_metadata_to_knowledge_catalog,
+    )
+
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    (target_dir / "manifest.json").write_text('{"nodes": {}}')
+
+    mock_run.side_effect = subprocess.TimeoutExpired(
+        cmd=["gcloud"], timeout=_GCLOUD_ASYNC_TIMEOUT_SECONDS
+    )
+    with pytest.raises(
+        RuntimeError,
+        match=f"gcloud dataplex dbt metadata-jobs create timed out after {_GCLOUD_ASYNC_TIMEOUT_SECONDS}s",
+    ):
+        _ingest_metadata_to_knowledge_catalog(
+            str(target_dir),
+            {
+                "project_id": "my-proj",
+                "location": "us-central1",
+                "entry_group": "my-group",
+                "storage_uri": "gs://my-bucket/imports/",
+            },
+            logging.getLogger("airflow.task"),
+        )
+
+
+@patch("orchestration_pipelines_lib.scripts.dbt_wrapper.subprocess.run")
+def test_ingest_metadata_invalid_choice_checks_version_lazily(
+    mock_run, tmp_path
+):
+    """Tests invalid choice 'dbt' checks gcloud --version and surfaces upgrade hint."""
+    from orchestration_pipelines_lib.scripts.dbt_wrapper import (
+        _ingest_metadata_to_knowledge_catalog,
+    )
+
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    (target_dir / "manifest.json").write_text('{"nodes": {}}')
+
+    config = {
+        "project_id": "my-proj",
+        "location": "us-central1",
+        "entry_group": "my-group",
+        "storage_uri": "gs://my-bucket/imports/",
+    }
+    logger = logging.getLogger("airflow.task")
+
+    mock_run.side_effect = [
+        SimpleNamespace(
+            returncode=2,
+            stdout="",
+            stderr="ERROR: (gcloud.dataplex) Invalid choice: 'dbt'.",
+        ),
+        SimpleNamespace(
+            returncode=0,
+            stdout="Google Cloud SDK 586.0.0\ncore 2026.09.20\n",
+            stderr="",
+        ),
+    ]
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "Installed gcloud-cli version 586\\.0\\.0 is older than the "
+            "minimum required version 587\\.0\\.0.*"
+            "Upgrade your worker/environment to have gcloud-cli 587\\.0\\.0\\+"
+        ),
+    ):
+        _ingest_metadata_to_knowledge_catalog(str(target_dir), config, logger)
+
+    assert mock_run.call_count == 2
+    assert mock_run.call_args_list[1].args[0] == ["gcloud", "--version"]
+
+
+@pytest.mark.parametrize(
+    "version_effect",
+    [
+        SimpleNamespace(
+            returncode=0, stdout="Google Cloud SDK 590.0.0\n", stderr=""
+        ),
+        SimpleNamespace(returncode=0, stdout="custom wrapper\n", stderr=""),
+        SimpleNamespace(returncode=1, stdout="", stderr="err"),
+        OSError("cannot run"),
+    ],
+)
+@patch("orchestration_pipelines_lib.scripts.dbt_wrapper.subprocess.run")
+def test_ingest_metadata_invalid_choice_falls_back_to_original_error(
+    mock_run, tmp_path, version_effect
+):
+    """Tests original gcloud error surfaces if version probe does not find old SDK."""
+    from orchestration_pipelines_lib.scripts.dbt_wrapper import (
+        _ingest_metadata_to_knowledge_catalog,
+    )
+
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    (target_dir / "manifest.json").write_text('{"nodes": {}}')
+
+    mock_run.side_effect = [
+        SimpleNamespace(
+            returncode=2,
+            stdout="",
+            stderr="ERROR: (gcloud.dataplex) Invalid choice: 'dbt'.",
+        ),
+        version_effect,
+    ]
+    with pytest.raises(
+        RuntimeError,
+        match="gcloud dataplex dbt metadata-jobs create failed with exit code 2.*Invalid choice: 'dbt'",
+    ):
+        _ingest_metadata_to_knowledge_catalog(
+            str(target_dir),
+            {
+                "project_id": "my-proj",
+                "location": "us-central1",
+                "entry_group": "my-group",
+                "storage_uri": "gs://my-bucket/imports/",
+            },
+            logging.getLogger("airflow.task"),
+        )
+
+
+@patch("orchestration_pipelines_lib.scripts.dbt_wrapper.subprocess.run")
+def test_ingest_metadata_other_failure_does_not_probe_version(
+    mock_run, tmp_path
+):
+    """Tests non-version errors (e.g. PERMISSION_DENIED) do not run gcloud --version."""
+    from orchestration_pipelines_lib.scripts.dbt_wrapper import (
+        _ingest_metadata_to_knowledge_catalog,
+    )
+
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    (target_dir / "manifest.json").write_text('{"nodes": {}}')
+
+    mock_run.return_value = SimpleNamespace(
+        returncode=1, stdout="", stderr="PERMISSION_DENIED: missing role"
+    )
+    with pytest.raises(
+        RuntimeError,
+        match="gcloud dataplex dbt metadata-jobs create failed with exit code 1.*PERMISSION_DENIED",
+    ):
+        _ingest_metadata_to_knowledge_catalog(
+            str(target_dir),
+            {
+                "project_id": "my-proj",
+                "location": "us-central1",
+                "entry_group": "my-group",
+                "storage_uri": "gs://my-bucket/imports/",
+            },
+            logging.getLogger("airflow.task"),
+        )
+
+    assert mock_run.call_count == 1
+
+
+@patch(
+    "orchestration_pipelines_lib.scripts.dbt_wrapper._ingest_metadata_to_knowledge_catalog"
+)
+@patch("dbt.cli.main.dbtRunner")
+def test_invoke_dbt_triggers_knowledge_catalog_on_success_and_dbt_failure(
+    mock_dbt_runner_cls, mock_ingest, tmp_path
+):
+    """Tests invoke_dbt runs Knowledge Catalog ingestion in finally even if dbt fails."""
+    kc_config = {
+        "project_id": "my-proj",
+        "location": "us-central1",
+        "entry_group": "my-group",
+        "storage_uri": "gs://my-bucket/imports/",
+    }
+    mock_runner = mock_dbt_runner_cls.return_value
+    mock_runner.invoke.return_value = MagicMock(
+        success=True, result=[], exception=None
+    )
+
+    invoke_dbt(
+        project_dir=str(tmp_path),
+        profiles_dir=str(tmp_path),
+        invocations=[{"command": "build"}],
+        knowledge_catalog=kc_config,
+    )
+    mock_ingest.assert_called_once()
+    assert mock_ingest.call_args.args[1] == kc_config
+
+    mock_ingest.reset_mock()
+    mock_runner.invoke.return_value = MagicMock(
+        success=False, result=[], exception=None
+    )
+    with pytest.raises(RuntimeError, match="dbt build failed"):
+        invoke_dbt(
+            project_dir=str(tmp_path),
+            profiles_dir=str(tmp_path),
+            invocations=[{"command": "build"}],
+            knowledge_catalog=kc_config,
+        )
+    mock_ingest.assert_called_once()
+
+
+@patch(
+    "orchestration_pipelines_lib.scripts.dbt_wrapper._ingest_metadata_to_knowledge_catalog"
+)
+@patch("dbt.cli.main.dbtRunner")
+def test_invoke_dbt_propagates_kc_error_when_dbt_succeeds(
+    mock_dbt_runner_cls, mock_ingest, tmp_path
+):
+    """Tests ingestion errors fail the task when dbt itself succeeded."""
+    mock_runner = mock_dbt_runner_cls.return_value
+    mock_runner.invoke.return_value = MagicMock(
+        success=True, result=[], exception=None
+    )
+    mock_ingest.side_effect = RuntimeError("PERMISSION_DENIED")
+
+    with pytest.raises(RuntimeError, match="PERMISSION_DENIED"):
+        invoke_dbt(
+            project_dir=str(tmp_path),
+            profiles_dir=str(tmp_path),
+            invocations=[{"command": "run"}],
+            knowledge_catalog={
+                "project_id": "my-proj",
+                "location": "us-central1",
+                "entry_group": "my-group",
+                "storage_uri": "gs://my-bucket/imports/",
+            },
+        )
+
+
+@patch(
+    "orchestration_pipelines_lib.scripts.dbt_wrapper._ingest_metadata_to_knowledge_catalog"
+)
+@patch("dbt.cli.main.dbtRunner")
+def test_invoke_dbt_suppresses_kc_error_when_dbt_already_failed(
+    mock_dbt_runner_cls, mock_ingest, tmp_path, caplog
+):
+    """Tests ingestion errors are logged without masking the root dbt failure."""
+    mock_runner = mock_dbt_runner_cls.return_value
+    mock_runner.invoke.return_value = MagicMock(
+        success=False, result=[], exception=None
+    )
+    mock_ingest.side_effect = RuntimeError("gcloud-cli 586.0.0 too old")
+
+    with (
+        caplog.at_level(logging.ERROR, logger="airflow.task"),
+        pytest.raises(RuntimeError, match="dbt run failed"),
+    ):
+        invoke_dbt(
+            project_dir=str(tmp_path),
+            profiles_dir=str(tmp_path),
+            invocations=[{"command": "run"}],
+            knowledge_catalog={
+                "project_id": "my-proj",
+                "location": "us-central1",
+                "entry_group": "my-group",
+                "storage_uri": "gs://my-bucket/imports/",
+            },
+        )
+
+    assert (
+        "Failed to ingest dbt metadata into Knowledge Catalog: gcloud-cli 586.0.0 too old"
+        in caplog.text
+    )
+
+
+@pytest.mark.parametrize(
+    "exc_cls",
+    [KeyboardInterrupt, TimeoutError],
+)
+@patch("orchestration_pipelines_lib.scripts.dbt_wrapper._sync_outputs_to_gcs")
+@patch(
+    "orchestration_pipelines_lib.scripts.dbt_wrapper._ingest_metadata_to_knowledge_catalog"
+)
+@patch("dbt.cli.main.dbtRunner")
+def test_invoke_dbt_skips_finally_on_timeout_or_cancellation(
+    mock_dbt_runner_cls, mock_ingest, mock_sync, tmp_path, exc_cls
+):
+    """Tests GCS sync and KC ingestion are skipped on timeout/cancellation."""
+    mock_runner = mock_dbt_runner_cls.return_value
+    mock_runner.invoke.side_effect = exc_cls("timed out")
+
+    with pytest.raises(exc_cls):
+        invoke_dbt(
+            project_dir=str(tmp_path),
+            profiles_dir=str(tmp_path),
+            invocations=[{"command": "run"}],
+            output_gcs_uri="gs://my-bucket/outputs/",
+            knowledge_catalog={
+                "project_id": "my-proj",
+                "location": "us-central1",
+                "entry_group": "my-group",
+                "storage_uri": "gs://my-bucket/imports/",
+            },
+        )
+
+    mock_sync.assert_not_called()
+    mock_ingest.assert_not_called()

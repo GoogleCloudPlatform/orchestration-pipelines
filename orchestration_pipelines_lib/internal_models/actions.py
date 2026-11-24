@@ -210,6 +210,20 @@ class DbtInvocationModel:
 
 
 @dataclass
+class DbtKnowledgeCatalogModel:
+    """Configuration for ingesting dbt metadata into Knowledge Catalog."""
+
+    entry_group: str
+    project_id: str | None = None
+    location: str | None = None
+    storage_uri: str | None = None
+    aspects_only: bool = False
+    skip_bigquery_link: bool = False
+    include_entry_links: bool = True
+    async_mode: bool = True
+
+
+@dataclass
 class DBTActionModel(ActionBaseModel):
     """Action model for DBT pipelines."""
 
@@ -220,6 +234,7 @@ class DBTActionModel(ActionBaseModel):
     params: dict[str, str] | None = None
     invocations: list[DbtInvocationModel] | None = None
     output_gcs_uri: str | None = None
+    knowledge_catalog: DbtKnowledgeCatalogModel | None = None
 
 
 @dataclass

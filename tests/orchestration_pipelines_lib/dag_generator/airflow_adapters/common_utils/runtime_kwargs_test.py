@@ -45,6 +45,7 @@ else:
 _DEFAULT_JINJA = {
     "{{ ds }}": "2026-10-22",
     "{{ ds_nodash }}": "20261022",
+    "{{ run_id }}": "run_2026_01",
     "{{ var.value.team }}": "analytics",
 }
 
@@ -461,6 +462,57 @@ def test_dbt_and_dataform_local_and_service_runtime_binding(
         tasks["df_svc"].workflow_invocation["compilation_result"]
         == "comp/resolved-proj"
     )
+
+
+def test_dbt_knowledge_catalog_dynamic_defaults_runtime_binding(
+    tmp_path, monkeypatch
+):
+    """Tests dbt knowledge_catalog resolves dynamic defaults.projectId/location and preserves run_id."""
+    (tmp_path / "dbt_dir").mkdir()
+    tasks = _run_pipeline_pre_execute(
+        tmp_path,
+        monkeypatch,
+        """\
+        - pipeline:
+            name: dbt_kc_defaults
+            framework:
+              dbt:
+                airflowWorker:
+                  projectDirectoryPath: dbt_dir
+                knowledgeCatalog:
+                  entryGroup: my-dbt-group
+        - pipeline:
+            name: dbt_kc_overrides
+            framework:
+              dbt:
+                airflowWorker:
+                  projectDirectoryPath: dbt_dir
+                knowledgeCatalog:
+                  entryGroup: custom-dbt-group
+                  projectId: custom-proj
+                  location: us-east1
+                  storageUri: gs://custom-bkt/imports
+        """,
+    )
+    kc_defaults_kwargs = tasks["dbt_kc_defaults"].op_kwargs
+    output_gcs_uri = kc_defaults_kwargs["output_gcs_uri"]
+    assert "run_2026_01" in output_gcs_uri
+    assert "{{ run_id }}" not in output_gcs_uri
+    assert kc_defaults_kwargs["knowledge_catalog"] == {
+        "project_id": "resolved-proj",
+        "location": "europe-west1",
+        "entry_group": "my-dbt-group",
+        "storage_uri": f"{output_gcs_uri.rstrip('/')}/dataplex_metadata/",
+        "aspects_only": False,
+        "skip_bigquery_link": False,
+        "include_entry_links": True,
+        "async_mode": True,
+    }
+
+    kc_override = tasks["dbt_kc_overrides"].op_kwargs["knowledge_catalog"]
+    assert kc_override["project_id"] == "custom-proj"
+    assert kc_override["location"] == "us-east1"
+    assert kc_override["storage_uri"] == "gs://custom-bkt/imports/"
 
 
 def test_trigger_pipeline_vertex_ai_and_airflow_task_runtime_binding(

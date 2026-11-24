@@ -283,15 +283,17 @@ def create_dbt_task(
         RuntimeError: If operator instantiation fails.
     """
     with wrap_task_creation_error(action.name):
-        op_kwargs = runtime_kwargs.build_dbt_op_kwargs(action)
-
         base_gcs_output_uri = _get_base_gcs_output_uri(action)
+        output_gcs_uri = None
         if base_gcs_output_uri:
             bundle_id, version_id, pipeline_id = get_pipeline_metadata(dag)
-            op_kwargs["output_gcs_uri"] = (
+            output_gcs_uri = (
                 f"{base_gcs_output_uri}/{bundle_id}/versions/{version_id}/"
                 f"{pipeline_id}/{{{{ run_id }}}}/{action.name}/"
             )
+        op_kwargs = runtime_kwargs.build_dbt_op_kwargs(
+            action, pipeline.defaults, output_gcs_uri=output_gcs_uri
+        )
 
         OrchestrationPythonOperator = wrap_operator(
             get_operator(),

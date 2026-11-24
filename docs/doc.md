@@ -273,6 +273,40 @@ Orchestrates third-party transformation frameworks.
         `run-operation` (**Required** for `run-operation`).
       - `args` (`google.protobuf.Struct`, optional): Keyword arguments passed
         via `--args` when `command` is `run-operation`.
+    - `knowledge_catalog` (`DbtKnowledgeCatalogConfig`, optional): Ingests dbt
+      artifacts from `target/` into Dataplex Knowledge Catalog via
+      `gcloud dataplex dbt metadata-jobs create` (requires
+      `gcloud-cli >= 587.0.0` in the Airflow worker environment; see
+      [limitations.md](limitations.md)).
+      - `entry_group` (string, **Required**): Existing Dataplex entry group
+        short ID. Use a dedicated entry group per dbt project because full-sync
+        imports (`aspects_only: false`) delete entries not present in the
+        run's artifacts.
+      - `location` (string, optional): Dataplex resource location (defaults to
+        pipeline `defaults.location`).
+      - `project_id` (string, optional): Dataplex project ID (defaults to
+        pipeline `defaults.project_id`).
+      - `storage_uri` (string, optional): GCS URI prefix (`gs://...`) for
+        staging `dbt_metadata.jsonl` (defaults to
+        `<output_gcs_uri>/dataplex_metadata/`). Ensure the Dataplex service
+        agent (`gcp-sa-dataplex`) has read access to `storage_uri`—especially
+        when relying on the default Composer `GCS_BUCKET` or targeting a
+        different `project_id`—and the worker service account has write access
+        plus `roles/dataplex.metadataJobOwner` along with entry-group /
+        connector-type permissions (e.g., `roles/dataplex.entryGroupOwner` or
+        `roles/dataplex.catalogAdmin`, or least-privilege
+        `roles/dataplex.entryGroupImporter` and `roles/dataplex.entryOwner`),
+        or `roles/dataplex.admin`.
+      - `aspects_only` (bool, optional): Pass `--aspects-only` to update only
+        observed metadata without creating or deleting entries.
+      - `skip_bigquery_link` (bool, optional): Pass `--skip-bigquery-link` to
+        skip physical BigQuery table reference links.
+      - `include_entry_links` (bool, optional): Emit EntryLink records
+        (defaults to `true`; set to `false` to pass
+        `--no-include-entry-links`).
+      - `async_mode` (bool, optional): Pass `--async` to return once Dataplex
+        accepts the job (defaults to `true`; set to `false` to wait for
+        completion).
   - `dataform`: Runs Dataform.
     - `dataform_service` (`DataformServiceExecution`): Executes via GCP Dataform
       API.

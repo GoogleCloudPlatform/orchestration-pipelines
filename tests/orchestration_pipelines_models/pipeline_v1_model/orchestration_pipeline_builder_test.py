@@ -429,6 +429,73 @@ class TestOrchestrationPipelineBuilder(unittest.TestCase):
         self.assertEqual(build_inv.target, "prod")
         self.assertListEqual(list(build_inv.extra_args), ["--store-failures"])
 
+    def test_build_action_dbt_with_knowledge_catalog(self):
+        """Tests DBT action with full and minimal knowledgeCatalog configs."""
+        pipeline_def = self._get_valid_pipeline_def(
+            actions=[
+                {
+                    "pipeline": {
+                        "name": "dbt_kc_full",
+                        "framework": {
+                            "dbt": {
+                                "airflowWorker": {
+                                    "projectDirectoryPath": "dbt_project",
+                                },
+                                "knowledgeCatalog": {
+                                    "entryGroup": "custom-dbt-group",
+                                    "location": "europe-west1",
+                                    "projectId": "catalog-project",
+                                    "storageUri": "gs://catalog-bucket/imports/",
+                                    "aspectsOnly": True,
+                                    "skipBigqueryLink": True,
+                                    "includeEntryLinks": False,
+                                    "asyncMode": False,
+                                },
+                            }
+                        },
+                    }
+                },
+                {
+                    "pipeline": {
+                        "name": "dbt_kc_defaults",
+                        "framework": {
+                            "dbt": {
+                                "airflowWorker": {
+                                    "projectDirectoryPath": "dbt_project",
+                                },
+                                "knowledgeCatalog": {
+                                    "entryGroup": "default-dbt-group",
+                                },
+                            }
+                        },
+                    }
+                },
+            ]
+        )
+
+        pipeline = OrchestrationPipelineBuilder.build(pipeline_def)
+
+        full_dbt = pipeline.actions[0].pipeline.framework.dbt
+        self.assertTrue(full_dbt.HasField("knowledge_catalog"))
+        kc = full_dbt.knowledge_catalog
+        self.assertEqual(kc.entry_group, "custom-dbt-group")
+        self.assertEqual(kc.location, "europe-west1")
+        self.assertEqual(kc.project_id, "catalog-project")
+        self.assertEqual(kc.storage_uri, "gs://catalog-bucket/imports/")
+        self.assertTrue(kc.aspects_only)
+        self.assertTrue(kc.skip_bigquery_link)
+        self.assertTrue(kc.HasField("include_entry_links"))
+        self.assertFalse(kc.include_entry_links)
+        self.assertTrue(kc.HasField("async_mode"))
+        self.assertFalse(kc.async_mode)
+
+        default_dbt = pipeline.actions[1].pipeline.framework.dbt
+        self.assertTrue(default_dbt.HasField("knowledge_catalog"))
+        default_kc = default_dbt.knowledge_catalog
+        self.assertEqual(default_kc.entry_group, "default-dbt-group")
+        self.assertFalse(default_kc.HasField("include_entry_links"))
+        self.assertFalse(default_kc.HasField("async_mode"))
+
     def test_build_action_dataform(self):
         """Tests Dataform action."""
         pipeline_def = self._get_valid_pipeline_def(

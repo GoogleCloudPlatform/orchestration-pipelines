@@ -540,6 +540,47 @@ message DbtFrameworkSpec {
   repeated DbtInvocation invocations = 3;
   // Optional GCS destination URI where produced output files and logs are synced.
   string output_gcs_uri = 4 [(pipeline_models.validation.regex) = "^gs://.+$"];
+  // Optional configuration for ingesting dbt metadata into Dataplex Knowledge
+  // Catalog via `gcloud dataplex dbt metadata-jobs create` (requires
+  // gcloud-cli 587.0.0+).
+  DbtKnowledgeCatalogConfig knowledge_catalog = 5;
+}
+
+// Configuration for ingesting dbt artifacts into Google Cloud Knowledge Catalog
+// (Dataplex Universal Catalog) via `gcloud dataplex dbt metadata-jobs create`.
+message DbtKnowledgeCatalogConfig {
+  // Short ID of the Dataplex entry group that receives dbt entries.
+  // Must already exist in the target project and location. Give each dbt
+  // project its own entry group because full-sync imports (when aspects_only
+  // is false) delete entries not present in the run's artifacts.
+  string entry_group = 1 [
+    (pipeline_models.validation.is_required) = true,
+    (pipeline_models.validation.regex) = "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$"
+  ];
+  // Google Cloud region/location of the Dataplex entry group.
+  // Defaults to pipeline defaults.location when omitted.
+  string location = 2;
+  // Google Cloud project ID hosting the Dataplex entry group.
+  // Defaults to pipeline defaults.project_id when omitted.
+  string project_id = 3;
+  // Cloud Storage URI prefix (e.g., "gs://my-bucket/dbt-imports/") used to
+  // stage the transformed dbt_metadata.jsonl file for the Dataplex import job.
+  // Defaults to "<output_gcs_uri>/dataplex_metadata/" when omitted.
+  string storage_uri = 4 [
+    (pipeline_models.validation.regex) = "^gs://[^/\\s]+(/.*)?$"
+  ];
+  // If true, passes `--aspects-only` to update only metadata observed in this
+  // run without creating, deleting, or re-parenting entries.
+  bool aspects_only = 5;
+  // If true, passes `--skip-bigquery-link` to skip physical reference links
+  // from dbt nodes to BigQuery table entries.
+  bool skip_bigquery_link = 6;
+  // Whether to emit EntryLink records (`--include-entry-links` /
+  // `--no-include-entry-links`). Defaults to true when omitted.
+  optional bool include_entry_links = 7;
+  // Whether to pass `--async` and return once Dataplex accepts the job
+  // instead of waiting for completion. Defaults to true when omitted.
+  optional bool async_mode = 8;
 }
 
 message DataformFrameworkSpec {

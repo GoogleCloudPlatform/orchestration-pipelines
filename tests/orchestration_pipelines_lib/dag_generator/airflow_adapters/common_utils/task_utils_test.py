@@ -1323,6 +1323,216 @@ def test_creates_dbt_task_with_custom_output_gcs_uri(
         "gs://custom-bucket/dbt-outputs/"
         "bundle_1/versions/v123/pipe_1/{{ run_id }}/dbt_minimal_run/"
     )
+    assert "knowledge_catalog" not in result.op_kwargs
+
+
+def test_creates_dbt_task_with_knowledge_catalog_default_storage_uri(
+    dbt_action_minimal,
+    pipeline,
+    sample_dag,
+    monkeypatch,
+):
+    """Tests knowledge_catalog defaults storage_uri, project_id, and location."""
+    from orchestration_pipelines_lib.internal_models.actions import (
+        DbtKnowledgeCatalogModel,
+    )
+
+    monkeypatch.setenv("GCS_BUCKET", "composer-bucket")
+    sample_dag.doc_md = json.dumps(
+        {
+            "op_bundle": "bundle_1",
+            "op_version": "v123",
+            "op_pipeline": "pipe_1",
+        }
+    )
+    action = replace(
+        dbt_action_minimal,
+        knowledge_catalog=DbtKnowledgeCatalogModel(entry_group="my-dbt-group"),
+    )
+
+    result = create_dbt_task(
+        get_operator=adapter_imports.get_python_operator,
+        action=action,
+        pipeline=pipeline,
+        dag=sample_dag,
+    )
+
+    assert result.op_kwargs["knowledge_catalog"] == {
+        "project_id": pipeline.defaults.cloudDefault.project,
+        "location": pipeline.defaults.cloudDefault.region,
+        "entry_group": "my-dbt-group",
+        "storage_uri": (
+            "gs://composer-bucket/orchestration_pipelines_outputs/"
+            "bundle_1/versions/v123/pipe_1/{{ run_id }}/dbt_minimal_run/"
+            "dataplex_metadata/"
+        ),
+        "aspects_only": False,
+        "skip_bigquery_link": False,
+        "include_entry_links": True,
+        "async_mode": True,
+    }
+
+
+def test_creates_dbt_task_with_knowledge_catalog_custom_options(
+    dbt_action_minimal,
+    pipeline,
+    sample_dag,
+    monkeypatch,
+):
+    """Tests knowledge_catalog normalizes custom storage_uri and passes all flags."""
+    from orchestration_pipelines_lib.internal_models.actions import (
+        DbtKnowledgeCatalogModel,
+    )
+
+    monkeypatch.delenv("GCS_BUCKET", raising=False)
+    action = replace(
+        dbt_action_minimal,
+        knowledge_catalog=DbtKnowledgeCatalogModel(
+            entry_group="my-dbt-group",
+            project_id="catalog-proj",
+            location="europe-west1",
+            storage_uri="gs://catalog-bucket/dbt-imports",
+            aspects_only=True,
+            skip_bigquery_link=True,
+            include_entry_links=False,
+            async_mode=False,
+        ),
+    )
+
+    result = create_dbt_task(
+        get_operator=adapter_imports.get_python_operator,
+        action=action,
+        pipeline=pipeline,
+        dag=sample_dag,
+    )
+
+    assert result.op_kwargs["knowledge_catalog"] == {
+        "project_id": "catalog-proj",
+        "location": "europe-west1",
+        "entry_group": "my-dbt-group",
+        "storage_uri": "gs://catalog-bucket/dbt-imports/",
+        "aspects_only": True,
+        "skip_bigquery_link": True,
+        "include_entry_links": False,
+        "async_mode": False,
+    }
+
+
+@pytest.mark.parametrize(
+    "bad_uri",
+    ["http://bucket/path", "gs://", "gs:///", "gs://   /path"],
+)
+def test_creates_dbt_task_with_invalid_knowledge_catalog_storage_uri_fails(
+    dbt_action_minimal,
+    pipeline,
+    sample_dag,
+    bad_uri,
+):
+    """Tests create_dbt_task rejects malformed knowledge_catalog storage_uri."""
+    from orchestration_pipelines_lib.internal_models.actions import (
+        DbtKnowledgeCatalogModel,
+    )
+
+    action = replace(
+        dbt_action_minimal,
+        knowledge_catalog=DbtKnowledgeCatalogModel(
+            entry_group="my-dbt-group", storage_uri=bad_uri
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError, match="Invalid Knowledge Catalog storage_uri"
+    ):
+        create_dbt_task(
+            get_operator=adapter_imports.get_python_operator,
+            action=action,
+            pipeline=pipeline,
+            dag=sample_dag,
+        )
+
+
+def test_creates_dbt_task_with_invalid_output_gcs_uri_fallback_fails(
+    dbt_action_minimal,
+    pipeline,
+    sample_dag,
+    monkeypatch,
+):
+    """Tests create_dbt_task validates storage_uri derived from output_gcs_uri."""
+    from orchestration_pipelines_lib.internal_models.actions import (
+        DbtKnowledgeCatalogModel,
+    )
+
+    monkeypatch.delenv("GCS_BUCKET", raising=False)
+    action = replace(
+        dbt_action_minimal,
+        output_gcs_uri="gs:///bad-prefix",
+        knowledge_catalog=DbtKnowledgeCatalogModel(entry_group="my-dbt-group"),
+    )
+
+    with pytest.raises(
+        RuntimeError, match="Invalid Knowledge Catalog storage_uri"
+    ):
+        create_dbt_task(
+            get_operator=adapter_imports.get_python_operator,
+            action=action,
+            pipeline=pipeline,
+            dag=sample_dag,
+        )
+
+
+def test_creates_dbt_task_with_knowledge_catalog_missing_storage_uri_fails(
+    dbt_action_minimal,
+    pipeline,
+    sample_dag,
+    monkeypatch,
+):
+    """Tests create_dbt_task fails when no storage_uri, output_gcs_uri, or GCS_BUCKET exists."""
+    from orchestration_pipelines_lib.internal_models.actions import (
+        DbtKnowledgeCatalogModel,
+    )
+
+    monkeypatch.delenv("GCS_BUCKET", raising=False)
+    action = replace(
+        dbt_action_minimal,
+        output_gcs_uri=None,
+        knowledge_catalog=DbtKnowledgeCatalogModel(entry_group="my-dbt-group"),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Knowledge Catalog ingestion requires 'storage_uri'",
+    ):
+        create_dbt_task(
+            get_operator=adapter_imports.get_python_operator,
+            action=action,
+            pipeline=pipeline,
+            dag=sample_dag,
+        )
+
+
+def test_creates_dbt_task_with_knowledge_catalog_missing_entry_group_fails(
+    dbt_action_minimal,
+    pipeline,
+    sample_dag,
+):
+    """Tests create_dbt_task fails when entry_group is empty."""
+    from orchestration_pipelines_lib.internal_models.actions import (
+        DbtKnowledgeCatalogModel,
+    )
+
+    action_no_group = replace(
+        dbt_action_minimal,
+        knowledge_catalog=DbtKnowledgeCatalogModel(
+            entry_group="", storage_uri="gs://bucket/imports/"
+        ),
+    )
+    with pytest.raises(RuntimeError, match="requires 'entry_group'"):
+        create_dbt_task(
+            get_operator=adapter_imports.get_python_operator,
+            action=action_no_group,
+            pipeline=pipeline,
+            dag=sample_dag,
+        )
 
 
 @pytest.fixture

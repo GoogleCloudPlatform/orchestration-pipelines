@@ -1336,6 +1336,81 @@ class TestConverterV1ToInternal(unittest.TestCase):
         ):
             self.converter._convert_pipeline_action(dbt_action, self.defaults)
 
+    def test_convert_pipeline_action_dbt_with_knowledge_catalog_defaults(self):
+        """Tests converting DBT action with minimal knowledge_catalog uses defaults."""
+        dbt_action = v1_protos.PipelineAction(
+            name="dbt-kc-defaults",
+            framework=v1_protos.PipelineFramework(
+                dbt=v1_protos.DbtFrameworkSpec(
+                    airflow_worker=v1_protos.DbtAirflowExecution(
+                        project_directory_path="dbt/project",
+                    ),
+                    knowledge_catalog=v1_protos.DbtKnowledgeCatalogConfig(
+                        entry_group="my-dbt-group",
+                    ),
+                )
+            ),
+        )
+
+        internal_dbt = self.converter._convert_pipeline_action(
+            dbt_action, self.defaults
+        )
+
+        self.assertEqual(
+            internal_dbt.knowledge_catalog,
+            internal_actions.DbtKnowledgeCatalogModel(
+                entry_group="my-dbt-group",
+                project_id=self.defaults.project_id,
+                location=self.defaults.location,
+                storage_uri=None,
+                aspects_only=False,
+                skip_bigquery_link=False,
+                include_entry_links=True,
+                async_mode=True,
+            ),
+        )
+
+    def test_convert_pipeline_action_dbt_with_knowledge_catalog_overrides(self):
+        """Tests converting DBT action with explicit knowledge_catalog fields."""
+        dbt_action = v1_protos.PipelineAction(
+            name="dbt-kc-custom",
+            framework=v1_protos.PipelineFramework(
+                dbt=v1_protos.DbtFrameworkSpec(
+                    airflow_worker=v1_protos.DbtAirflowExecution(
+                        project_directory_path="dbt/project",
+                    ),
+                    knowledge_catalog=v1_protos.DbtKnowledgeCatalogConfig(
+                        entry_group="custom-group",
+                        location="europe-west1",
+                        project_id="catalog-proj",
+                        storage_uri="gs://catalog-bucket/dbt-imports/",
+                        aspects_only=True,
+                        skip_bigquery_link=True,
+                        include_entry_links=False,
+                        async_mode=False,
+                    ),
+                )
+            ),
+        )
+
+        internal_dbt = self.converter._convert_pipeline_action(
+            dbt_action, self.defaults
+        )
+
+        self.assertEqual(
+            internal_dbt.knowledge_catalog,
+            internal_actions.DbtKnowledgeCatalogModel(
+                entry_group="custom-group",
+                project_id="catalog-proj",
+                location="europe-west1",
+                storage_uri="gs://catalog-bucket/dbt-imports/",
+                aspects_only=True,
+                skip_bigquery_link=True,
+                include_entry_links=False,
+                async_mode=False,
+            ),
+        )
+
     def test_convert_pipeline_action_dataform_local(self):
         """Tests conversion of a Dataform local execution action."""
         dataform_local_action = v1_protos.PipelineAction(

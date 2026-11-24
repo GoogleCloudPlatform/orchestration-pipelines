@@ -1493,5 +1493,110 @@ def test_notebook_action_invalid_output_uri_prefix_fails(
         PipelineValidator.validate(base_pipeline)
 
 
+def _make_dbt_kc_action(**kc_kwargs):
+    from orchestration_pipelines_models.pipeline_v1_model.protos.orchestration_pipeline_pb2 import (
+        DbtAirflowExecution,
+        DbtFrameworkSpec,
+        DbtKnowledgeCatalogConfig,
+        PipelineAction,
+        PipelineFramework,
+    )
+
+    return Action(
+        pipeline=PipelineAction(
+            name="dbt_kc_step",
+            framework=PipelineFramework(
+                dbt=DbtFrameworkSpec(
+                    airflow_worker=DbtAirflowExecution(
+                        project_directory_path="dbt_project",
+                    ),
+                    knowledge_catalog=DbtKnowledgeCatalogConfig(**kc_kwargs),
+                )
+            ),
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "kc_kwargs",
+    [
+        {"entry_group": "my-dbt-group"},
+        {
+            "entry_group": "my-dbt-entry-group-1",
+            "location": "europe-west1",
+            "project_id": "catalog-proj",
+            "storage_uri": "gs://catalog-bucket/dbt-imports/",
+            "aspects_only": True,
+            "skip_bigquery_link": True,
+            "include_entry_links": False,
+            "async_mode": False,
+        },
+        {"entry_group": "a", "storage_uri": "gs://catalog-bucket"},
+    ],
+)
+def test_dbt_knowledge_catalog_valid_configs_succeed(base_pipeline, kc_kwargs):
+    """Tests valid DbtKnowledgeCatalogConfig configurations pass validation."""
+    base_pipeline.actions.append(_make_dbt_kc_action(**kc_kwargs))
+    PipelineValidator.validate(base_pipeline)
+
+
+def test_dbt_knowledge_catalog_missing_entry_group_fails(base_pipeline):
+    """Tests omitting required entry_group fails validation."""
+    base_pipeline.actions.append(_make_dbt_kc_action())
+    with pytest.raises(
+        ValueError,
+        match=r"Error for field 'actions\[2\]\.pipeline\.framework\.dbt\.knowledge_catalog\.entry_group'",
+    ):
+        PipelineValidator.validate(base_pipeline)
+
+
+@pytest.mark.parametrize(
+    "entry_group",
+    [
+        "InvalidUpper",
+        "has_underscore",
+        "-leading-hyphen",
+        "trailing-hyphen-",
+        "1starts-with-digit",
+        "a" * 64,
+    ],
+)
+def test_dbt_knowledge_catalog_invalid_entry_group_fails(
+    base_pipeline, entry_group
+):
+    """Tests invalid Dataplex entry_group short IDs fail validation."""
+    base_pipeline.actions.append(_make_dbt_kc_action(entry_group=entry_group))
+    with pytest.raises(
+        ValueError,
+        match=r"Error for field 'actions\[2\]\.pipeline\.framework\.dbt\.knowledge_catalog\.entry_group'",
+    ):
+        PipelineValidator.validate(base_pipeline)
+
+
+@pytest.mark.parametrize(
+    "storage_uri",
+    [
+        "gs://",
+        "gs:///",
+        "gs:///path",
+        "gs:// bad-bucket/path",
+        "https://storage.googleapis.com/bucket/path",
+        "/local/path",
+    ],
+)
+def test_dbt_knowledge_catalog_invalid_storage_uri_fails(
+    base_pipeline, storage_uri
+):
+    """Tests invalid storage_uri values fail validation."""
+    base_pipeline.actions.append(
+        _make_dbt_kc_action(entry_group="valid-group", storage_uri=storage_uri)
+    )
+    with pytest.raises(
+        ValueError,
+        match=r"Error for field 'actions\[2\]\.pipeline\.framework\.dbt\.knowledge_catalog\.storage_uri'",
+    ):
+        PipelineValidator.validate(base_pipeline)
+
+
 if __name__ == "__main__":
     unittest.main()

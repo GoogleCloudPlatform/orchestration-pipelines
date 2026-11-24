@@ -32,6 +32,7 @@ from orchestration_pipelines_lib.internal_models.actions import (
     DataformActionModel,
     DataIngestionActionModel,
     DataprocOperatorActionModel,
+    DBTActionModel,
     PythonScriptActionModel,
     PythonVirtualenvActionModel,
 )
@@ -499,9 +500,16 @@ def _str_bindings(source: Any, prefix: str = "") -> list[tuple[str, str]]:
 
 
 def _consumes_gcp_defaults(action_model: Any) -> bool:
-    return isinstance(action_model, _GCP_ACTION_TYPES) or (
-        isinstance(action_model, DataformActionModel)
-        and action_model.executionMode == "service"
+    return (
+        isinstance(action_model, _GCP_ACTION_TYPES)
+        or (
+            isinstance(action_model, DataformActionModel)
+            and action_model.executionMode == "service"
+        )
+        or (
+            isinstance(action_model, DBTActionModel)
+            and action_model.knowledge_catalog is not None
+        )
     )
 
 

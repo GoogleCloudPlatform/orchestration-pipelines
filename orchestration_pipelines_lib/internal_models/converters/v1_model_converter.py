@@ -1109,6 +1109,29 @@ class ConverterV1ToInternal:
                             select=list(airflow_worker.select_models),
                         )
                     ]
+                knowledge_catalog = None
+                if dbt.HasField("knowledge_catalog"):
+                    kc = dbt.knowledge_catalog
+                    knowledge_catalog = (
+                        internal_actions.DbtKnowledgeCatalogModel(
+                            entry_group=kc.entry_group,
+                            project_id=kc.project_id or defaults.project_id,
+                            location=kc.location or defaults.location,
+                            storage_uri=kc.storage_uri or None,
+                            aspects_only=kc.aspects_only,
+                            skip_bigquery_link=kc.skip_bigquery_link,
+                            include_entry_links=(
+                                kc.include_entry_links
+                                if kc.HasField("include_entry_links")
+                                else True
+                            ),
+                            async_mode=(
+                                kc.async_mode
+                                if kc.HasField("async_mode")
+                                else True
+                            ),
+                        )
+                    )
                 return internal_actions.DBTActionModel(
                     **base_kwargs,
                     type="dbt_pipeline",
@@ -1122,6 +1145,7 @@ class ConverterV1ToInternal:
                     params=params,
                     invocations=invocations,
                     output_gcs_uri=dbt.output_gcs_uri or None,
+                    knowledge_catalog=knowledge_catalog,
                 )
         elif framework_type == "dataform":
             dataform = action.framework.dataform

@@ -149,8 +149,13 @@ def _parse_pyspark_args(args: Sequence[Any]) -> dict[str, str]:
     return parsed
 
 
-def build_dbt_op_kwargs(action: DBTActionModel) -> dict[str, Any]:
-    """Builds base `op_kwargs` for `invoke_dbt` PythonOperator tasks."""
+def build_dbt_op_kwargs(
+    action: DBTActionModel,
+    defaults: Any = None,
+    *,
+    output_gcs_uri: str | None = None,
+) -> dict[str, Any]:
+    """Builds `op_kwargs` for `invoke_dbt` PythonOperator tasks."""
     op_kwargs: dict[str, Any] = {
         "project_dir": action.source.path,
         "profiles_dir": action.source.path,
@@ -162,6 +167,54 @@ def build_dbt_op_kwargs(action: DBTActionModel) -> dict[str, Any]:
         ]
     if action.params:
         op_kwargs["params"] = dict(action.params)
+    if output_gcs_uri:
+        op_kwargs["output_gcs_uri"] = output_gcs_uri
+
+    if action.knowledge_catalog:
+        kc = action.knowledge_catalog
+        if not kc.entry_group:
+            raise ValueError(
+                "Knowledge Catalog ingestion requires 'entry_group'."
+            )
+        raw_storage_uri = kc.storage_uri
+        if not raw_storage_uri:
+            if output_gcs_uri:
+                raw_storage_uri = (
+                    f"{output_gcs_uri.rstrip('/')}/dataplex_metadata/"
+                )
+            else:
+                raise ValueError(
+                    "Knowledge Catalog ingestion requires 'storage_uri', "
+                    "'output_gcs_uri', or the GCS_BUCKET environment "
+                    "variable to be set."
+                )
+
+        if not raw_storage_uri.startswith("gs://"):
+            raise ValueError(
+                f"Invalid Knowledge Catalog storage_uri: {raw_storage_uri!r}"
+            )
+        remainder = raw_storage_uri.removeprefix("gs://").rstrip("/")
+        bucket = remainder.split("/", 1)[0]
+        if not bucket or any(ch.isspace() for ch in bucket):
+            raise ValueError(
+                f"Invalid Knowledge Catalog storage_uri: {raw_storage_uri!r}"
+            )
+        storage_uri = f"gs://{remainder}/"
+
+        cloud_default = getattr(defaults, "cloudDefault", None)
+        project_id = kc.project_id or getattr(cloud_default, "project", "")
+        location = kc.location or getattr(cloud_default, "region", "")
+
+        op_kwargs["knowledge_catalog"] = {
+            "project_id": project_id,
+            "location": location,
+            "entry_group": kc.entry_group,
+            "storage_uri": storage_uri,
+            "aspects_only": kc.aspects_only,
+            "skip_bigquery_link": kc.skip_bigquery_link,
+            "include_entry_links": kc.include_entry_links,
+            "async_mode": kc.async_mode,
+        }
     return op_kwargs
 
 
@@ -406,10 +459,20 @@ def python_kwargs(
 
 
 def dbt_kwargs(
-    action: DBTActionModel, _defaults: Any, _ctx: RuntimeKwargsContext
+    action: DBTActionModel, defaults: Any, ctx: RuntimeKwargsContext
 ) -> dict[str, Any]:
     """Builds runtime kwargs for dbt PythonOperator tasks."""
-    return {"op_kwargs": build_dbt_op_kwargs(action)}
+    cur_op_kwargs = getattr(ctx.op, "op_kwargs", None)
+    output_gcs_uri = (
+        cur_op_kwargs.get("output_gcs_uri")
+        if isinstance(cur_op_kwargs, Mapping)
+        else None
+    )
+    return {
+        "op_kwargs": build_dbt_op_kwargs(
+            action, defaults, output_gcs_uri=output_gcs_uri
+        )
+    }
 
 
 def dataform_kwargs(
